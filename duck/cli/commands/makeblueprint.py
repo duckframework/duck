@@ -35,22 +35,24 @@ class MakeBlueprintCommand:
         from duck.settings import SETTINGS
         from duck.setup.makeblueprint import makeblueprint
         
+        original_name = name
+        name = name.lower()
         dest_dir = os.path.abspath(destination)
         dest_blueprint_path = joinpaths(dest_dir, name)
         
         # Log something
-        console.log(f'Creating "{name}" Duck Blueprint', level=console.DEBUG)
+        console.log(f'Creating "{original_name}" Blueprint', level=console.DEBUG)
         
         try:
             makeblueprint(
-                name,
+                original_name,
                 dest_dir,
                 overwrite_existing=overwrite_existing,
             )  # create blueprint directory structure
             
             # Log msg on blueprint creation.
             console.log(
-                f'Blueprint "{name}" created in directory "{dest_dir}"',
+                f'Blueprint "{original_name}" created at "{dest_blueprint_path}"',
                 custom_color=console.Fore.GREEN,
             )
         except FileExistsError:
@@ -69,14 +71,14 @@ class MakeBlueprintCommand:
             if overwrite.lower().startswith("y"):
                 # Overwrite existing blueprint
                 makeblueprint(
-                    name,
+                    original_name,
                     dest_dir,
                     overwrite_existing=True,
                  )
                 
                 # Log success message
                 console.log(
-                    f'Blueprint "{name}" created at "{dest_blueprint_path}"',
+                    f'Blueprint "{original_name}" created at "{dest_blueprint_path}"',
                     custom_color=console.Fore.GREEN,
                 )
             else:

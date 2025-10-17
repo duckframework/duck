@@ -5,10 +5,10 @@ Available Images:
 - `Image`: Base image component.
 - `CircularImage`: Rounded circular image component.
 """
-from duck.html.components import NoInnerHtmlComponent
+from duck.html.components import NoInnerComponent
 
 
-class Image(NoInnerHtmlComponent):
+class Image(NoInnerComponent):
     """
     Basic Image component.
     
@@ -22,17 +22,18 @@ class Image(NoInnerHtmlComponent):
         return "img"
         
     def on_create(self):
-        if self.kwargs.get("source"):
-            self.properties["src"] = self.kwargs.get("source", '')
+        super().on_create()
+        if "source" in self.kwargs:
+            self.props["src"] = self.kwargs.get("source")
         
-        if self.kwargs.get("alt"):
-            self.properties["alt"] = self.kwargs.get("alt", '')
+        if "alt" in self.kwargs:
+            self.props["alt"] = self.kwargs.get("alt")
             
-        if self.kwargs.get("width"):
-            self.style["width"] = self.kwargs.get("width", '')
+        if "width" in self.kwargs:
+            self.style["width"] = self.kwargs.get("width")
             
-        if self.kwargs.get("height"):
-            self.style["height"] = self.kwargs.get("height", '')
+        if "height" in self.kwargs:
+            self.style["height"] = self.kwargs.get("height")
 
 
 class CircularImage(Image):

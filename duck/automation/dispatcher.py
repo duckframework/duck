@@ -61,8 +61,8 @@ class AutomationDispatcher:
 
     poll: int | float = 1
     """
-	Poll interval to listen for triggers
-	"""
+	  Poll interval to listen for triggers
+	  """
 
     def __init__(self, application=None):
         self.__force_stop = False

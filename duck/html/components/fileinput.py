@@ -1,9 +1,10 @@
 """
 File Input components module (including FileDragAndDrop component).
 """
-from .input import Input
-from .script import Script
-from .card import Card
+from duck.html.components.input import Input
+from duck.html.components.script import Script
+from duck.html.components.card import Card
+from duck.html.components.label import Label
 
 
 class FileInput(Input):
@@ -12,7 +13,7 @@ class FileInput(Input):
     """
     def on_create(self):
         super().on_create()
-        self.properties["type"] = "file"
+        self.props["type"] = "file"
 
 
 class FileDragAndDrop(Card):
@@ -28,33 +29,32 @@ class FileDragAndDrop(Card):
         self.style["display"] = "flex"
         self.style["flex-direction"] = "column"
         self.style["border"] = "1px dashed #ccc"
-        
         self.style["gap"] = "10px"
         self.style["flex-direction"] = "column"
-        self.properties['class'] = 'drag-and-drop'
+        self.klass = 'drag-and-drop'
         
+        # Do some magic.
         if "label_text" in self.kwargs:
             label_text = self.kwargs.get('label_text', '')
-            label = f"<label>{label_text}</label>"
-            selected_file_label = "<label class='selected-file-label'>Selected file: No file selected</label>"
-            self.inner_body += label
-            self.inner_body += selected_file_label
+            self.label = Label(inner_html=label_text)
+            self.selected_file_label = Label(
+                text="Selected file: No file selected",
+                props={"class": 'selected-file-label'},
+            )
+            self.add_child(self.label)
+            self.add_child(self.selected_file_label)
         
-        if "input" in self.kwargs:
-            inputfield = self.kwargs.get('input', '')
-            inputfield.style['aria-hidden'] = "true"
-            inputfield.style["opacity"] = "0"
-            inputfield.style["width"] = "0"
-            inputfield.style["height"] = "0"
-            inputfield.properties["class"] = "drag-n-drop-fileinput"
+        self.inputfield = self.get_kwarg_or_raise('input')
+        self.inputfield.style['aria-hidden'] = "true"
+        self.inputfield.style["opacity"] = "0"
+        self.inputfield.style["width"] = "0"
+        self.inputfield.style["height"] = "0"
+        self.inputfield.klass = "drag-n-drop-fileinput"
+        self.add_child(self.inputfield)
             
-            if inputfield:
-                inputfield = inputfield.to_string()
-            self.inner_body += inputfield
-        
         # Now attach script for this drag n drop
-        script = Script(
-            inner_body="""
+        self.script = Script(
+            inner_html="""
                 function dragAndDropClick(dragAndDrop){
                     const fileInput = $(dragAndDrop).find('input[type="file"]');
                     fileInput.click();
@@ -129,4 +129,5 @@ class FileDragAndDrop(Card):
                     .on('drop', handleDrop);  // Handle the drop event when the file is dropped
             """
         )
-        self.inner_body += script.to_string()
+        
+        self.add_child(self.script)

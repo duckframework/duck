@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "ducksite/base.html" %}
 {# This uses django templating to showcase its use #}
 {% block title %}Contact Us{% endblock title %}
 
@@ -8,7 +8,7 @@
 
 {% block main %}
 {% if feedback_submitted %}
-    <h1>Feedback Submitted</h1>
+    <h2>Feedback Submitted</h2>
     <p class="feedback-message">
        Thanks for your feedback!
        <br>
@@ -16,7 +16,7 @@
     <p><strong>Duck is working correctly.</strong></p>
 
 {% else %}
-    <h1>Contact Us</h1>
+    <h2>Contact Us</h2>
     <h4>
       <span style="color: #FFA500;">*</span> This is a test form and will be implemented in the future for Duck maintainers to receive emails.
     </h4>

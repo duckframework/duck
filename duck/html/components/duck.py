@@ -1,8 +1,10 @@
 """
 Module containing Duck specific components.
 """
-from .container import FlexContainer
-from .image import Image
+
+from duck.html.components.container import FlexContainer
+from duck.html.components.image import Image
+from duck.html.components.label import Label
 
 
 class MadeWithDuck(FlexContainer):
@@ -11,17 +13,20 @@ class MadeWithDuck(FlexContainer):
     text named `Proudly made with Duck`
     """
     def on_create(self):
-        super().on_create()
         from duck.etc.templatetags import static
+        
+        # Call the super creation
+        super().on_create()
         
         self.style["gap"] = "10px"
         self.style["align-items"] = "center"
         self.style["justify-content"] = "center"
         
-        # Add image left
-        image = Image(source=static('images/duck-logo.png'))
-        image.style["object-fit"] = "contain"
-        self.inner_body += image.to_string()
+        # Add image.
+        self.image = Image(source=static('images/duck-logo.png'))
+        self.image.style["object-fit"] = "contain"
+        self.image.style["margin"] = "0px"
+        self.add_child(self.image)
         
-        # Add info
-        self.inner_body += "Proudly made with Duck"
+        # Add some text.
+        self.add_child(Label(text="Proudly made with Duck", style={"margin": "0px"}))

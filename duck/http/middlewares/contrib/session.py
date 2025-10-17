@@ -2,10 +2,10 @@
 Module containing SessionMiddleware class.
 """
 
+from duck.settings import SETTINGS
 from duck.http.middlewares import BaseMiddleware
 from duck.http.request import HttpRequest
 from duck.meta import Meta
-from duck.settings import SETTINGS
 
 
 class SessionMiddleware(BaseMiddleware):
@@ -18,7 +18,7 @@ class SessionMiddleware(BaseMiddleware):
     - Request session should not be explicitly saved if you want session to be sent to the client in Set-Cookie header.
     """
 
-    debug_message: str = "SessionMiddleware: Session error"
+    debug_message: str = "SessionMiddleware: Session Error"
 
     @classmethod
     def process_response(cls, response, request):
@@ -26,13 +26,12 @@ class SessionMiddleware(BaseMiddleware):
         
         if request.SESSION.needs_update(): # whether session has been modified.
             session_expired = False
+            
             try:
                 request.SESSION.save()
             except SessionExpired:
                 session_expired = True
-                request.set_expiry(
-                    None
-                )  # None will resolve to SESSION_AGE set in settings.py
+                request.set_expiry(None) # None will resolve to SESSION_AGE set in settings.py
                 request.SESSION.save()
             
             if request.session_exists or session_expired:
@@ -43,9 +42,7 @@ class SessionMiddleware(BaseMiddleware):
              
             session_key = request.SESSION.session_key
             session_cookie_name = SETTINGS["SESSION_COOKIE_NAME"]
-            session_cookie_domain = SETTINGS[
-                "SESSION_COOKIE_DOMAIN"] or Meta.get_metadata(
-                    "DUCK_SERVER_DOMAIN")
+            session_cookie_domain = SETTINGS["SESSION_COOKIE_DOMAIN"] or Meta.get_metadata("DUCK_SERVER_DOMAIN")
             expire_at_browser_close = SETTINGS["SESSION_EXPIRE_AT_BROWSER_CLOSE"]
             expires = request.SESSION.get_expiry_date() if not expire_at_browser_close else None
             path = SETTINGS["SESSION_COOKIE_PATH"]
@@ -82,20 +79,21 @@ class SessionMiddleware(BaseMiddleware):
         session_cookie_name = SETTINGS["SESSION_COOKIE_NAME"]
         session_key = request.COOKIES.get(session_cookie_name)
         session_exists = False
-
+        
         if session_key:
             request.SESSION.session_key = session_key
             session_exists = False
             try:
-                request.SESSION.load()
-                if request.SESSION:
+                data = request.SESSION.load()
+                if data:
                     session_exists = True
             except KeyError:
-                # session doesnt exist
+                # Session doesnt exist
                 pass
 
-        if not session_exists:
-            # session needs to be created
+        if not session_exists and not session_key:
+            # Session needs to be created
             request.SESSION.create()
+            
         request.session_exists = session_exists
         return cls.request_ok

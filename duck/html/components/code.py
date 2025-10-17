@@ -19,8 +19,11 @@ Example:
 code_block = Code(code="print('Hello, world!')", code_props={"class": "highlighted"})
 editable_code_block = EditableCode(code="x = 5", code_style={"color": "blue"})
 ```
+
+**Notes**:
+- These implementations might require Bootstrap, JQuery and Bootstrap Icons.
 """
-from duck.html.components import InnerHtmlComponent
+from duck.html.components import InnerComponent
 from duck.html.components.textarea import TextArea
 from duck.html.components.icon import Icon
 from duck.html.components.script import Script
@@ -29,7 +32,7 @@ from duck.html.components.container import FlexContainer
 from duck.html.components import Theme
 
 
-class CodeInner(InnerHtmlComponent):
+class CodeInner(InnerComponent):
     """
     Represents the inner `<code>` element in the HTML code block.
 
@@ -39,7 +42,7 @@ class CodeInner(InnerHtmlComponent):
         return "code"
 
 
-class Code(InnerHtmlComponent):
+class Code(InnerComponent):
     """
     Code HTML component - The base component is built on the <pre> tag.
     
@@ -83,7 +86,9 @@ class Code(InnerHtmlComponent):
         self.style["flex-direction"] = "column"
         self.style["gap"] = "3px"
         self.style["padding"] = "10px"
-        self.properties["class"] = "code-block"
+        self.style["width"] = "100%"
+        self.style["background"] = "black"
+        self.klass = "code-block"
         
         # Add copy button container
         self.code_copy_container = FlexContainer()
@@ -97,18 +102,18 @@ class Code(InnerHtmlComponent):
         self.code_copy_btn.style["height"] = "auto"
         self.code_copy_btn.style["position"] = "fixed"
         self.code_copy_btn.style["font-size"] = "1rem"
-        self.code_copy_btn.properties["class"] = "code-copy-btn bi bi-copy"
-        self.code_copy_btn.properties["onclick"] = "copyCode(this);"
+        self.code_copy_btn.klass = "code-copy-btn bi bi-copy"
+        self.code_copy_btn.props["onclick"] = "copyCode(this);"
         self.code_copy_container.add_child(self.code_copy_btn)
         
         # Add inner code element (<code></code>)
-        self.code_inner = CodeInner()  # <code></code>
-        self.code_inner.properties["class"] = "code-block-inner"
+        self.code_inner = CodeInner(style={"overflow-x": "auto"})  # <code></code>
+        self.code_inner.klass = "code-block-inner"
         self.add_child(self.code_inner)
         
         # Add global script for copying code
         script = Script(
-            inner_body="""
+            inner_html="""
                 function copyCode(copyCodeBtn){
                     const copyBtn = $(copyCodeBtn);
                     const codeBlock = copyBtn.parent().parent().find('code');
@@ -141,15 +146,18 @@ class Code(InnerHtmlComponent):
         Initializes the components and sets up the code content.
         It checks if the `code`, `code_props`, and `code_style` arguments were passed in.
         """
+        super().on_create()
+        
+        # Add initial components.
         self.add_initial_components()
         
         if "code" in self.kwargs:
             code = self.kwargs.get('code') or ''
-            self.code_inner.inner_body += code
+            self.code_inner.inner_html = code
         
         if "code_props" in self.kwargs:
             code_props = self.kwargs.get('code_props') or {}
-            self.code_inner.properties.update(code_props)
+            self.code_inner.props.update(code_props)
         
         if "code_style" in self.kwargs:
             code_style = self.kwargs.get('code_style') or {}
@@ -184,5 +192,5 @@ class EditableCode(Code):
         Extends the `on_create` method to add the `contenteditable` attribute to allow code editing.
         """
         super().on_create()
-        self.properties["class"] = "editable-code-block"
-        self.properties["contenteditable"] = "true"
+        self.props["class"] = "editable-code-block"
+        self.props["contenteditable"] = "true"

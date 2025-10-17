@@ -14,11 +14,15 @@ from duck.utils.safemarkup import MarkupSafeString
 
 
 class TemplateTagError(Exception):
-    """Exception for errors related to the TemplateTag class."""
+    """
+    Exception for errors related to the TemplateTag class.
+    """
 
 
 class TemplateFilterError(Exception):
-    """Exception for errors related to the TemplateFilter class."""
+    """
+    Exception for errors related to the TemplateFilter class.
+    """
 
 
 class TemplateTag:

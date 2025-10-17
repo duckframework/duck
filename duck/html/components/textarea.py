@@ -5,10 +5,10 @@ This module provides a customizable `TextArea` component for handling multi-line
 """
 
 from duck.html.components import Theme
-from duck.html.components import InnerHtmlComponent
+from duck.html.components import InnerComponent
 
 
-class TextArea(InnerHtmlComponent):
+class TextArea(InnerComponent):
     """
     A reusable HTML `<textarea>` component for multi-line text input.
     
@@ -24,7 +24,13 @@ class TextArea(InnerHtmlComponent):
 
         maxlength (int, optional):  
             The maximum number of characters allowed in the textarea.
-
+        
+        minlength (int, option):
+            The minimum number of characters.
+        
+        disabled (bool, optional):
+            Whether input is disabled.
+         
     Example:
     
     ```py
@@ -55,7 +61,11 @@ class TextArea(InnerHtmlComponent):
         return "textarea"
 
     def on_create(self):
-        """Initializes the component with default styles and attributes."""
+        """
+        Initializes the component with default styles and attributes.
+        """
+        super().on_create()
+        
         # Apply default styling
         textarea_style = {
             "padding": "10px",
@@ -66,18 +76,24 @@ class TextArea(InnerHtmlComponent):
         self.style.setdefaults(textarea_style)
 
         # Set default properties
-        self.properties["min-width"] = "50%"
-        self.properties["min-height"] = "80px"
+        self.props["min-width"] = "50%"
+        self.props["min-height"] = "80px"
 
         # Assign properties based on arguments
         if "name" in self.kwargs:
-            self.properties["name"] = self.kwargs.get("name", "")
+            self.props["name"] = self.kwargs.get("name")
 
         if "placeholder" in self.kwargs:
-            self.properties["placeholder"] = self.kwargs.get("placeholder", "")
+            self.props["placeholder"] = self.kwargs.get("placeholder")
 
         if self.kwargs.get("required", False):
-            self.properties["required"] = "true"
+            self.props["required"] = "true"
 
         if "maxlength" in self.kwargs:
-            self.properties["maxlength"] = str(self.kwargs.get("maxlength", ""))
+            self.props["maxlength"] = str(self.kwargs.get("maxlength"))
+        
+        if "minlength" in self.kwargs:
+           self.props["minlength"] = str(self.kwargs.get('minlength')) or ''  
+                
+        if "disabled" in self.kwargs:
+            self.props["disabled"] = "true" if self.kwargs.get("disabled") else "false"

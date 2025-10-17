@@ -1,6 +1,7 @@
 """
 Defines and provides the storage directory for Duck-related data and configuration files.
 """
+import sys
 
 from os import path, getenv
 from pathlib import Path
@@ -35,7 +36,7 @@ def BaseDir() -> Path:
     try:
         settings_path = getenv("DUCK_SETTINGS_MODULE")
         settings_mod = import_module_once(settings_path)
-        return Path(settings_mod.__file__).resolve().parent
+        return Path(settings_mod.__file__).resolve().parent.parent
     except (ImportError, ModuleNotFoundError, KeyError) as e:
         raise SettingsError(
             f"Error loading Duck settings module, ensure environment variable DUCK_SETTINGS_MODULE is set correctly: {e}."

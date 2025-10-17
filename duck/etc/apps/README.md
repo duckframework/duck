@@ -1,1 +1,1 @@
-# Contains duck internal apps/route blueprints
+This directory contains internal Duck apps/blueprints.

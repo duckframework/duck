@@ -67,6 +67,7 @@ class Content:
         "supported_encodings",
         "suppress_errors",
         "auto_read_file",
+        "disable_datatype_check",
     )
     
     def __init__(
@@ -111,6 +112,7 @@ class Content:
         self.auto_read_file = auto_read_file
         self.set_content(data or b'', filepath, content_type)
         self.encoding = encoding
+        self.disable_datatype_check = False
 
     def _compress(self, data: bytes, encoding: str, **kwargs) -> Tuple[bytes, bool]:
         """
@@ -295,11 +297,11 @@ class Content:
 
     @property
     def data(self):
-        return self.__data
+        return bytes(self.__data)
 
     @data.setter
     def data(self, data: bytes):
-        if not isinstance(data, bytes):
+        if not isinstance(data, bytes) and not self.disable_datatype_check:
             if self.suppress_errors:
                 self.__data = b""
                 return self.__data
@@ -413,6 +415,12 @@ class Content:
                 content_type = "application/octet-stream"
         self.content_type = content_type
 
+    def force_set_data(self, data):
+        """
+        Forcily set data regardless of the type.
+        """
+        self.__data = data
+        
     def set_content(
         self,
         data: bytes = b"",

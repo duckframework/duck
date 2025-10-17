@@ -28,8 +28,7 @@ from duck.utils.rand_domain import generate_random_domain
 
 
 def generate_ascii_secret(length=16):
-    letters = (string.ascii_letters
-               )  # Contains both lowercase and uppercase letters
+    letters = (string.ascii_letters)  # Contains both lowercase and uppercase letters
     token = "".join(random.choice(letters) for _ in range(length))
     return token
 

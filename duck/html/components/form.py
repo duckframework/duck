@@ -5,14 +5,12 @@ Available Forms:
 - `Form`: Basic form component.
 - `FeedbackForm`: Basic feedback form component.
 """
-from duck.html.components import InnerHtmlComponent
-from duck.html.components import Theme
-
-from .input import Input, CSRFInput
-from .textarea import TextArea
+from duck.html.components import InnerComponent, to_component, Theme
+from duck.html.components.input import Input, CSRFInput
+from duck.html.components.textarea import TextArea
 
 
-class Form(InnerHtmlComponent):
+class Form(InnerComponent):
     """
     Basic Form component.
     
@@ -26,24 +24,25 @@ class Form(InnerHtmlComponent):
         return "form"
     
     def on_create(self):
+        super().on_create()
         if "action" in self.kwargs:
-            self.properties["action"] = self.kwargs.get("action") or "#"
+            self.props["action"] = self.kwargs.get("action") or "#"
             
         if "method" in self.kwargs:
-            self.properties["method"] = self.kwargs.get("method") or "post"
+            self.props["method"] = self.kwargs.get("method") or "post"
         
         if "enctype" in self.kwargs:
-            self.properties["enctype"] = self.kwargs.get("enctype") or "multipart/form-data"
+            self.props["enctype"] = self.kwargs.get("enctype") or "multipart/form-data"
         
         if "fields" in self.kwargs:
             for field in self.kwargs.get("fields", []):
                 field.style["border-radius"] = Theme.border_radius
                 field.style["font-size"] = "1.5rem"
-                if "class" in field.properties:
-                    field.properties["class"] += " form-control"
+                if "class" in field.props:
+                    field.props["class"] += " form-control"
                 else:
-                    field.properties["class"] = "form-control"
-                self.inner_body += field.to_string()
+                    field.props["class"] = "form-control"
+                self.add_child(field)
 
 
 class FeedbackForm(Form):
@@ -68,48 +67,47 @@ class FeedbackForm(Form):
         self.style["padding"] = "10px"
         self.style["border-radius"] = Theme.border_radius
         self.style["border"] = "1px solid #ccc"
-        
-        self.properties["class"] = "feedback-form form"
+        self.props["class"] = "feedback-form form"
         
         # Create fullname textfield
-        fullname = Input(
+        self.fullname = Input(
             type="text",
             placeholder="Full Name",
             required=True,
             maxlength=64,
-            name="fullname")
+            name="fullname",
+        )
         
-        email = Input(
+        self.email = Input(
             type="email",
             placeholder="Email",
             required=True,
             maxlength=64,
-            name="email")
+            name="email",
+        )
         
-        textarea = TextArea(
+        self.textarea = TextArea(
             placeholder="What is it you like to say?",
             maxlength=255,
             required=True,
-            name="feedback")
+            name="feedback",
+            props={"rows": "4", "cols": "50"},
+        )
         
-        textarea.properties["rows"] = "4"
-        textarea.properties["cols"] = "50"
-            
-        submit = Input(type="submit", value="Submit",)
-        submit.style["border"] = "none"
-        submit.style["font-size"] = "1rem"
-        submit.style["color"] = "#ccc"
-        submit.style["background-color"] = "green"
+        self.submit = Input(type="submit", value="Submit",)
+        self.submit.color = "#ccc"
+        self.submit.bg_color = "green"
+        self.submit.style["border"] = "none"
+        self.submit.style["font-size"] = "1rem"
         
-        context = self.kwargs.get("context")
-        request = context.get('request')
-        
+        # Get the current request
         self.kwargs["fields"] = [
-            CSRFInput(request=request),
+            CSRFInput(request=self.get_request_or_raise()),
             fullname,
             email,
             textarea,
-            submit]
+            submit,
+        ]
         
         # Super Create
         super().on_create()

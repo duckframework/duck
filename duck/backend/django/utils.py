@@ -12,12 +12,36 @@ from django.http.request import (
     RawPostDataException,
 )
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import execute_from_command_line, call_command
 from duck.http.request import HttpRequest
 from duck.http.response import (
     HttpResponse,
     StreamingHttpResponse,
 )
 from duck.http.fileuploads.handlers import BaseFileUpload
+
+
+def run_from_command_line(command):
+    """
+    Runs any Django management command as if it was run from command line.
+
+    Args:
+        command (str): The command e.g., "manage.py migrate"
+    """
+    cmd = [i.strip() for i in command.split(" ")] if isinstance(command, str) else command
+    execute_from_command_line(cmd)
+    
+
+def run_django_command(command, *args, **kwargs):
+    """
+    Runs any Django management command programmatically.
+
+    Args:
+        command (str): The command name, e.g., "migrate", "makemigrations"
+        *args: Positional arguments for the command.
+        **kwargs: Keyword arguments for the command.
+    """
+    call_command(command, *args, **kwargs)
 
 
 def duck_url_to_django_syntax(url: str) -> str:
@@ -44,7 +68,9 @@ def duck_url_to_django_syntax(url: str) -> str:
 
 
 def duck_to_django_response(response: HttpResponse):
-    """Converts Duck's http response to Django's http response object/"""
+    """
+    Converts Duck's http response to Django's http response object.
+    """
     headers = response.title_headers
     
     # Retrieve content type from headers or the automatic calculated content type
@@ -138,7 +164,13 @@ def get_raw_django_payload(request: DjangoHttpRequest) -> bytes:
                request construction or logging.
     """
     # Start with the request line (method, path, protocol)
-    topheader = f'{request.method} {request.path} {request.META.get("SERVER_PROTOCOL", "HTTP/1.1")}\r\n'
+    fullpath = request.path
+    query_string = request.META.get("QUERY_STRING", "")
+    
+    if query_string:
+        fullpath += "?" + query_string
+    
+    topheader = f'{request.method} {fullpath} {request.META.get("SERVER_PROTOCOL", "HTTP/1.1")}\r\n'
     raw = bytes(topheader, "utf-8")
     
     # Add headers to the raw request

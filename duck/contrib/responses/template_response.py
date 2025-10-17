@@ -5,14 +5,14 @@ import os
 
 from typing import Type
 
-from duck.etc.internals.template_engine import InternalDuckEngine
 from duck.http.response import HttpResponse, TemplateResponse
 from duck.settings import SETTINGS
 from duck.utils.path import joinpaths
 from duck.utils.safemarkup import mark_safe
+from duck.etc.internals.template import internal_render
 
 
-FAVICON = os.getenv("SIMPLE_RESPONSE_DEFAULT_ICON") or joinpaths(str(SETTINGS["STATIC_URL"]), "duck-favicon.png")
+FAVICON = os.getenv("TEMPLATE_RESPONSE_DEFAULT_ICON") or joinpaths("/" + str(SETTINGS["STATIC_URL"]), "/ducksite/duck-favicon.png")
 
 
 def template_response(
@@ -54,12 +54,11 @@ def template_response(
     if icon_link and not icon_type:
         raise TypeError("The icon type must be provided when an icon link is provided.")
 
-    response = TemplateResponse(
+    response = internal_render(
         request=None,
-        template="base_template_response.html",
+        template="base_response.html",
         context=context,
         content_type="text/html",
         status_code=response.status_code,
-        engine=InternalDuckEngine.get_default(),
     )
     return response

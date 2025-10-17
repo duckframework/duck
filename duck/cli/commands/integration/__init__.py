@@ -219,7 +219,7 @@ class DjangoAddCommand:
         
         # Destination settings
         django_destination_name = destination_name or django_project_path.name
-        django_destination_path = base_dir / f"backend/django/{django_destination_name}"
+        django_destination_path = base_dir / f"web/backend/django/{django_destination_name}"
         django_destination_mainapp_dir = django_destination_path / django_project_mainapp_name
         django_destination_old_dir = django_destination_mainapp_dir / "old"
         django_destination_manage_py = django_destination_path / "manage.py"
@@ -333,7 +333,7 @@ class DjangoAddCommand:
         
         console.log_raw(
             "🔧 Ensure your Duck `settings.py` includes:\n"
-            f" - `DJANGO_SETTINGS_MODULE = 'backend.django.{django_destination_name}.{django_destination_mainapp_dir.name}.settings'`\n"
+            f" - `DJANGO_SETTINGS_MODULE = 'web.backend.django.{django_destination_name}.{django_destination_mainapp_dir.name}.settings'`\n"
             " - Verify the copied Django settings file matches your project requirements.\n",
             level=console.WARNING,
         )

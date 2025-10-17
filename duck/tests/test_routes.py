@@ -82,7 +82,7 @@ class TestMiddlewareResponses(TestBaseRoutes):
         - Command injection attempts
         - XSS injection via query parameters
 
-        Ensures input validation middleware (e.g., HttpSanitizationMiddleware) 
+        Ensures input validation middleware (e.g., BadRequestMiddleware) 
         correctly blocks suspicious or malformed requests.
         """
         attack_paths = [

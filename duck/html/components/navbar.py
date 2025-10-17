@@ -6,22 +6,24 @@ It includes support for branding, navigation links, and a responsive design.
 """
 
 from duck.html.components import (
-    InnerHtmlComponent,
+    Component,
+    InnerComponent,
     Theme,
+    to_component,
 )
-from .container import (
+from duck.html.components.container import (
     Container,
     FlexContainer,
 )
-from .button import (
+from duck.html.components.button import (
     Button,
     FlatButton,
 )
-from .link import Link
-from .icon import Icon
-from .image import Image
-from .script import Script
-from .style import Style
+from duck.html.components.link import Link
+from duck.html.components.icon import Icon
+from duck.html.components.image import Image
+from duck.html.components.script import Script
+from duck.html.components.style import Style
 
 
 class NavbarBrand(Link):
@@ -41,44 +43,53 @@ class NavbarBrand(Link):
     """
 
     def on_create(self):
-        """Initialize and configure the NavbarBrand component."""
+        """
+        Initialize and configure the NavbarBrand component.
+        """
+        super().on_create()
+        self.color = "transaparent"
+        self.klass = "navbar-brand me-auto"
+        
         if "brand" in self.kwargs:
             self.add_navbar_image()
-
-        self.style["color"] = "none"
-        self.properties["class"] = "navbar-brand me-auto"
-        super().on_create()
-
+            
     def add_navbar_image(self):
-        """Adds a brand image and optional text to the NavbarBrand component."""
+        """
+        Adds a brand image and optional text to the NavbarBrand component.
+        """
         brand = self.kwargs.get("brand", {})
         image_source = brand.get("image_source")
         alt = brand.get("alt", "")
-        url = brand.get("url", "#")
+        url = brand.get("url")
         text = brand.get("text", "")
-
-        self.kwargs.update({"url": url})
-
+        
+        if not url:
+            raise ValueError("Please provide valid URL in brand dictionary.")
+        
+        else:
+            self.props["href"] = url
+        
         if image_source:
-            brand_image = Image(source=image_source)
-            brand_image.properties["class"] = "nav-brand-image"
-            brand_image.style["height"] = "40px"
-            brand_image.style["width"] = "auto"
+            self.brand_image = Image(source=image_source)
+            self.brand_image.props["class"] = "nav-brand-image"
+            self.brand_image.style["height"] = "40px"
+            self.brand_image.style["width"] = "auto"
 
             if alt:
-                brand_image.properties["alt"] = alt
-
-            self.add_child(brand_image)
+                self.brand_image.props["alt"] = alt
+            
+            # Add the brand image.
+            self.add_child(self.brand_image)
 
         if text:
-            brand_text = FlexContainer(inner_body=text)
-            brand_text.style["display"] = "inline-flex"
-            brand_text.style["margin-left"] = "3px"
-            brand_text.properties["class"] = "nav-brand-text"
-            self.add_child(brand_text)
+            self.brand_text = FlexContainer(text=text)
+            self.brand_text.style["display"] = "inline-flex"
+            self.brand_text.style["margin-left"] = "3px"
+            self.brand_text.props["class"] = "nav-brand-text"
+            self.add_child(self.brand_text)
 
 
-class NavbarLinks(InnerHtmlComponent):
+class NavbarLinks(InnerComponent):
     """
     Navigation Bar Links Component.
 
@@ -95,23 +106,30 @@ class NavbarLinks(InnerHtmlComponent):
         return "ul"
 
     def on_create(self):
-        """Initialize and configure the NavbarLinks component."""
-        self.properties["class"] = "navbar-nav navbar-links d-flex gap-3"
-        self.properties["id"] = "navbar-links"
+        """
+        Initialize and configure the NavbarLinks component.
+        """
+        super().on_create()
+        self.klass = "navbar-nav navbar-links d-flex gap-3"
+        self.id = "navbar-links"
 
         if "links" in self.kwargs:
             self.add_links()
 
     def add_links(self):
-        """Adds navigation links to the component."""
+        """
+        Adds navigation links to the component.
+        """
         links = self.kwargs.get("links", [])
 
         for link_item in links:
             text = link_item.get("text", "")
             url = link_item.get("url", "#")
-            link = Link(text=text, url=url, properties={"class": "nav-link active"})
-            link.style["color"] = "#ccc"
-            self.inner_body += f"<li class='nav-item'>{link.to_string()}</li>"
+            link = Link(url=url, text=text, props={"class": "nav-link active"})
+            link.color = "white"
+            list_item = to_component(tag="li", props={'class': 'nav-item'})
+            list_item.add_child(link)
+            self.add_child(list_item)
 
 
 class NavbarContainer(FlexContainer):
@@ -123,40 +141,42 @@ class NavbarContainer(FlexContainer):
     """
 
     def on_create(self):
-        """Initialize and configure the NavbarContainer component."""
+        """
+        Initialize and configure the NavbarContainer component.
+        """
         super().on_create()
-        self.properties["class"] = "container-fluid d-flex justify-content-between align-items-center"
-
+        self.klass = "container-fluid d-flex justify-content-between align-items-center"
+        
         # Add Navbar Brand
-        self.add_child(NavbarBrand(**self.kwargs))
-
+        self.navbar_brand = NavbarBrand(**self.kwargs)
+        self.add_child(self.navbar_brand)
+        
         # Add Navbar Toggler (for mobile)
-        navbar_toggler = FlatButton()
-        navbar_toggler.style["outline"] = "none !important"
-        navbar_toggler.style["background-color"] = "transparent"
-        navbar_toggler.properties["class"] = "navbar-toggler"
-        navbar_toggler.properties["onclick"] = "toggleCollapse($('.navbar-links-container'));"
+        self.navbar_toggler = FlatButton()
+        self.navbar_toggler.style["outline"] = "none !important"
+        self.navbar_toggler.bg_color = "transparent"
+        self.navbar_toggler.klass = "navbar-toggler"
+        self.navbar_toggler.props["onclick"] = "toggleCollapse($('.navbar-links-container'));"
 
-        navbar_toggler_icon = Icon(icon_class="navbar-toggler-icon bi bi-list")
-        navbar_toggler_icon.style["width"] = "16px"
-        navbar_toggler_icon.style["height"] = "16px"
-        navbar_toggler_icon.properties["alt"] = "menu"
+        self.navbar_toggler_icon = Icon(klass="navbar-toggler-icon bi bi-list")
+        self.navbar_toggler_icon.style["width"] = "16px"
+        self.navbar_toggler_icon.style["height"] = "16px"
+        self.navbar_toggler_icon.props["alt"] = "menu"
 
-        navbar_toggler.add_child(navbar_toggler_icon)
-        self.add_child(navbar_toggler)
+        self.navbar_toggler.add_child(self.navbar_toggler_icon)
+        self.add_child(self.navbar_toggler)
 
         # Add Navbar Links Container
-        navbar_links_container = Container()
-        navbar_links_container.properties["class"] = "navbar-links-container collapse navbar-collapse d-lg-flex align-items-center"
-        #navbar_links_container.style["justify-content"] = "flex-end"
-
+        self.navbar_links_container = Container()
+        self.navbar_links_container.props["class"] = "navbar-links-container collapse navbar-collapse d-lg-flex align-items-center"
+        
         # Add Navbar Links to their container
-        navbar_links_container.add_child(NavbarLinks(**self.kwargs))
-        self.add_child(navbar_links_container)
+        self.navbar_links_container.add_child(NavbarLinks(**self.kwargs))
+        self.add_child(self.navbar_links_container)
 
         # Add script for toggling navbar visibility
-        script = Script(
-            inner_body="""
+        self.script = Script(
+            inner_html="""
                 function toggleCollapse(elem) {
                     elem = $(elem);
                     if (elem.is(':hidden')) {
@@ -165,12 +185,27 @@ class NavbarContainer(FlexContainer):
                         elem.css('display', 'none');
                     }
                 }
+                
+                function closeNavbar() {
+                  const toggleBtn = $('.navbar-toggler');
+                  const navlinks = $('.navbar-links-container');
+                  
+                  // Only hide if navbar toggle button is visible
+                  if (!toggleBtn.is(':hidden')) {
+                    navlinks.css('display', 'none');
+                  }
+                }
+                
+                $(document).ready(() => {
+                  const navlinks = $('.nav-link');
+                  navlinks.on('click', closeNavbar);
+                });
             """
         )
         
         # Add responsive styles
-        style = Style(
-            inner_body="""
+        self.css = Style(
+            inner_html="""
                 @media (max-width: 768px){
                     .navbar-links-container {
                         justify-content: flex-start !important;
@@ -182,17 +217,20 @@ class NavbarContainer(FlexContainer):
             """
         )
         
-        self.add_child(style)
-        self.add_child(script)
+        self.add_child(self.css)
+        self.add_child(self.script)
 
 
-class Navbar(InnerHtmlComponent):
+class Navbar(InnerComponent):
     """
     Navigation Bar Component.
 
     This component represents a full navigation bar with a brand logo, navigation links, and
     a responsive toggler button for mobile screens.
-
+    
+    Notes:
+    - This requires Bootsrap & Bootstrap icons library.
+    
     Example Template Usage:
     
     ```django
@@ -219,9 +257,12 @@ class Navbar(InnerHtmlComponent):
         return "nav"
 
     def on_create(self):
-        """Initialize and configure the Navbar component."""
-        self.properties["class"] = "navbar navbar-expand-lg navbar-dark px-3"
-        self.style["background-color"] = "rgba(100, 100, 100, .25)"
+        """
+        Initialize and configure the Navbar component.
+        """
+        super().on_create()
+        self.klass = "navbar navbar-expand-lg navbar-dark px-3"
+        self.bg_color = "rgba(100, 100, 100, .25)"
 
         # Add Navbar Container
         self.add_child(NavbarContainer(**self.kwargs))

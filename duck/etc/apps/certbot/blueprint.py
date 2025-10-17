@@ -20,7 +20,7 @@ Certbot = Blueprint(
         ),
     ],
     prepend_name_to_urls=False,
-    is_builtin=True,
     enable_template_dir=False,
     enable_static_dir=False,
+    is_builtin=True,
 )

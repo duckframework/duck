@@ -20,6 +20,7 @@ Constants:
 - WARNING (int): Log level for warning messages.
 - INFO (int): Log level for informational messages.
 - DEBUG (int): Log level for debug messages.
+- SUCCESS (int): Log level for success message.
 
 Functions:
 - log_raw(msg, level, use_colors, custom_color): Logs a plain message.
@@ -37,15 +38,27 @@ log_raw("Raw debug message", level=DEBUG, use_colors=True, custom_color=Fore.MAG
 
 import sys
 import threading
+import warnings
 
 from colorama import Fore, Style
 
-# Define log level constants
-CRITICAL = 50
-ERROR = 40
-WARNING = 30
-INFO = 20
-DEBUG = 10
+# Whether to silence all logs
+SILENT = False
+
+try:
+    # If the below import succeeds, this means we are in a Duck project env.
+    from duck.settings import SETTINGS
+    SILENT = SETTINGS['SILENT']
+except Exception:
+    pass
+    
+# Logging Levels
+INFO = 0x0
+DEBUG = 0x1
+SUCCESS = 0x2
+WARNING = 0x3
+CRITICAL = 0x4
+ERROR = 0x5
 
 # Global print lock
 print_lock = threading.Lock()
@@ -56,7 +69,8 @@ def log_raw(
     level: int = INFO,
     use_colors: bool = True,
     custom_color: str = None,
-    end: str = "\n"):
+    end: str = "\n"
+):
     """
     Logs a raw message to the console without any modifications or prefixes.
     
@@ -68,17 +82,27 @@ def log_raw(
             Requires `use_colors` to be `True`.
         end (str): The log suffix, defaults to `"\n"` for newline.
     """
+    if SILENT:
+        # Do not log anything in this mode.
+        print(SILENT)
+        return
+        
     std = sys.stderr if level in {ERROR, CRITICAL} else sys.stdout
-    color = Style.RESET_ALL  # Default: no color
-
+    color = Fore.WHITE
+    
     # Determine color based on log level
     if level == ERROR or level == CRITICAL:
         color = Fore.RED
+    
     elif level == WARNING:
         color = Fore.YELLOW
+    
     elif level == DEBUG:
         color = Fore.CYAN
-
+    
+    elif level == SUCCESS:
+        color = Fore.GREEN 
+        
     # Apply custom color if provided
     if custom_color:
         color = custom_color
@@ -98,7 +122,8 @@ def log(
     level: int = INFO,
     use_colors: bool = True,
     custom_color: str = None,
-    end: str = "\n"):
+    end: str = "\n",
+):
     """
     Logs a formatted message to the console with a prefix and optional colors.
     
@@ -111,18 +136,27 @@ def log(
             Requires `use_colors` to be `True`.
         end (str): The log suffix, defaults to `"\n"` for newline.
     """
+    if SILENT:
+        # Do not log anything in this mode.
+        return
+        
     formatted_msg = f"{prefix} {msg}"
     std = sys.stderr if level in {ERROR, CRITICAL} else sys.stdout
-    color = Style.RESET_ALL  # Default: no color
-
+    color = Fore.WHITE
+    
     # Determine color based on log level
     if level == ERROR or level == CRITICAL:
         color = Fore.RED
+    
     elif level == WARNING:
         color = Fore.YELLOW
+    
     elif level == DEBUG:
         color = Fore.CYAN
-
+    
+    elif level == SUCCESS:
+        color = Fore.GREEN
+        
     # Apply custom color if provided
     if custom_color:
         color = custom_color
@@ -134,3 +168,29 @@ def log(
     else:
         with print_lock:
             print(formatted_msg, file=std, end=end)
+
+
+def should_filter_warning(category, message, module = None, lineno = 0):
+    """
+    Simulate Python's filtering logic for a warning.
+    Returns True if the warning would be filtered (ignored), False otherwise.
+    """
+    module = module or "__main__"
+    for action, msg, cat, mod, ln in warnings.filters:
+        # Check if this filter matches the warning
+        if ((msg is None or msg in message)
+            and (cat is None or issubclass(category, cat))
+            and (mod is None or mod in module)
+            and (ln == 0 or lineno == ln)):
+            # Actions: 'ignore', 'always', 'default', 'error', 'once', 'module'
+            return action == 'ignore'
+    # If no filter matches, default action is 'default' (show once per location)
+    return False
+
+
+def warn(message: str, category: Warning = UserWarning, use_colors: bool = True, module = None, lineno = 0):
+    """
+    This logs a warning to the console. You can filter warnings by using `warnings.filterwarnings`.
+    """
+    if not should_filter_warning(category, message, module, lineno):
+        log_raw(f"{category.__name__}: {message}", level=WARNING, use_colors=use_colors)

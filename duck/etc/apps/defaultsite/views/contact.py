@@ -17,4 +17,4 @@ def ducksite_contact_view(request: HttpRequest):
     if request.method.upper() == "POST":
         ctx["feedback_submitted"] = True
 
-    return render(request, "contact.html", ctx, engine="django")
+    return render(request, "ducksite/contact.html", ctx, engine="django")

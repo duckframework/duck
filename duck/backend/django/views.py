@@ -14,7 +14,8 @@ from duck.backend.django.utils import (
     duck_to_django_response,
 )
 from duck.contrib.sync import convert_to_sync_if_needed
-from duck.exceptions.all import RouteNotFoundError
+from duck.contrib.websockets import WebSocketView, View
+from duck.exceptions.all import RouteNotFoundError, ExpectingNoResponse
 from duck.routes import RouteRegistry
 from duck.meta import Meta
 from duck.logging import logger
@@ -89,18 +90,40 @@ def _duck_django_view(
     try:
         route_info = RouteRegistry.fetch_route_info_by_url(duck_request.path)
         url = route_info["url"]
-        handler_kwargs = route_info["handler_kwargs"]
+        view_kwargs = route_info["handler_kwargs"]
         
         # Call the Duck view with the necessary parameters
-        duck_view = route_info["handler"]
-        duck_response = convert_to_sync_if_needed(duck_view)(duck_request, **handler_kwargs)
+        view_callable = route_info["handler"]
+        
+        if type(view_callable) == type and issubclass(view_callable, WebSocketView):
+            raise TypeError(f"A websocket View cannot be accessed at Django side. Add `{duck_request.path}` to DUCK_EXPLICIT_URLS in settings.py.")
             
+        if (type(view_callable) == type and issubclass(view_callable, View)):
+            view = view_callable(duck_request, **view_kwargs)
+                
+            if view.strictly_async():
+                # View needs to be run asynchonously.
+                raise TypeError("View is set to be strictly asynchronous and cannot be accessed at Django side.")
+                
+            else:
+                # Convert the run method to sync if not.
+                run = convert_to_sync_if_needed(view.run)
+                duck_response = run()
+        else:
+            view_callable = convert_to_sync_if_needed(view_callable)
+            duck_response = view_callable(request=duck_request, **view_kwargs)
+                
     except RouteNotFoundError:
         duck_response = not_found404(request=duck_request)
     
     except Exception as e:
+        if isinstance(e, ExpectingNoResponse):
+            error_msg = f'ExpectingNoResponse exception have no effect on Django side": {str(e)}'
+        else:
+            error_msg = f'Error invoking response view for URL "{duck_request.path}": {str(e)}'
+            
         logger.log_raw(
-            f'Error invoking response view for URL "{duck_request.path}": {str(e)}',
+            error_msg,
             level=logger.ERROR,
             custom_color=logger.Fore.YELLOW,
         )

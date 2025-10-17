@@ -7,20 +7,16 @@ import sys
 import asyncio
 from typing import List
 
-from duck.exceptions.all import (
-    SettingsError,
-    BlueprintError,
-    RouteError,
-)
-from duck.routes import RouteRegistry
+from duck.exceptions.all import SettingsError
+from duck.routes import register_blueprints, register_urlpatterns
 from duck.settings import SETTINGS
 from duck.settings.loaded import (
     BLUEPRINTS,
     URLPATTERNS,
     REQUEST_HANDLING_TASK_EXECUTOR,
 )
-from duck.backend.django.setup import prepare_django
-from duck.utils.port_recorder import PortRecorder
+from duck.html.components.core.system import LivelyComponentSystem
+from duck.env import is_testing_environment
 
 
 def makedirs():
@@ -89,51 +85,6 @@ def makedirs():
         os.makedirs(ldir, exist_ok=True)
 
 
-def register_urlpatterns(urlpatterns: List):
-    """
-    Register some application urlpatterns.
-    """
-    # register route urlpatterns
-    for urlpattern in urlpatterns:
-        try:
-            if urlpattern.regex:
-                # this is a regex urlpattern
-                url, handler, name, methods = (
-                        urlpattern['url'], 
-                        urlpattern['handler'],
-                        urlpattern['name'],
-                        urlpattern['methods']
-                  )
-                RouteRegistry.regex_register(
-                       url, handler, name, methods,
-                )
-            else:
-                # this is a normal urlpattern
-                url, handler, name, methods = (
-                        urlpattern['url'], 
-                        urlpattern['handler'],
-                        urlpattern['name'],
-                        urlpattern['methods']
-                )
-                RouteRegistry.register(
-                        url, handler, name, methods,
-                )
-        except Exception as e:
-            raise RouteError(f"Error registering URL pattern '{urlpattern}': {e}")
-
-
-def register_blueprints(blueprints: list):
-    """
-    Register application blueprints.
-    """
-    # Register route blueprint.urlpatterns
-    for blueprint in blueprints:
-        try:
-            register_urlpatterns(blueprint.urlpatterns)
-        except Exception as e:
-            raise BlueprintError(f"Error registering urlpatterns for blueprint '{blueprint}' ") from e
-
-
 def set_asyncio_loop():
     """
     Configure the event loop policy based on SETTINGS["ASYNC_LOOP"].
@@ -182,25 +133,22 @@ def setup(make_app_dirs: bool = True):
     
     # Create base application directories
     if make_app_dirs:
-        makedirs()  # app dirs creation
-
-    if SETTINGS["USE_DJANGO"]:
-        PortRecorder.add_new_occupied_port(
-            SETTINGS["DJANGO_BIND_PORT"],
-            "DJANGO_BIND_PORT",
-        )
-        
+        # Only make app dirs if not in testing environment
+        if not is_testing_environment():
+            makedirs()  # app dirs creation
+           
+    # Register some urlpatterns
     register_urlpatterns(URLPATTERNS)
     register_blueprints(BLUEPRINTS)
+    
+    # Register Lively component system urlpattern
+    if LivelyComponentSystem.is_active():
+        lively_urlpatterns = LivelyComponentSystem.get_urlpatterns()
+        register_urlpatterns(lively_urlpatterns) # register lively component system urlpatterns.
     
     if base_dir not in sys.path:
         # Add project directory to path
         sys.path.insert(-1, base_dir)
-    
-    try:
-        prepare_django(True)
-    except Exception:
-        pass
     
     # Initialize the RequestHandlingExecutor lazily after prepare_django as this line will
     # make the whole setup very slow.

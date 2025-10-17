@@ -11,7 +11,15 @@ URL resolution fails.
 """
 import io
 
-from typing import Optional, Any, Union
+from typing import (
+    Optional,
+    Any,
+    Union,
+    Awaitable,
+    Callable,
+    Dict,
+)
+from collections.abc import Iterable
 from functools import lru_cache
 
 from duck import template as _template
@@ -25,6 +33,7 @@ from duck.http.response import (
     TemplateResponse,
     JsonResponse,
     StreamingHttpResponse,
+    ComponentResponse,
 )
 from duck.utils.path import (
     build_absolute_uri,
@@ -36,12 +45,16 @@ from duck.contrib.responses import (
     template_response,
 )
 from duck.contrib.responses.errors import get_404_error_response
-from duck.contrib.sync import sync_to_async
+from duck.contrib.sync import (
+  sync_to_async,
+  convert_to_sync_if_needed,
+)
+from duck.contrib.websockets import WebSocketView
 from duck.exceptions.all import (
     RouteNotFoundError,
     TemplateError,
 )
-
+from duck.html.components import Component
 from duck.meta import Meta
 from duck.routes import RouteRegistry
 
@@ -59,6 +72,7 @@ __all__ = [
     "not_found404",
     "merge",
     "content_replace",
+    "streaming_content_replace",
     "replace_response",
     "resolve",
     "to_response",
@@ -109,7 +123,8 @@ def media(resource_path: str) -> str:
 def jinja2_render(
     request: HttpRequest,
     template: str,
-    context: dict = {},
+    context: Dict[Any, Any] = {},
+    status_code: int = 200,
     **kw,
 ) -> TemplateResponse:
     """
@@ -117,8 +132,9 @@ def jinja2_render(
 
     Args:
         request (HttpRequest): The request object.
-        template (str): The Jinja2 template.
+        template (str): The Jinja2 template with global or blueprint template dirs.
         context (dict, optional): The context dictionary to pass to the template. Defaults to an empty dictionary.
+        status_code (int): The response status code, defaults to 200.
         **kw: Additional keyword arguments to parse to TemplateResponse.
 
     Returns:
@@ -130,7 +146,8 @@ def jinja2_render(
         request=request,
         template=template,
         context=context,
-        engine=_template.environment.Jinja2Engine.get_default(),
+        engine=_template.environment.default_jinja2_engine(),
+        status_code=status_code,
         **kw,
     )
 
@@ -138,7 +155,8 @@ def jinja2_render(
 def django_render(
     request: HttpRequest,
     template: str,
-    context: dict = {},
+    context: Dict[Any, Any] = {},
+    status_code: int = 200,
     **kw,
 ) -> TemplateResponse:
     """
@@ -146,9 +164,10 @@ def django_render(
 
     Args:
         request (HttpRequest): The request object.
-        template (str): The Django template.
+        template (str): The Django template within the global or blueprint template dirs.
         context (dict, optional): The context dictionary to pass to the template. Defaults to an empty dictionary.
-        **kw: Additional keyword arguments to parse to DjangoTemplateResponse.
+        status_code (int): The response status code, defaults to 200.
+        **kw: Additional keyword arguments to parse to the TemplateResponse.
 
     Returns:
         TemplateResponse: The response object with the rendered Django template.
@@ -159,7 +178,8 @@ def django_render(
         request=request,
         template=template,
         context=context,
-        engine=_template.environment.DjangoEngine.get_default(),
+        engine=_template.environment.default_django_engine(),
+        status_code=status_code,
         **kw,
     )
 
@@ -167,7 +187,8 @@ def django_render(
 def render(
     request,
     template: str,
-    context: dict = {},
+    context: Dict[Any, Any] = {},
+    status_code: int = 200,
     engine: str = "django",
     **kw,
 ) -> TemplateResponse:
@@ -178,6 +199,7 @@ def render(
             request (HttpRequest): Http request object.
             template (str): Template path within the TEMPLATE_DIR.
             context (dict, optional): Dictionary respresenting template context.
+            status_code (int): The response status code, defaults to 200.
             engine (str, optional): Template engine to use for rendering template, defaults to 'django'.
             **kw: Additional keywords to parse to the http response for the current template engine.
 
@@ -192,9 +214,9 @@ def render(
         )
     try:
         if engine == "jinja2":
-            return jinja2_render(request, template, context, **kw)
+            return jinja2_render(request, template, context, status_code, **kw)
         else:
-            return django_render(request, template, context, **kw)
+            return django_render(request, template, context, status_code, **kw)
     except Exception as e:
         _e = e
         e = str(e)
@@ -209,7 +231,8 @@ def render(
 async def async_render(
     request,
     template: str,
-    context: dict = {},
+    context: Dict[Any, Any] = {},
+    status_code: int = 200,
     engine: str = "django",
     **kw,
 ) -> TemplateResponse:
@@ -218,8 +241,9 @@ async def async_render(
 
     Args:
             request (HttpRequest): Http request object.
-            template (str): Template path within the TEMPLATE_DIR.
+            template (str): Template path within global or blueprint template dirs.
             context (dict, optional): Dictionary respresenting template context.
+            status_code (int): The response status code, defaults to 200.
             engine (str, optional): Template engine to use for rendering template, defaults to 'django'.
             **kw: Additional keywords to parse to the http response for the current template engine.
 
@@ -234,9 +258,9 @@ async def async_render(
         )
     try:
         if engine == "jinja2":
-            return await sync_to_async(jinja2_render)(request, template, context, **kw)
+            return await sync_to_async(jinja2_render)(request, template, context, status_code, **kw)
         else:
-            return await sync_to_async(django_render)(request, template, context, **kw)
+            return await sync_to_async(django_render)(request, template, context, status_code, **kw)
     except Exception as e:
         _e = e
         e = str(e)
@@ -358,7 +382,7 @@ def content_replace(
         new_content_filepath (str): Filepath to the content, Defaults to "use_existing" to use the already set filepath.
 
     """
-    assert not isinstance(response, StreamingHttpResponse), "Streaming http response not supported."
+    assert not isinstance(response, StreamingHttpResponse), "Streaming HTTP response not supported, use `streaming_content_replace` instead."
     assert isinstance(new_data, str) or isinstance(
         new_data, bytes
     ), "Only string or bytes allowed for new_data"
@@ -379,7 +403,6 @@ def content_replace(
 
     if new_content_filepath == "use_existing":
         new_content_filepath = response.content_obj.filepath
-
     response.content_obj.set_content(new_data, new_content_filepath, new_content_type)
 
     # Update content type header
@@ -388,27 +411,141 @@ def content_replace(
     return response
 
 
-def replace_response(old_response, new_response) -> HttpResponse:
+def streaming_content_replace(
+    response: StreamingHttpResponse,
+    stream: Union[Callable, Iterable[bytes]],
+    chunk_size: int = 2 * 1024 * 1024,
+) -> None:
     """
-    Replaces/transforms the old response into a new response object but with some old
-    fields except for headers, status and content.
+    Replaces response content with new content.
+
+    Args:
+        response (StreamingHttpResponse): Streaming Http Response to replace content for.
+        stream (Union[Callable, Iterable[bytes]]): The new stream.
+        chunk_size (int): The new chunk size.
+        
+    Notes:
+    - This approach only replace content, it doesn't touch any headers.
+    """
+    default_chunk_size = 2 * 1024 * 1024
+    
+    assert isinstance(response, StreamingHttpResponse), "Normal HTTP response not supported, use `content_replace` instead."
+    
+    def iter_content_original() -> Iterable[bytes]:
+        """
+        Returns an iterable (like an asynchronous generator) over the response content.
+    
+        Ensures that the content provider yields chunks of bytes and not raw bytes or strings directly.
+        """
+        content = response.content_provider()
+        
+        if isinstance(content, (str, bytes)):
+            raise TypeError(
+                "Expected iterable or generator yielding bytes, got raw string or bytes. "
+                "Wrap your content in a generator or iterable."
+            )
+            
+        if not isinstance(content, Iterable) and not isasyncgen(content):
+            raise TypeError(
+                f"Expected an iterable, generator or async_generator, got {type(content).__name__}"
+            )
+        
+        # Return the content provider.
+        return content
+        
+    async def async_iter_content_original() -> Awaitable[Iterable[bytes]]:
+        """
+        Coroutine which returns an iterable (like an asynchronous generator) over the response content.
+    
+        Ensures that the content provider yields chunks of bytes and not raw bytes or strings directly.
+        """
+        content = response.content_provider()
+        
+        if isinstance(content, (str, bytes)):
+            raise TypeError(
+                "Expected iterable or generator yielding bytes, got raw string or bytes. "
+                "Wrap your content in a generator or iterable."
+            )
+            
+        if not isinstance(content, Iterable) and not isasyncgen(content):
+            raise TypeError(
+                f"Expected an iterable, generator or async_generator, got {type(content).__name__}"
+            )
+        
+        # Return the content provider
+        return content
+        
+    # Now replace content
+    if isinstance(stream, io.IOBase):
+        content_provider = lambda: (
+            response._read_from_file(stream, chunk_size)
+            if not SETTINGS['ASYNC_HANDLING']
+            else response._async_read_from_file(stream, chunk_size)
+        )
+           
+    elif callable(stream):
+        content_provider = stream
+        
+        if chunk_size and chunk_size != default_chunk_size and not isinstance(stream, io.IOBase):
+            raise ValueError(f"Chunk size has been provided yet, the supplied `stream` is not an IO/file-like object. Got {type(stream)} instance.")
+                
+    elif isinstance(stream, Iterable):
+        content_provider = lambda: stream
+        
+        if chunk_size and chunk_size != default_chunk_size and not isinstance(stream, io.IOBase):
+            raise ValueError(f"Chunk size has been provided yet, the supplied `stream` is not an IO/file-like object. Got {type(stream)} instance.")
+        
+    else:
+        raise ValueError("Stream must be either a callable, iterable or a file-like object.")
+        
+    response.content_provider = content_provider
+    response.iter_content = iter_content_original
+    response.async_iter_content = async_iter_content_original
+            
+
+def replace_response(
+  old_response: HttpResponse,
+  new_response: HttpResponse,
+  full_replacement: bool = True,
+) -> HttpResponse:
+    """
+    Replaces/transforms the old response into a new response object (inplace).
     
     Args:
         old_response (HttpResponse): The response you want to apply modifications to.
         new_response (HttpResponse): The base response you want to get values or reference data from.
-        
+        full_replacement (bool): Whether to completely alter the old response into identical response with the new response (defaults to True).
+          As the name suggests, this replaces all attributes of old with new ones and even the response type will become the same as the new one's.
+          If set to False, the old response will keep its attributes but status, headers & content will change.
+          This might not work if responses includes unmatching `__slots__` attributes.
+          
     Returns:
         HttpResponse: The old response but transformed or combined with new response
     """
+    
+    if isinstance(old_response, StreamingHttpResponse):
+        # Stream might need to be closed first.
+        if hasattr(old_response, "stream") and hasattr(old_response.stream, "close"):
+          convert_to_sync_if_needed(old_response.stream.close)() # close stream before replacing response
+          
+    if full_replacement:
+      # A little hack to alter response inplace.
+      old_response.__class__ = new_response.__class__
+      old_response.__dict__ = new_response.__dict__
+      return old_response
+   
+    # Else, use a different approach for replacement.
     old_response.payload_obj = new_response.payload_obj
     
     if isinstance(old_response, StreamingHttpResponse):
         if isinstance(new_response, StreamingHttpResponse):
             # New and old response are both streaming http responses
-            old_response.content_provider = new_response.content_provider
+            streaming_content_replace(old_response, stream=new_response.stream)
+            
         else:
             # New response is not a streaming http response
-            old_response.content_provider = lambda: io.BytesIO(new_response.content)
+            streaming_content_replace(old_response, stream=[new_response.content])
+            
     else:
         if isinstance(new_response, StreamingHttpResponse):
             raise ValueError("Old response is not compatible with new response, i.e. StreamingHttpResponse")
@@ -416,6 +553,7 @@ def replace_response(old_response, new_response) -> HttpResponse:
     return old_response
 
 
+@lru_cache(maxsize=1024)
 def resolve(name: str, absolute: bool = True, fallback_url: Optional[str] = None) -> str:
     """
     This resolves a URL based on name.
@@ -450,13 +588,18 @@ def resolve(name: str, absolute: bool = True, fallback_url: Optional[str] = None
     try:
         info = RouteRegistry.fetch_route_info_by_name(name)
         url = info["url"]
+        handler = info["handler"]
         
         if absolute:
             # build absolute url
-            root_url = Meta.get_absolute_server_url()
+            if type(handler) == type and issubclass(handler, WebSocketView):
+                root_url = Meta.get_absolute_ws_server_url()
+            else:
+                root_url = Meta.get_absolute_server_url()
 
             # return absolute url
-            return build_absolute_uri(root_url, url)
+            abs_url = build_absolute_uri(root_url, url, normalization_ignore_chars=["*", "<", ">"])
+            return abs_url
         return "/" + url if not url.startswith("/") else url
 
     except RouteNotFoundError:
@@ -467,7 +610,7 @@ def resolve(name: str, absolute: bool = True, fallback_url: Optional[str] = None
 
 def to_response(value: Any) -> Union[BaseResponse, HttpResponse]:
     """
-    Converts any value to http response.
+    Converts any value to http response (including html components).
 
     Notes:
     - If value is already a response object, nothing will be done.
@@ -475,10 +618,13 @@ def to_response(value: Any) -> Union[BaseResponse, HttpResponse]:
     Raises:
         TypeError: If the value is not convertable to http response.
     """
-    allowed_types = (int, str, float, dict, list, set)
+    allowed_types = (int, str, float, dict, list, set, Component)
 
     if not isinstance(value, BaseResponse):
-        if not isinstance(value, allowed_types):
+        if not any([isinstance(value, t) for t in allowed_types]):
             raise TypeError(f"Value '{value}' cannot be converted to http response. Consider these types: {allowed_types}")
-        value = HttpResponse("%s" % value)
+        if isinstance(value, Component):
+            value = ComponentResponse(value)
+        else:
+            value = HttpResponse("%s" % value)
     return value

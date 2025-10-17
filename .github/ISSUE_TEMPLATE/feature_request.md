@@ -1,20 +1,45 @@
 ---
-name: Feature request
-about: Suggest an idea for this project
-title: ''
-labels: ''
+name: 🚀 Feature Request
+about: Suggest a new idea for the Duck Framework
+title: "[Feature] "
+labels: enhancement, feature
 assignees: ''
+---
+
+## Summary
+
+A clear and concise description of the feature you're requesting.
 
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+## Motivation
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+Why do you need this feature? What problem does it solve?
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+---
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+## Description
+
+Please provide as much detail as possible:
+- Expected behavior
+- Input/output examples
+- Edge cases
+- Related features/modules
+
+---
+
+## Alternatives Considered
+
+Have you tried any other workarounds?
+
+---
+
+## Additional Context
+
+Add screenshots, references, or links if available.
+
+---
+
+🙏 **Sponsor Support (Optional)**  
+If this feature is important to you, please consider [sponsoring us](https://duckframework.xyz/sponsorship).
+

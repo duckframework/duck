@@ -42,8 +42,10 @@ def get_duck_urlpatterns() -> List:
     Returns all urlpatterns registered within Duck including blueprint urlpatterns.
     """
     duck_urlpatterns = URLPATTERNS
+    
     for blueprint in BLUEPRINTS:
         duck_urlpatterns.extend(blueprint.urlpatterns)
+    
     return duck_urlpatterns
 
 

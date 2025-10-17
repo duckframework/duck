@@ -1,13 +1,17 @@
 """
 Footer component module.
 """
-from duck.html.components import InnerHtmlComponent
+from duck.html.components import (
+  Component,
+  InnerComponent,
+  Theme,
+  to_component,
+)
 from duck.html.components.duck import MadeWithDuck
-from duck.html.components import Theme
-
-from .container import FlexContainer
-from .style import Style
-from .link import Link
+from duck.html.components.container import FlexContainer
+from duck.html.components.style import Style
+from duck.html.components.link import Link
+from duck.html.components.heading import Heading
 
 
 class FooterBlock(FlexContainer):
@@ -26,13 +30,18 @@ class FooterBlock(FlexContainer):
         self.style["flex-direction"] = "column"
         
         if "heading" in self.kwargs:
-            heading = self.kwargs.get('heading', '')
-            self.inner_body += f"<h2 class='footer-heading' style='font-size:1.2rem'>{heading}</h2>"
-       
+            heading = self.kwargs.get('heading')
+            self.heading = Heading("h2", text=heading, klass="footer-heading")
+            self.heading.style["font-size"] = "1.2rem"
+            self.add_child(self.heading)
+            
         if 'elements' in self.kwargs:
            for element in self.kwargs.get('elements', []):
-               # Element is an html element
-               self.inner_body += element
+               # This is an html element
+               if isinstance(element, Component):
+                   self.add_child(element)
+               else:
+                   self.add_child(to_component(element))
 
 
 class FooterItems(FlexContainer):
@@ -55,7 +64,7 @@ class FooterItems(FlexContainer):
                  self.add_child(footer_block)
 
 
-class Footer(InnerHtmlComponent):
+class Footer(InnerComponent):
     """
     Footer component.
     
@@ -87,26 +96,29 @@ class Footer(InnerHtmlComponent):
         return "footer"
     
     def on_create(self):
+        super().on_create()
         self.style["padding"] = Theme.padding
         self.style["width"] = "100%"
+        self.style["font-size"] = ".8rem"
         self.footer_items = FooterItems(**self.kwargs)
         
         # Add footer items
-        self.inner_body += self.footer_items.to_string()
+        self.add_child(self.footer_items)
         
         # Add made with Duck
-        self.inner_body += Link(
-            inner_body=MadeWithDuck().to_string(),
-            url="https://github.com/digreatbrian/duck").to_string()
+        self.duck_link = Link(url="https://github.com/duckframework/duck")
+        self.duck_link.add_child(MadeWithDuck())
+        self.add_child(self.duck_link)
         
         # Add copyright info
         if self.kwargs.get('copyright'):
             copyright = self.kwargs.get('copyright') or ''
-            self.inner_body += f"<p class='text-center'>{copyright}</p>"
+            self.copyright = to_component(copyright, "p", style={"text-align": "center"})
+            self.add_child(self.copyright)
         
         # Add style
-        style = Style(
-            inner_body="""
+        self.css= Style(
+            inner_html="""
                 @media (max-width: 768px){
                     footer {
                           font-size: .8rem;
@@ -125,4 +137,4 @@ class Footer(InnerHtmlComponent):
                   }
             """
         )
-        self.add_child(style)
+        self.add_child(self.css)

@@ -2,6 +2,7 @@
 Module containing runserver command class.
 """
 import os
+import sys
 import subprocess
 
 from typing import Optional
@@ -37,7 +38,8 @@ class RunserverCommand:
             domain=domain,
             mainfile=mainfile,
             uses_ipv6=uses_ipv6,
-            reload=reload)
+            reload=reload
+        )
     
     @classmethod
     def runserver(
@@ -49,7 +51,6 @@ class RunserverCommand:
          uses_ipv6: bool = False,
          reload: bool = False,
      ):
-        
         from duck.app import App
         from duck.settings import SETTINGS
         
@@ -61,27 +62,24 @@ class RunserverCommand:
                 )
     
             if not os.path.isfile(mainfile):
-                raise FileNotFoundError(
-                    "Main python file which the app resides not found.")
-    
-            # Log something
-            console.log_raw("All flags and arguments are ignored!", level=console.WARNING)
-            
+                raise FileNotFoundError("Main python file which the app resides not found.")
+                    
             # Execute sub-command
-            command = [SETTINGS["PYTHON_PATH"], mainfile]
+            command = [sys.executable, mainfile]
             
             if reload:
                 command.extend(["--reload"])
             
-            # Execute the command in a subprocess
-            subprocess.call(command, start_new_session=False)  # run command as child process
+            # Execute command and replace current process.
+            os.execve(sys.executable, command, os.environ)
         
         else:
             application = App(
                 addr=address,
                 port=port,
                 domain=domain,
-                uses_ipv6=uses_ipv6)
+                uses_ipv6=uses_ipv6
+            )
            
              # If --reload arg in sys.argv, app will be restarted nomatter if run was called instead.
             application.run()  

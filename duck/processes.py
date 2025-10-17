@@ -30,7 +30,7 @@ from duck.utils.filelock import open_and_lock
 from duck.utils.path import joinpaths
 
 BASE_DIR = str(SETTINGS["BASE_DIR"]).rstrip("/")
-FILENAME = ".duck-processes.json"
+FILENAME = ".processes.json"
 
 
 def set_process_data(name: str, data: dict, clear_existing_data=False) -> str:

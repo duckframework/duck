@@ -25,10 +25,10 @@ class RequestsLimitMiddleware(BaseMiddleware):
     _clients: dict[str, list[float]] = {}
     """In-memory store of request timestamps per client IP."""
 
-    requests_delay: float = 2
+    requests_delay: float = 60
     """Duration in seconds defining the time window for request counting."""
 
-    max_requests: int = 15
+    max_requests: int = 200
     """Maximum number of allowed requests within the `requests_delay` window."""
     
     debug_message: str = "RequestsLimitMiddleware: Too many requests"

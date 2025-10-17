@@ -90,13 +90,13 @@ class URL:
     
     This class works on urls without scheme unlike urllib.parse and other libraries.
     """
-    def __init__(self, url: str, normalize_url: bool = True):
+    def __init__(self, url: str, normalize_url: bool = True, normalization_ignore_chars: Optional[List[str]] = None):
         self.scheme = ''
         self.netloc = ''
         self.path = ''
         self.query = ''
         self.fragment = ''
-        self.parse(url, normalize_url)
+        self.parse(url, normalize_url, normalization_ignore_chars=normalization_ignore_chars)
     
     @property
     def user_info(self) -> Optional[str]:
@@ -176,7 +176,9 @@ class URL:
         head_url: str,
         replace_authority: bool = False,
         full_path_replacement: bool = True,
-     ):
+        normalize_urls: bool = True,
+        normalization_ignore_chars: Optional[List[str]] = None
+     ) -> str:
         """
         Joins 2 URLs and return the result.
         
@@ -186,17 +188,18 @@ class URL:
         Args:
             base_url (str): The base URL
             head_url (str): The URL or URL path to concanetate to the base URL
-            replace_netloc (bool):
-                Whether to replace URL authority (netloc). If head url has a netloc, it will be the final netloc and this also replaces the
+            replace_netloc (bool): Whether to replace URL authority (netloc). If head url has a netloc, it will be the final netloc and this also replaces the
                 final scheme if it is present in head URL. Defaults to False.
-            full_path_replacement (bool):
-                This means whether to replace the query and fragment even if they are empty in head URL. Defaults to True.
-            
+            full_path_replacement (bool): This means whether to replace the query and fragment even if they are empty in head URL. Defaults to True.
+            nomalize_urls (bool): Whether to normalize urls.
+            normalization_ignore_chars (Optional[List[str]]): List of characters to ignore when normalizing the url path.
+                By default, all unsafe characters are stripped.
+    
         Example:
-            > https://digreatbrian.tech/some/path + http://digreatbrian.tech/path/endpoint = https://digreatbrian.tech/some/path/endpoint
+            > https://duckframework.xyz/some/path + http://digreatbrian.tech/path/endpoint = https://digreatbrian.tech/some/path/endpoint
         """
-        base_url_obj = URL(base_url)
-        head_url_obj = URL(head_url)
+        base_url_obj = URL(base_url, normalize_url=normalize_urls, normalization_ignore_chars=normalization_ignore_chars)
+        head_url_obj = URL(head_url, normalize_url=normalize_urls, normalization_ignore_chars=normalization_ignore_chars)
         
         if head_url_obj.scheme:
             base_url_obj.scheme = head_url_obj.scheme
@@ -232,12 +235,21 @@ class URL:
         """
         Normalizes a URL by removing consecutive slashes, adding a leading slash, removing trailing slashes, removing disallowed characters, e.g "<", string quotes (etc), replacing back slashes and lowercasing the scheme.
         """
+        from urllib.parse import unquote
+        
+        # First unquote url
+        try:
+            url = unquote(url)
+        except Exception:
+            pass
+        
         is_url_path = False
         ignore_chars = ignore_chars or []
         
         if not url:
             # url is None
             url = ""
+        
         disallowed_chars = ("<", '"', "'", "^", ">", ";", "|", "{", "}", "`", " ")
         url = url.replace("\\", "/")
     
@@ -298,13 +310,16 @@ class URL:
                 raise InvalidPortError(f"Port obtained from authority (netloc) cannot be converted to integer: {e}")
         return host, port
         
-    def innerjoin(self, head_url: str):
+    def innerjoin(self, head_url: str, normalize_url: bool = True, normalization_ignore_chars: Optional[List[str]] = None) -> "URL":
         """
         Join the current URL with the provided `head_url`, and update the current URL object in-place.
     
         Args:
             head_url (str): The relative or absolute URL segment to join with the current URL.
-    
+            normalize_url (bool): Whether to normalize the url.
+            normalization_ignore_chars (Optional[List[str]]): List of characters to ignore when normalizing the url path.
+                By default, all unsafe characters are stripped.
+            
         Behavior:
         - Performs a URL join operation similar to urllib.parse.urljoin.
         - The resulting URL replaces the current URL in this object.
@@ -313,17 +328,28 @@ class URL:
         Returns:
             self: The current URL object with the updated value.
         """
-        new_url = URL.urljoin(self.to_str(), head_url)
-        self.parse(new_url)
+        new_url = URL.urljoin(
+            self.to_str(),
+            head_url,
+            normalize_urls=normalize_url,
+            normalization_ignore_chars=normalization_ignore_chars
+        )
+        self.parse(
+            new_url,
+            normalize_url=False,
+        ) # Already normalized somehow
         return self
     
-    def join(self, head_url: str):
+    def join(self, head_url: str, normalize_url: bool = True, normalization_ignore_chars: Optional[List[str]] = None) -> "URL":
         """
         Join the current URL with the provided `head_url`, and return a new URL object.
     
         Args:
             head_url (str): The relative or absolute URL segment to join with the current URL.
-    
+            normalize_url (bool): Whether to normalize the url.
+            normalization_ignore_chars (Optional[List[str]]): List of characters to ignore when normalizing the url path.
+                By default, all unsafe characters are stripped.
+            
         Behavior:
         - Performs a URL join operation similar to urllib.parse.urljoin.
         - Unlike `innerjoin()`, this does not modify the current object.
@@ -332,7 +358,12 @@ class URL:
         Returns:
             URL: A new URL object with the combined URL.
         """
-        new_url = URL.urljoin(self.to_str(), head_url)
+        new_url = URL.urljoin(
+            self.to_str(),
+            head_url,
+            normalize_urls=normalize_url,
+            normalization_ignore_chars=normalization_ignore_chars
+        )
         return URL(new_url)
     
     def split_scheme_and_authority(self, url: str) -> Tuple[str, str, str]:
@@ -405,24 +436,28 @@ class URL:
                 path = url_path
         return path, query, fragment
     
-    def parse(self, url: str, normalize_url: bool = True):
+    def parse(self, url: str, normalize_url: bool = True, normalization_ignore_chars: Optional[List[str]] = None):
         """
         Parse URL from a string.
        
         Args:
            normalize_url (bool): Whether to normalize the URL e.g:
                https://// \\google.com>}////path?q`=some_query``; => https://google.com/path?q=some_query
-       
+           normalization_ignore_chars (Optional[List[str]]): List of characters to ignore when normalizing the url path.
+            By default, all unsafe characters are stripped.
+            
         Expected input:
+           ```
            scheme://some-site.com/path/...
            scheme://some-site/...
            some-site.com/...
            /some-path/...
+           ```
         """
         query, fragment = '', ''
        
         if normalize_url:
-            url = URL.normalize_url(url)
+            url = URL.normalize_url(url, ignore_chars=normalization_ignore_chars)
        
         try:
             scheme, netloc, path = self.split_scheme_and_authority(url)

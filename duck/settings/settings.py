@@ -2,11 +2,14 @@
 Provides access to application settings.
 """
 import os
+import sys
 
 from duck.exceptions.all import SettingsError
 from duck.utils.importer import import_module_once
 
-os.environ.setdefault("DUCK_SETTINGS_MODULE", "settings")
+
+# Set default settings if not provided
+os.environ.setdefault("DUCK_SETTINGS_MODULE", "web.settings")
 
 SETTINGS_MODULE = os.environ.get("DUCK_SETTINGS_MODULE")
 
@@ -48,7 +51,8 @@ class Settings(dict):
 
 
 def settings_to_dict(settings_module: str) -> Settings:
-    """Converts a settings module to a dictionary.
+    """
+    Converts a settings module to a dictionary.
 
     Args:
             settings_module (str): The path to the settings module.
@@ -103,5 +107,9 @@ def get_combined_settings() -> Settings:
 # Set and load important settings, objects, etc.
 SETTINGS: Settings = get_combined_settings()
 
-if os.getenv("DUCK_USE_DJANGO", None) == "true":
+# Set Django specific configurations
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', SETTINGS['DJANGO_SETTINGS_MODULE'])
+
+if (os.getenv("DUCK_USE_DJANGO", None) == "true"
+    or "-dj" in sys.argv or "--use-django" in sys.argv):
     SETTINGS["USE_DJANGO"] = True

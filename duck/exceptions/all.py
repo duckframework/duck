@@ -3,9 +3,11 @@ Module containing Duck error classes.
 """
 
 
-class BaseError(Exception):
-    """Base class for all errors."""
-
+class BaseException(Exception):
+    """
+    Base class for all errors.
+    """
+    
     def __init__(self, message, **kws):
         """
         Stores the error message in the `message` attribute.
@@ -17,116 +19,190 @@ class BaseError(Exception):
         self.message = message
 
     def __str__(self):
-        """Returns the error message."""
+        """
+        Returns the error message.
+        """
         return f"{self.message}"
 
 
-class ApplicationError(BaseError):
-    """Represents base or micro app errors."""
+class AsyncViolationError(BaseException):
+   """
+   Raised on operations which violates asynchronous way of doing things.
+   """
 
 
-class BlueprintError(Exception):
+class ExpectingNoResponse(BaseException):
+    """
+    Exception raised when we are expecting a response yet we are never going to
+    get any. Useful in cases where methods like `get_response` are expecting a response e.g. from
+    a WebSocketView yet this view handles everything on its own and no response is supposed to be returned.
+    """
+
+
+class DisallowedAction(BaseException):
+    """
+    Raised on disallowed actions.
+    """
+
+    
+class ServerError(BaseException):
+    """
+    Server based exceptions.
+    """
+
+
+class ApplicationError(BaseException):
+    """
+    Raised on application related errors.
+    """
+
+
+class BlueprintError(BaseException):
     """
     Raised for blueprint-related errors.
     """
 
 
-class PortError(BaseError):
-    """Raised for port obtaining errors."""
+class PortError(BaseException):
+    """
+    Raised on port conflict errors.
+    """
 
 
-class RequestError(BaseError):
-    """Raised for request errors."""
+class RequestError(BaseException):
+    """
+    Raised for request errors.
+    """
 
 
 class RequestHostError(RequestError):
-    """Raised for request host errors."""
+    """
+    Raised on request host errors.
+    """
 
 
 class MethodNotAllowedError(RequestError):
-    """Raised for request disallowed methods."""
+    """
+    Raised on disallowed request method.
+    """
 
 
 class RequestSyntaxError(RequestError):
-    """Raised for request syntax errors.."""
+    """
+    Raised on request syntax errors.
+    """
 
 
 class RequestUnsupportedVersionError(RequestError):
-    """Raised for unsupported http version."""
+    """
+    Raised on unsupported HTTP version.
+    """
 
 
 class RequestTimeoutError(RequestError):
-    """Raised for request timeouts"""
+    """
+    Raised on request timeouts.
+    """
 
 
-class HeaderError(BaseError):
-    """Raised for errors related to headers."""
+class HeaderError(BaseException):
+    """
+    Raised on header-related exceptions.
+    """
 
 
-class RouteError(BaseError):
-    """Raised for errors related to routes."""
+class RouteError(BaseException):
+    """
+    Raised on errors related to routes and route configuration.
+    """
 
 
-class RouteNotFoundError(BaseError):
-    """Raised for errors related to unregistered routes."""
+class RouteNotFoundError(BaseException):
+    """
+    Raised on unregistered or unknown routes.
+    """
 
 
-class FunctionError(BaseError):
-    """Raised for errors related to functions."""
+class FunctionError(BaseException):
+    """
+    Raised on function errors.
+    """
 
 
-class CustomHeadersJsonLoadError(BaseError):
-    """Raised when there's an error loading custom headers from JSON."""
+class CustomHeadersJsonLoadError(BaseException):
+    """
+    Raised when there's an error loading custom headers from JSON.
+    """
 
 
-class MiddlewareError(BaseError):
-    """Raised when there's an error on any middleware"""
+class MiddlewareError(ApplicationError):
+    """
+    Raised when there's an error on any middleware.
+    """
 
 
 class MiddlewareLoadError(MiddlewareError):
-    """Raised when there's an error loading or importing a middleware."""
+    """
+    Raised when there's an error loading or importing a middleware.
+    """
 
 
-class NormalizerError(BaseError):
-    """Raised when there's an error on any normalizer"""
+class NormalizerError(BaseException):
+    """
+    Raised when there's an error on any normalizer.
+    """
 
 
 class NormalizerLoadError(NormalizerError):
-    """Raised when there's an error loading or importing a normalizer."""
+    """
+    Raised when there's an error loading or importing a normalizer.
+    """
 
 
 class CSRFMiddlewareError(MiddlewareError):
-    """Raised when there's an error in CSRF middleware"""
+    """
+    Raised when there's an error in CSRF middleware.
+    """
 
 
-class NormalizationError(BaseError):
-    """Raised when there's an error in normalization process"""
+class NormalizationError(BaseException):
+    """
+    Raised when there's an error in normalization process.
+    """
 
 
-class SettingsError(BaseError):
-    """Raised for errors in the app's settings configuration."""
+class SettingsError(BaseException):
+    """
+    Raised for errors in the app's settings configuration.
+    """
 
 
-class ContentError(BaseError):
-    """Raised for error related to setting Content of an HttpResponse."""
+class ContentError(BaseException):
+    """
+    Raised for error related to setting content of an HttpResponse.
+    """
 
 
-class TemplateError(BaseError):
-    """Raised for any errors related to templates"""
+class TemplateError(BaseException):
+    """
+    Raised for any errors related to templates.
+    """
 
 
-class DjangoTemplateError(TemplateError):
-    """Raised for error trying to use DjangoTemplateResponse if USE_DJANGO has been set to False in settings.py"""
+class TemplateNotFound(TemplateError):
+    """
+    Raised when a template could not be found.
+    """
 
 
-class SSLError(BaseError):
+class SSLError(BaseException):
     """
     Raised when ssl certfile or ssl private key is not found in locations specified in settings.py if and only if
     `ENABLE_HTTPS=True`
     """
 
 
-class MultiPartParserError(BaseError):
+class MultiPartParserError(BaseException):
     """
     Exception when parsing multipart/form-data
     """

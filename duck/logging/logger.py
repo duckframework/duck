@@ -1,191 +1,179 @@
 """
 Logging module for Duck with console color support using colorama module.
-
-Notes:
-- Whenever `DEBUG=True`, redirect all console output if `LOG_TO_FILE=True` but ignore log_to_file argument which may be provided in functions 'log' and 'log_raw'.
 """
 import os
 import sys
 import atexit
 import datetime
-import logging
 import threading
 import traceback
+import warnings
 
-from typing import Callable
+from typing import (
+    Callable,
+    Optional,
+    Union,
+)
 from colorama import Fore, Style
 
 from duck import processes
 from duck.settings import SETTINGS
-from duck.utils.importer import import_module_once
-from duck.utils.path import paths_are_same
+from duck.utils.path import paths_are_same, joinpaths
 from duck.ansi import remove_ansi_escape_codes
+from duck.env import is_testing_environment
 
 
-# Info Logging Level
-INFO = logging.INFO
-
-# Debug Logging Level
-DEBUG = logging.DEBUG
-
-# Warning Logging Level
-WARNING = logging.WARNING
-
-# Critical Logging Level
-CRITICAL = logging.CRITICAL
-
-# Error Logging Level
-ERROR = logging.ERROR
+# Logging Levels
+INFO = 0x0
+DEBUG = 0x1
+SUCCESS = 0x2
+WARNING = 0x3
+CRITICAL = 0x4
+ERROR = 0x5
 
 # Logging configuration
-# Logging to file
+SILENT = SETTINGS["SILENT"]
 LOG_TO_FILE = SETTINGS["LOG_TO_FILE"]
-
-# Format for all logs
 LOG_FILE_FORMAT = SETTINGS["LOG_FILE_FORMAT"]
-
-# Logging Directory
 LOGGING_DIR = SETTINGS["LOGGING_DIR"]
-
-# Silencing all logs
-SILENT = SETTINGS["SILENT"] # silence logs
-
-# Verbose logging, enabled by default if DEBUG=True
 VERBOSE_LOGGING = SETTINGS["VERBOSE_LOGGING"]
 
-# Global print lock
-print_lock = threading.Lock()
 
-globals = import_module_once("duck.globals")
-
-
-def get_current_log_file() -> str:
+def log_raw(
+    msg: str,
+    level: int = INFO,
+    use_colors: bool = True,
+    custom_color: str = None,
+    end: str = "\n",
+):
     """
-    This function retrieves the current log file in LOGGING_DIR which depends on datetime.
+    Logs a message to console as it is without any modifications.
 
-    Returns:
-        str: The path to the current log file.
-
-    Raises:
-        FileNotFoundError: If the log directory does not exist.
+    Args:
+        msg (str): The message to log.
+        level (int): The log level of the message.
+        use_colors (bool): Whether to log message with some colors, i.e. red for Errors, Yellow for warnings, etc.
+        custom_color (string): The custom color to use.
+        The use colors argument is required to use custom color.
+        end (str): The log suffix, defaults to `"\n"` for newline.
     """
-    if "--reload" in sys.argv:
-        # this is a reload so lets use latest log file because its a continuation
-        try:
-            return processes.get_process_data("main").get("log_file")
-        except KeyError:
-            # failed to retrieve last log file used by the main app.
-            pass
+    std = sys.stdout
 
-    logging_dir = LOGGING_DIR
-    log_file_format = LOG_FILE_FORMAT
-    current_log_file = os.environ.get("DUCK_CURRENT_LOG_FILE")
-    
-    if not os.path.isdir(logging_dir):
-        raise FileNotFoundError("Directory to save log files doesn't exist.")
-
-    if current_log_file:
-        return current_log_file
-
-    # Format the new log file name with the given LOG_FILE_FORMAT
-    now = datetime.datetime.now(datetime.UTC)
-    formatted_time = log_file_format.format(
-        day=now.day,
-        month=now.month,
-        year=now.year,
-        hours=now.hour,
-        minutes=now.minute,
-        seconds=now.second,
-    )
-    new_log_file = os.path.join(logging_dir, formatted_time + ".log")
-
-    with open(new_log_file, "ab"):
-        # Create the new log file.
-        pass
-
-    # record current log file in duck.globals
-    os.environ["DUCK_CURRENT_LOG_FILE"] = new_log_file
-    return new_log_file
-
-
-def get_current_log_file_fd():
-    """
-    Get the opened file descriptor for the current log file in bytes append mode.
-    """
-    filepath = get_current_log_file()  # refetches the current log file, maybe it has changed.
-
-    if hasattr(globals, "current_log_file_fd"):
-        file_fd = globals.current_log_file_fd
-        if paths_are_same(file_fd.name, filepath):
-            return file_fd
-    file_fd = open(filepath, "ab")
-    globals.current_log_file_fd = file_fd
-    return file_fd
-
-
-def redirect_console_output():
-    """
-    Redirects all console output (stdout and stderr) to a log file, i.e current log file.
-
-    This function locks sys.stdout and sys.stderr so that they cannot be modified by another process.
-
-    """
-    if not LOG_TO_FILE or SILENT:
-        # Do not log to any file if logging is disabled in settings.
+    if SILENT:
+        if LOG_TO_FILE:
+            cleaned_data = remove_ansi_escape_codes([msg])[0]
+            Logger.log_to_file(cleaned_data, end=end)
         return
 
-    # Redirect stdout and stderr to a file
-    file_fd = get_current_log_file_fd()
+    if level == ERROR or level == CRITICAL:
+        std = sys.stderr
+        color = Fore.RED
     
-    # Record default write methods
-    default_stdout_write = sys.stdout.write
-    default_stderr_write = sys.stderr.write
+    elif level == WARNING:
+        color = Fore.YELLOW
     
-    # Create a lock for synchronized writing
-    write_lock = threading.Lock()
+    elif level == INFO:
+        color = Fore.WHITE
+    
+    elif level == DEBUG:
+        color = Fore.CYAN
+    
+    elif level == SUCCESS:
+        color = Fore.GREEN 
+    
+    if custom_color:
+        color = custom_color
 
-    def stdout_write(data):
-        """
-        Writes data to both the default stdout and the specified file.
-
-        Args:
-            data (str): The data to be written.
-        """
-        cleaned_data = remove_ansi_escape_codes([data])[0]  # remove ansi escape codes if present
-        
-        with write_lock:
-            file_fd.write(bytes(cleaned_data, "utf-8"))
-            file_fd.flush()  # Ensure data is written to the file immediately
-            default_stdout_write(data)
-
-    def stderr_write(data):
-        """
-        Writes data to both the default stderr and the specified file.
-
-        Args:
-            data (str): The data to be written.
-        """
-        cleaned_data = remove_ansi_escape_codes([data])[0]  # remove ansi escape codes if present
-        
-        with write_lock:
-            file_fd.write(bytes(cleaned_data, "utf-8"))
-            file_fd.flush()  # Ensure data is written to the file immediately
-            default_stderr_write(data)
-
-    # Assign new write methods
-    sys.stdout.write = stdout_write
-    sys.stderr.write = stderr_write
+    if use_colors:
+        colored_msg = f"{color}{msg}{Style.RESET_ALL}"
+        with Logger.print_lock:
+            print(colored_msg, file=std, end=end)
+    else:
+        with Logger.print_lock:
+            print(msg, file=std, end=end)
 
 
-def get_latest_log_file():
+def log(
+    msg: str,
+    prefix: str = "[ * ]",
+    level: int = INFO,
+    use_colors: bool = True,
+    custom_color: str = None,
+    end: str = "\n",
+):
     """
-    Returns the latest created file in LOGGING_DIR.
+    Pretty log a message to console.
+
+    Args:
+        msg (str): The message to log.
+        prefix (str): The prefix to prepend to the message.
+        level (int): The log level of the message.
+        use_colors (bool): Whether to log message with some colors, ie, red for Errors, Yellow for warnings, etc
+        custom_color (string): The custom color to use. Argument `use_colors` is required to use custom color.
+        end (str): The log suffix, defaults to `"\n"` for newline.
     """
-    logging_dir = LOGGING_DIR
+    std = sys.stdout
+    color = Fore.WHITE
+    formatted_msg = f"{prefix} {msg}"
     
-    if os.path.isdir(logging_dir):
-        scan = {i.stat().st_ctime: i for i in os.scandir(logging_dir)}
-        return scan.get(sorted(scan)[-1]) if scan else None
+    if SILENT:
+        if LOG_TO_FILE:
+            cleaned_data = remove_ansi_escape_codes([msg])[0]
+            Logger.log_to_file(cleaned_data, end=end)
+        return
+
+    if level == ERROR or level == CRITICAL:
+        std = sys.stderr
+        color = Fore.RED
+    
+    elif level == WARNING:
+        color = Fore.YELLOW
+    
+    elif level == INFO:
+        color = Fore.WHITE
+    
+    elif level == DEBUG:
+        color = Fore.CYAN
+    
+    elif level == SUCCESS:
+        color = Fore.GREEN
+    
+    if custom_color:
+        color = custom_color
+
+    if use_colors:
+        colored_msg = f"{color}{formatted_msg}{Style.RESET_ALL}"
+        with Logger.print_lock:
+            print(colored_msg, file=std, end=end)
+    else:
+        with Logger.print_lock:
+            print(msg, file=std, end=end)
+
+
+def should_filter_warning(category, message, module = None, lineno = 0):
+    """
+    Simulate Python's filtering logic for a warning.
+    Returns True if the warning would be filtered (ignored), False otherwise.
+    """
+    module = module or "__main__"
+    for action, msg, cat, mod, ln in warnings.filters:
+        # Check if this filter matches the warning
+        if ((msg is None or msg in message)
+            and (cat is None or issubclass(category, cat))
+            and (mod is None or mod in module)
+            and (ln == 0 or lineno == ln)):
+            # Actions: 'ignore', 'always', 'default', 'error', 'once', 'module'
+            return action == 'ignore'
+    # If no filter matches, default action is 'default' (show once per location)
+    return False
+
+
+def warn(message: str, category: Warning = UserWarning, use_colors: bool = True, module = None, lineno = 0):
+    """
+    This logs a warning to the console. You can filter warnings by using `warnings.filterwarnings`.
+    """
+    if not should_filter_warning(category, message, module, lineno):
+        log_raw(f"{category.__name__}: {message}", level=WARNING, use_colors=use_colors)
 
 
 def expand_exception(e: Exception) -> str:
@@ -212,7 +200,6 @@ def handle_exception(func: Callable):
     Returns:
         callable: The wrapped function with exception handling.
     """
-
     def wrapper(*args, **kwargs):
         """
         Wrapper function for the callable provided to the decorator.
@@ -224,169 +211,242 @@ def handle_exception(func: Callable):
         Returns:
             Any: The return value of the callable, if no exception occurs.
         """
-
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            exception = f"Exception: {str(e)}"
-
-            if VERBOSE_LOGGING:
-                exception = expand_exception(e)
-
-            if not SILENT:
-                log_raw(exception)
-
-            if LOG_TO_FILE:
-                # Write the expanded exception to a file.
-                log_to_file(exception)
-
+            log_exception(e)
     return wrapper
 
 
-@handle_exception
 def log_exception(e: Exception):
     """
     Logs exception to console and file or both.
     """
-    raise e
+    exception = f"Exception: {str(e)}"
+    
+    if VERBOSE_LOGGING or SETTINGS['DEBUG']:
+        exception = expand_exception(e)
+    
+    if not SILENT:
+        log_raw(exception)
+        
+    if SILENT and LOG_TO_FILE:
+        # Write the expanded exception to a file.
+        # Explicitly log to file if console output not being redirected.
+        Logger.log_to_file(exception)
 
 
-def log_to_file(data: str, end: str = "\n") -> str | bytes:
+class Logger:
     """
-    This writes data to the log file.
-
-    Args:
-        data (str | bytes): Data to write.
-        end (str | bytes): The suffix to add to data before writting to file.
-
-    Returns:
-         str | bytes: Data that was written
+    Logging class.
     """
-    log_file_fd = get_current_log_file_fd()
-    data = data.encode("utf-8") if isinstance(data, str) else data
-    data += end.encode("utf-8") if isinstance(end, str) else end
-    log_file_fd.write(data)
-    log_file_fd.flush()
-    return data
-
-
-def log_raw(
-    msg: str,
-    level: int = INFO,
-    use_colors: bool = True,
-    custom_color: str = None,
-    end: str = "\n",
-):
+    
+    print_lock = threading.Lock() 
     """
-    Logs a message to console as it is without any modifications.
-
-    Args:
-        msg (str): The message to log.
-        level (int): The log level of the message.
-        use_colors (bool): Whether to log message with some colors, i.e. red for Errors, Yellow for warnings, etc.
-        custom_color (string): The custom color to use.
-        The use colors argument is required to use custom color.
-        end (str): The log suffix, defaults to `"\n"` for newline.
+    Lock used by `log` & `log_raw` functions.
     """
-    log_level = level
-    std = sys.stdout
-
-    if SILENT:
-        if LOG_TO_FILE:
-            cleaned_data = remove_ansi_escape_codes([msg])[0]  # remove ansi escape codes if present
-            log_to_file(cleaned_data, end=end)
-        return
-
-    if log_level == ERROR or log_level == CRITICAL:
-        std = sys.stderr
-        color = Fore.RED
     
-    elif log_level == WARNING:
-        color = Fore.YELLOW
-    
-    elif log_level == INFO:
-        color = Style.RESET_ALL  # default
-    
-    elif log_level == DEBUG:
-        color = Fore.CYAN
-
-    if custom_color:
-        color = custom_color
-
-    if use_colors:
-        colored_msg = f"{color}{msg}{Style.RESET_ALL}"
-        with print_lock:
-            print(colored_msg, file=std, end=end)
-    
-    else:
-        with print_lock:
-            print(msg, file=std, end=end)
-
-
-def log(
-    msg: str,
-    prefix: str = "[ * ]",
-    level: int = INFO,
-    use_colors: bool = True,
-    custom_color: str = None,
-    end: str = "\n",
-):
+    __current_logfile_fd = None
     """
-    Pretty log a message to console.
-
-    Args:
-        msg (str): The message to log.
-        prefix (str): The prefix to prepend to the message.
-        level (int): The log level of the message.
-        use_colors (bool): Whether to log message with some colors, ie, red for Errors, Yellow for warnings, etc
-        custom_color (string): The custom color to use. Argument `use_colors` is required to use custom color.
-        end (str): The log suffix, defaults to `"\n"` for newline.
+    The file descriptor for the current logfile.
     """
-    formatted_msg = f"{prefix} {msg}"
-    log_level = level
-    color = Fore.WHITE  # Default color for normal message
-    std = sys.stdout
-
-    if SILENT:
-        if LOG_TO_FILE:
-            cleaned_data = remove_ansi_escape_codes(
-                [msg])[0]  # remove ansi escape codes if present
-            log_to_file(cleaned_data, end=end)
-        return
-
-    if log_level == ERROR or log_level == CRITICAL:
-        std = sys.stderr
-        color = Fore.RED
     
-    elif log_level == WARNING:
-        color = Fore.YELLOW
+    @classmethod
+    def get_current_logfile(cls, raise_if_logging_dir_not_found: bool = True) -> str:
+        """
+        Returns the current log file.
+        
+        Args:
+            raise_if_logging_dir_not_found (bool): Whether to raise an exception if logging directory is not found.
+            
+        Returns:
+            str: The path to the current log file.
     
-    elif log_level == INFO:
-        color = Style.RESET_ALL  # default
+        Raises:
+            FileNotFoundError: If the log directory does not exist.
+        """
+        logfile_format = LOG_FILE_FORMAT
+        current_logfile = os.getenv("DUCK_CURRENT_LOG_FILE")
+        
+        if "--reload" in sys.argv:
+            # This is a reload so lets use previous latest log file because its a continuation
+            try:
+                return processes.get_process_data("main").get("log_file")
+            except KeyError:
+                # Failed to retrieve last log file used by the main app.
+                pass
+        
+        if not os.path.isdir(LOGGING_DIR) and raise_if_logging_dir_not_found:
+            raise FileNotFoundError("Directory to save log files doesn't exist.")
     
-    elif log_level == DEBUG:
-        color = Fore.CYAN
-
-    if custom_color:
-        color = custom_color
-
-    if use_colors:
-        colored_msg = f"{color}{formatted_msg}{Style.RESET_ALL}"
-        with print_lock:
-            print(colored_msg, file=std, end=end)
+        if current_logfile:
+            # Returns the logfile saved in os.environ
+            return current_logfile
     
-    else:
-        with print_lock:
-            print(msg, file=std, end=end)
-
-
-try:
+        # Format the new logfile name with the given LOG_FILE_FORMAT
+        now = datetime.datetime.now()
+        
+        # Create log name
+        logname = logfile_format.format(
+            day=now.day,
+            month=now.month,
+            year=now.year,
+            hours=now.hour,
+            minutes=now.minute,
+            seconds=now.second,
+        )
+        
+        # Generate new logfile
+        new_logfile = joinpaths(LOGGING_DIR, logname + ".log")
+        
+        # Save logfile to os.environ
+        os.environ["DUCK_CURRENT_LOG_FILE"] = new_logfile
+        
+        # Finally return new logfile.
+        return new_logfile
     
-    if not os.path.isdir(LOGGING_DIR):
+    @classmethod
+    def get_current_logfile_fd(cls):
+        """
+        Get the opened file descriptor for the current log file in bytes append mode.
+        """
+        # Refetches the current log file, maybe it has changed.
+        filepath = cls.get_current_logfile()
+        
+        if cls.__current_logfile_fd is not None:
+            if paths_are_same(cls.__current_logfile_fd.name, filepath):
+                # Reuse the FD, files are the same.
+                fd = cls.__current_logfile_fd
+                
+                if not fd.closed:
+                    # Only return the fd if not closed else,
+                    # reopen file and return new opened fd.
+                    return fd
+                
+        # Open filepath and return FD
+        cls.__current_logfile_fd = open(filepath, "ab")
+        return cls.__current_logfile_fd
+        
+    @classmethod
+    def redirect_console_output(cls):
+        """
+        Redirects all console output (stdout and stderr) to a log file, i.e current log file.
+    
+        This function locks sys.stdout and sys.stderr so that they cannot be modified by another process.
+        """
+        if not LOG_TO_FILE or SILENT:
+            # Do not log to any file if logging is disabled in settings.
+            return
+    
+        # Redirect stdout and stderr to a file
+        file_fd = cls.get_current_logfile_fd()
+        
+        # Record default write methods
+        default_stdout_write = sys.stdout.write
+        default_stderr_write = sys.stderr.write
+        
+        # Create a lock for synchronized writing
+        write_lock = threading.Lock()
+    
+        def stdout_write(data):
+            """
+            Writes data to both the default stdout and the specified file.
+    
+            Args:
+                data (str): The data to be written.
+            """
+            cleaned_data = remove_ansi_escape_codes([data])[0]  # remove ansi escape codes if present
+            
+            with write_lock:
+                file_fd.write(bytes(cleaned_data, "utf-8"))
+                file_fd.flush()  # Ensure data is written to the file immediately
+                default_stdout_write(data)
+    
+        def stderr_write(data):
+            """
+            Writes data to both the default stderr and the specified file.
+    
+            Args:
+                data (str): The data to be written.
+            """
+            cleaned_data = remove_ansi_escape_codes([data])[0]  # remove ansi escape codes if present
+            
+            with write_lock:
+                file_fd.write(bytes(cleaned_data, "utf-8"))
+                file_fd.flush()  # Ensure data is written to the file immediately
+                default_stderr_write(data)
+    
+        # Assign new write methods
+        sys.stdout.write = stdout_write
+        sys.stderr.write = stderr_write
+        
+    @classmethod
+    def get_latest_logfile(cls) -> Optional[str]:
+        """
+        Returns the latest created file in `LOGGING_DIR`.
+        """
+        if os.path.isdir(LOGGING_DIR):
+            scan = {i.stat().st_ctime: i for i in os.scandir(LOGGING_DIR)}
+            return scan.get(sorted(scan)[-1]) if scan else None
+            
+    @classmethod
+    def log_to_file(cls, data: Union[str, bytes], end: Union[str, bytes] = "\n") -> str | bytes:
+        """
+        This writes data to the log file.
+    
+        Args:
+            data (Union[str, bytes]): Data to write.
+            end (Union[str, bytes]): The suffix to add to data before writting to file.
+            
+        Returns:
+             bytes: Data that was written (in bytes).
+        
+        Raises:
+            DisallowedAction: If SILENT=False or LOG_TO_FILE=False in settings.
+        """
+        if not SILENT:
+             raise DisallowedAction(
+                 "SILENT is not True in settings. No need for using this method as all console output"
+                 " is redirected to file by default."
+             )
+             
+        if not LOG_TO_FILE:
+             raise DisallowedAction(
+                 "LOG_TO_FILE is not True in settings. This is required to allow file logging."
+             )
+             
+        logfile_fd = cls.get_current_logfile_fd()
+        
+        data = b"".join([
+            data.encode("utf-8") if isinstance(data, str) else data,
+            end.encode("utf-8") if isinstance(end, str) else end
+        ])
+        
+        # Write to logfile and return data written
+        with logfile_fd:
+            logfile_fd.write(data)
+            logfile_fd.flush()
+        
+        # Finally, return data written
+        return data
+
+    @classmethod
+    def close_logfile(cls):
+        """
+        Closes the current logfile if opened.
+        """
+        logfile_fd = cls.__current_logfile_fd
+        if logfile_fd is not None:
+            try:
+                logfile_fd.close()
+            except Exception:
+                pass
+
+
+if not os.path.isdir(LOGGING_DIR):
+    # If not in testing environment.
+    if not is_testing_environment():
         os.makedirs(LOGGING_DIR, exist_ok=True)
-    
-    if LOG_TO_FILE:
-        # Close log file at exit.
-        atexit.register(get_current_log_file_fd().close)
-except Exception:
-    pass
+
+# Register some callback at exit (just in case the file is not yet closed)
+atexit.register(Logger.close_logfile)

@@ -10,26 +10,20 @@ import hashlib
 import datetime
 import urllib.parse
 
-from duck.etc.internals.template_engine import InternalDuckEngine
 from duck.http.middlewares import BaseMiddleware
 from duck.http.request import HttpRequest
-from duck.http.response import (
-    HttpForbiddenRequestResponse,
-    TemplateResponse,
-)
+from duck.http.response import HttpForbiddenRequestResponse
 from duck.meta import Meta
 from duck.settings import SETTINGS
 from duck.utils.urlcrack import URL
 from duck.utils.safe_compare import constant_time_compare
 from duck.shortcuts import simple_response
+from duck.etc.internals.template import internal_render
 
 
 CSRF_USE_SESSIONS = SETTINGS["CSRF_USE_SESSIONS"]
-
 CSRF_SECRET_LENGTH = SETTINGS["CSRF_SECRET_LENGTH"]
-
 CSRF_TOKEN_LENGTH = SETTINGS["CSRF_TOKEN_LENGTH"]
-
 CSRF_SESSION_KEY = SETTINGS["CSRF_SESSION_KEY"]
 
 # Allowed characters: Letters and Digits
@@ -249,19 +243,16 @@ class CSRFMiddleware(BaseMiddleware):
             
         parsed_good_origin = URL(request.host)
         parsed_good_origin.scheme = request.scheme
-        
         parsed_request_origin = URL(request_origin)
         
         if parsed_request_origin.port:
             # there is port in origin header
             if parsed_request_origin.port != parsed_good_origin.port:
-                raise OriginError(
-                    "Port specified in Origin header is not allowed")
+                raise OriginError("Port specified in Origin header is not allowed")
 
         if not (parsed_good_origin.host == parsed_request_origin.host
                 and parsed_good_origin.scheme == parsed_request_origin.scheme):
             raise OriginError("Bad Origin header specified")
-
         return True
 
     @classmethod
@@ -338,13 +329,12 @@ class CSRFMiddleware(BaseMiddleware):
                 csrf_error_context["reason"] = request.csrf_error_reason
                 cls.debug_message = f"CSRFMiddleware: {request.csrf_error_reason}"
 
-            response = TemplateResponse(
+            response = internal_render(
                 request,
                 "csrf_error.html",
                 context=csrf_error_context,
                 content_type="text/html",
                 status_code=403,
-                engine=InternalDuckEngine.get_default(),
             )
         else:
             body = None
@@ -417,7 +407,6 @@ class CSRFMiddleware(BaseMiddleware):
             correct_csrf_secret = request.SESSION.get(csrf_session_key)
         else:
             correct_csrf_secret = csrf_secret_from_cookie
-
         try:
             cls.check_csrf_cookie(request)
         except CSRFCookieError as e:

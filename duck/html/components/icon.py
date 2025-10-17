@@ -4,8 +4,8 @@ Icon component module.
 Notes:
 - This depends on your JS/CSS bundle you are using for icons.
 """
-from duck.html.components import InnerHtmlComponent
-from .link import Link
+from duck.html.components import InnerComponent
+from duck.html.components.link import Link
 
 
 class IconLink(Link):
@@ -17,18 +17,12 @@ class IconLink(Link):
         self.style["color"] = "#ccc"
 
 
-class Icon(InnerHtmlComponent):
+class Icon(InnerComponent):
     """
     Icon component.
     
-    Args:
-        icon_class (str): Icon class according to your custom JS/CSS Icon bundle.
+    Notes:
+    - This is just a `<span>` component, provide argument `klass` for the icon class.
     """
     def get_element(self):
         return "span"
-        
-    def on_create(self):
-        super().on_create()
-        if "icon_class" in self.kwargs:
-            icon_class = self.kwargs.get('icon_class')
-            self.properties["class"] = icon_class

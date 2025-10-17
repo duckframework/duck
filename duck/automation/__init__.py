@@ -19,6 +19,7 @@ from duck.automation.trigger import NoTrigger
 class SimpleAutomation(Automation):
     # Execute a shell script
     def execute(self):
+        # Or use async def execute for asynchronous execution, but parse `async_` argument to automation.
         os.system('bash some_script.sh')
 
 # Instantiate the automation with specified parameters
@@ -61,15 +62,21 @@ dispatcher.register(trigger, automation)
 dispatcher.start()  # Listen for triggers and execute automations infinitely
 """
 
+import time
 import datetime
 import threading
-import time
+import asyncio
 
+from duck.contrib.sync import convert_to_async_if_needed
+from duck.contrib.asyncio import get_available_event_loop
 from duck.utils.dateutils import build_readable_date, datetime_difference
+from duck.utils.asyncio import create_task
 
 
 class AutomationError(Exception):
-    """Automation based exceptions"""
+    """
+    Automation based exceptions.
+    """
 
 
 class AutomationThread(threading.Thread):
@@ -82,12 +89,10 @@ class AutomationThread(threading.Thread):
         Set a callback that will be called whenever the thread finishes execution.
 
         Notes:
-    - Make sure callback doesn't allow any positional or keyword arguments.
+        - Make sure callback doesn't allow any positional or keyword arguments.
         """
         if not callable(callback):
-            raise TypeError(
-                f"Callback should be a callable object not {type(callback).__name__}"
-            )
+            raise TypeError(f"Callback should be a callable object not {type(callback).__name__}.")
         self.on_stop_callback = callback
 
     def on_stop(self):
@@ -123,6 +128,8 @@ class Automation:
     - The `join` method can be used to stop the next execution cycle, meaning the automation will stop immediately before entering the next execution cycle.
     - Using a while loop in the `callback` or `execute` method will cause the automation to hang, and `join` will not work if the callback is in a loop.
     - The `join` method works properly before the next execution cycle or after the current execution cycle.
+    
+    **Automations can be asynchronously executed by providing the `async_` argument.**
     """
 
     def __init__(
@@ -130,6 +137,7 @@ class Automation:
         callback: callable = None,
         name: str = None,
         threaded: bool = True,
+        async_: bool = False,
         start_time: datetime.datetime | str = "immediate",
         schedules: int = 1,
         interval: float | int = None,
@@ -142,6 +150,7 @@ class Automation:
             callback (callable, optional): A callable to be executed whenever the automation runs. If you do not provide a callback, implement the 'execute' method.
             name (str, optional): The name of the Automation. Defaults to None.
             threaded (bool): Indicates whether to run the automation in a new thread. Defaults to True.
+            async_ (bool): Indicates whether to run automation asynchronously. Defaults to False.
             start_time (datetime.datetime | str): The datetime to start the Automation. It can be "immediate" or any specific datetime.
             schedules (int): The number of times to run the Automation. Defaults to 1. Set to -1 for infinite schedules.
             interval (int | float): The time period in seconds between successive runs of the Automation.
@@ -157,32 +166,37 @@ class Automation:
         self.__finished = False
         self.__latest_error = None
         self.disable_execution = False
-        # run some checks
+        
+        # Run some checks
         # threaded checks
         if not isinstance(threaded, bool):
             raise AutomationError(
-                f"Argument threaded should be a boolean not {type(threaded).__name__}"
+                f"Argument `threaded` should be a boolean not {type(threaded).__name__}"
             )
 
-        # callback checks
+        # Callback checks
         if callback:
             if not callable(callback):
                 raise AutomationError(
-                    "Callback should be a callable object, function or method."
+                    "Callback must be a callable object, function or method."
                 )
 
-        # name checks
+        # Name checks
         if name:
             if not isinstance(name, str):
                 raise AutomationError(
-                    f"Name should be an instance of string not {type(name).__name__}"
+                    f"Name must be an instance of string not {type(name).__name__}"
                 )
 
         if description and not isinstance(description, str):
             raise AutomationError(
-                f"Description should be a string not {type(description).__name__}"
+                f"Description must be a string not {type(description).__name__}"
             )
 
+        # Async/threaded checks
+        if async_ and threaded:
+            raise AutomationError("Arguments `async_` and `threaded` cannot be both True at the same time.")
+            
         # start_time checks
         if isinstance(start_time, datetime.datetime):
             now = datetime.datetime.now()
@@ -226,7 +240,7 @@ class Automation:
                 f"Number of shedules should an integer not {type(schedules).__name__}"
             )
 
-        # interval checks
+        # Interval checks
         if isinstance(interval, (float, int)):
             if interval < 0:
                 raise AutomationError(
@@ -244,19 +258,88 @@ class Automation:
         self.callback = callback
         self.name = name
         self.threaded = threaded
+        self.async_ = async_
         self.start_time = start_time
         self.schedules = schedules
         self.interval = interval or 0  # will be 0 if interval is set to None
         self.description = str(description)
 
-    def wrap_automation(self) -> AutomationThread:
+    @property
+    def latest_error(self):
+        """
+        Returns the latest exception encountered during execution.
+        """
+        return self.__latest_error
+
+    @property
+    def is_running(self) -> bool:
+        """
+        Whether the automation is running or not.
+        """
+        return self.__running
+
+    @property
+    def started_at(self) -> datetime.datetime:
+        """
+        The datetime where this automation started.
+        """
+        if not self.is_running and not self.finished:
+            raise AutomationError(
+                "The automation was never started so the time it started cannot be given."
+            )
+        return self.__started_at
+
+    @property
+    def finished_at(self) -> datetime.datetime:
+        """
+        The datetime where this automation finished.
+        """
+        if not self.finished:
+            if self.is_running:
+                raise AutomationError("Automation still running.")
+            raise AutomationError(
+                "The automation was never started so the time it finished cannot be given."
+            )
+        return self.__finished_at
+        
+    @property
+    def finished(self):
+        """
+        Whether the automation has been stopped completely.
+        """
+        return self.__finished
+
+    @property
+    def first_execution(self) -> bool:
+        """
+        Returns whether the automation has already been executed for the first time.
+
+        Notes:
+            - Take a look a property execution_times to see the number of times the Automation was Executed.
+        """
+        return self.__first_execution
+
+    @property
+    def execution_times(self) -> int:
+        """
+        Returns the number of times the automation has been executed.
+        """
+        return self.__execution_times
+
+    @property
+    def execution_cycles(self) -> int:
+        """
+        Returns the number of times the automation has been executed (same as property 'execution_times').
+        """
+        return self.execution_times
+        
+    def to_thread(self) -> AutomationThread:
         """
         This wraps an automation in new Thread so that it may be executed nicely without blocking any other automations execution.
 
         Return:
-                AutomationThread: Returns an automation in new thread.
+            AutomationThread: Returns an automation in new thread.
         """
-
         def on_error_wrapper(error: Exception):
             """
             Function called on automation execution error.
@@ -306,53 +389,15 @@ class Automation:
             - The thread is only created once.
         """
         if not hasattr(self, "_base_thread"):
-            self._base_thread = self.wrap_automation()
+            self._base_thread = self.to_thread()
         return self._base_thread
-
+        
     def join(self):
         """
         Wait for the automation to finish the current execution cycle and stop the execution
         """
         self.__force_stop = True
-
-    @property
-    def latest_error(self):
-        """
-        Returns the latest exception encountered during execution.
-        """
-        return self.__latest_error
-
-    @property
-    def is_running(self) -> bool:
-        """
-        Whether the automation is running or not.
-        """
-        return self.__running
-
-    @property
-    def started_at(self) -> datetime.datetime:
-        """
-        The datetime where this automation started.
-        """
-        if not self.is_running and not self.finished:
-            raise AutomationError(
-                "The automation was never started so the time it started cannot be given."
-            )
-        return self.__started_at
-
-    @property
-    def finished_at(self) -> datetime.datetime:
-        """
-        The datetime where this automation finished.
-        """
-        if not self.finished:
-            if self.is_running:
-                raise AutomationError("Automation still running.")
-            raise AutomationError(
-                "The automation was never started so the time it finished cannot be given."
-            )
-        return self.__finished_at
-
+                
     def get_short_description(self):
         """
         Get the short version of description.
@@ -372,43 +417,11 @@ class Automation:
                         short_description += "..."
                         break
             else:
-                short_description = (self.description[:max_limit].strip()
-                                     + "...")
+                short_description = (self.description[:max_limit].strip() + "...")
         else:
             return self.description
         return short_description
-
-    @property
-    def finished(self):
-        """
-        Whether the automation has been stopped completely.
-        """
-        return self.__finished
-
-    @property
-    def first_execution(self) -> bool:
-        """
-        Returns whether the automation has already been executed for the first time.
-
-        Notes:
-            - Take a look a property execution_times to see the number of times the Automation was Executed.
-        """
-        return self.__first_execution
-
-    @property
-    def execution_times(self) -> int:
-        """
-        Returns the number of times the automation has been executed.
-        """
-        return self.__execution_times
-
-    @property
-    def execution_cycles(self) -> int:
-        """
-        Returns the number of times the automation has been executed (same as property 'execution_times').
-        """
-        return self.execution_times
-
+        
     def prepare_stop(self):
         """
         Called before the main application termination.
@@ -451,13 +464,28 @@ class Automation:
             self.on_error(error)
 
         if self.threaded:
+            # Use multithreading
             thread = self.get_thread()
             if thread.is_alive():
                 raise AutomationError(
-                    "Automation is already running in another thread, cannot start automation."
+                    "Automation is already running in another Thread, cannot start automation."
                 )
             thread.start()
+        
+        elif self.async_:
+            # Use asynchronous execution
+            task = getattr(self, "_async_task", None)
+            if task and not task.done():
+              raise AutomationError(
+                    "Automation is already running in another async Task, cannot start automation."
+                )
+            event_loop = get_available_event_loop()
+            coro = self._async_start()
+            task = create_task(coro, loop=event_loop)
+            self._async_task = task
+            
         else:
+            # Use synchronous blocking execution
             try:
                 self._start()
             except Exception as e:
@@ -542,7 +570,76 @@ class Automation:
 
         # finished or stopped execution
         on_finish_wrapper()
+        
+    async def _async_start(self):
+        """
+        Asyncronous entry method to execute an automation.
+        """
+        self.__running = False
+        self.__force_stop = False  # undo method "join" if it has been used
+        self.__finished = False
+        
+        async def on_start_wrapper():
+            """
+            Async function called on automation start.
+            """
+            self.__running = True
+            self.__first_execution = True
+            self.__started_at = datetime.datetime.now()
+            await convert_to_async_if_needed(self.on_start)()
 
+        async def on_finish_wrapper():
+            """
+            Async function called on automation finish.
+            """
+            self.__running = False
+            self.__finished = True
+            self.__finished_at = datetime.datetime.now()
+            await convert_to_async_if_needed(self.on_finish, thread_sensitive=False)()
+
+        if self.schedules == -1:  # execute to infinite
+            counter = 0
+
+            while True:
+                if self.__force_stop or self.disable_execution:
+                    break  # force stop, maybe method join was used.
+
+                if counter == 0:
+                    await on_start_wrapper()  # call function on_start_wrapper just once
+                
+                if self.disable_execution:
+                    break
+                    
+                # continue with execution
+                await convert_to_async_if_needed(self.on_pre_execute, thread_sensitive=False)()  # do some stuff before execution
+                await convert_to_async_if_needed(self.execute, thread_sensitive=False)()  # execute the automation
+                await convert_to_async_if_needed(self.on_post_execute, thread_sensitive=False)()  # do some stuff after execution
+                self.__executed = (True)  # set that the method has executed for the first time
+                self.__execution_times += 1
+                counter += 1  # counter is more accurate on number of times the loop was run compared to __execution_times.
+                await asyncio.sleep(self.interval)  # sleep before next execution cycle
+        else:
+            for i in range(0, self.schedules):
+                if self.__force_stop or self.disable_execution:
+                    break  # force stop, maybe method join was used.
+
+                if i == 0:
+                    await on_start_wrapper()  # call function on_start_wrapper just once
+                
+                if self.disable_execution:
+                    break
+                    
+                # continue with execution
+                await convert_to_async_if_needed(self.on_pre_execute, thread_sensitive=False)()  # do some stuff before execution
+                await convert_to_async_if_needed(self.execute, thread_sensitive=False)()  # execute the automation
+                await convert_to_async_if_needed(self.on_post_execute, thread_sensitive=False)()  # do some stuff after execution
+                self.__executed = (True)  # automation has executed for the first time
+                self.__execution_times += 1
+                await asyncio.sleep(self.interval)  # sleep before next execution cycle
+
+        # finished or stopped execution
+        await on_finish_wrapper()
+        
     def execute(self):
         """
         This executes an automation.

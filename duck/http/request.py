@@ -32,6 +32,7 @@ from duck.utils.object_mapping import map_data_to_object
 from duck.utils.urldecode import url_decode
 from duck.utils.urlcrack import URL
 from duck.utils.path import build_absolute_uri
+from duck.utils.xsocket import xsocket
 
 
 SUPPORTED_HTTP_VERSIONS = ["HTTP/1.0", "HTTP/1.1"]
@@ -100,7 +101,7 @@ class Request:
         self.__path: str = None  # path stripped of queries if so
         self.__id: str = None  # request unique identifier
         
-        self.client_socket: socket.socket = None # client socket which made this request
+        self.client_socket: xsocket = None # client socket which made this request
         self.client_address: Tuple[str, int] = None # client remote address
         self.application = None
         self.method: str = ""
@@ -347,6 +348,7 @@ class Request:
             raise RequestError(
                 f"Request headers should be an instance of 'duck.http.header.Headers', not {type(headers)}"
             )
+        self.headers.clear()
         self.headers.update(headers)
     
     @property
@@ -359,7 +361,9 @@ class Request:
 
     @property
     def uses_https(self):
-        """Whether the request is on `HTTP` or `HTTPS` protocol, this is determined by checking if application is started with https enabled or not"""
+        """
+        Whether the request is on `HTTP` or `HTTPS` protocol, this is determined by checking if application is started with https enabled or not.
+        """
         if self.application:
             if self.application.enable_https:
                 return True
@@ -463,7 +467,9 @@ class Request:
 
     @property
     def has_error(self) -> bool:
-        """Returns boolean on whether boolean has an error."""
+        """
+        Returns boolean on whether boolean has an error.
+        """
         return bool(self.error)
 
     @property
@@ -497,6 +503,23 @@ class Request:
         """
         root_url = URL(self.host)
         root_url.scheme = self.scheme
+        root_url = root_url.to_str()
+        return build_absolute_uri(root_url, self.path)
+
+    @property
+    def absolute_ws_uri(self) -> str:
+        """
+        Resolves the absolute WebSocket URI for the current request.
+    
+        This property constructs the absolute URI by combining the base URL and 
+        the request path. The absolute URI includes the full protocol, domain, 
+        and path to the requested resource.
+    
+        Returns:
+            str: The absolute URI of the request, including scheme and domain.
+        """
+        root_url = URL(self.host)
+        root_url.scheme = "wss" if self.scheme == "https" else "ws"
         root_url = root_url.to_str()
         return build_absolute_uri(root_url, self.path)
 
@@ -545,16 +568,15 @@ class Request:
         self._set_auth_headers()
         
         # Start constructing the request with the method, path, and HTTP version
-        request = self._build_request_line()
+        raw_request = self._build_request_line()
         
         # Add headers to the request
-        request += self._build_headers()
-        request = request.strip()
+        raw_request = raw_request.join([b"", self._build_headers()])
+        raw_request = raw_request.strip()
         
         # Append the content if it exists
-        if self.content:
-            request += b"\r\n\r\n" + self.content
-        return request
+        raw_request = raw_request.join([b"", b"\r\n\r\n"]).join([b"", self.content or b""])
+        return raw_request
     
     @staticmethod
     def extract_cookies_from_request(request) -> Dict[str, str]:
@@ -590,7 +612,8 @@ class Request:
 
     @staticmethod
     def extract_auth_from_request(request) -> Dict[str, str]:
-        """Extracts authentication-related information from the request headers.
+        """
+        Extracts authentication-related information from the request headers.
     
         This method looks for both the `Authorization` and `Proxy-Authorization` headers and
         returns a dictionary containing the values if they exist.
@@ -716,8 +739,7 @@ class Request:
                         "content_disposition": content_disposition,
                     }
 
-                    file_upload_handler = FILE_UPLOAD_HANDLER(
-                        filename, content, **additional_kw)
+                    file_upload_handler = FILE_UPLOAD_HANDLER(filename, content, **additional_kw)
 
                     # Add file in request.FILES
                     request.FILES[query_key] = file_upload_handler
@@ -784,10 +806,11 @@ class Request:
 
     @staticmethod
     def add_queries_to_url(url: str, queries: Dict) -> str:
-        """This adds queries to a URL"""
+        """
+        This adds queries to a URL.
+        """
         if not isinstance(queries, dict):
-            raise RequestError(
-                f"Argument `queries` should be a dict not {type(queries)}")
+            raise RequestError(f"Argument `queries` should be a dict not {type(queries)}")
         url = (url.strip("?") + "?" if queries else url.strip("?"))  # remove existing if so and add new (?)
         counter = 0
         for key in queries.keys():
@@ -798,7 +821,9 @@ class Request:
         
     @property
     def remote_addr(self) -> Tuple[str, int]:
-        """Returns the client remote address and port"""
+        """
+        Returns the client remote address and port.
+        """
         if self.__remote_addr:
             return self.__remote_addr
 
@@ -876,8 +901,27 @@ class Request:
             return self.absolute_uri
         return build_absolute_uri(self.absolute_uri, path)
     
+    def build_absolute_ws_uri(self, path: str = None) -> str:
+        """
+        Constructs an absolute WebSocket URL by combining the scheme, netloc, and the provided path.
+    
+        This method ensures that the resulting URL includes the scheme, host, and port (if applicable).
+        It relies on the `scheme` and `port` attributes for accurate URL construction.
+    
+        Args:
+            path (str, optional): The URL path to append to the base URL. Defaults to None.
+    
+        Returns:
+            str: A fully constructed absolute URL.
+        """
+        if not path:
+            return self.absolute_uri
+        return build_absolute_uri(self.absolute_ws_uri, path)
+    
     def set_connection(self, mode: str):
-        """Sets the request connection mode by modifying the connection header."""
+        """
+        Sets the request connection mode by modifying the connection header.
+        """
         if mode.lower() not in ["close", "keep-alive"]:
             raise RequestError(
                 "Connection mode can only be between 'close' and 'keep-alive' "
@@ -1091,7 +1135,7 @@ class Request:
     
         Notes:
             - This method assumes the content is properly formatted in the request.
-            - The stripping of `\r\n` ensures that no unnecessary line breaks remain before 
+            - The left stripping of `\r\n` ensures that no unnecessary line breaks remain before 
               storing the content.
             - The method does not automatically add content-related headers (e.g., 
               `Content-Length`) by setting `auto_add_content_headers=False` in the call to 
@@ -1100,7 +1144,7 @@ class Request:
         content = raw_content
         
         if content:
-            content = content.strip(b"\r\n")
+            content = content.lstrip(b"\r\n") # only strip "\r\n" from the left (never the right side.)
             self.set_content(content, auto_add_content_headers=False)
     
     def _parse_request(self, topheader: str, headers: Dict[str, str], content: bytes):

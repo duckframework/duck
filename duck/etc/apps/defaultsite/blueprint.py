@@ -18,15 +18,15 @@ DuckSite = Blueprint(
         re_path(
             "/duck-static/.*",
             views.ducksite_staticfiles_view,
-            name="duck-staticfiles",
+            name="staticfiles",
             methods=["GET"],
         ),
     ],
     prepend_name_to_urls=False,
-    is_builtin=True,
+    static_dir="shared_static",  # includes only static files that needs to be shared or stored in static root.
     enable_static_dir=True,
     enable_template_dir=True,
-    static_dir="shared_static",  # includes only static files that needs to be shared or stored in static root.
+    is_builtin=True,   
 )
 
 # The above blueprint will only allow collectstatic method to collect static files in shared_static because some parts of the duck app depends on these shared static files.

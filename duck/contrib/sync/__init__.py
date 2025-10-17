@@ -93,3 +93,8 @@ def convert_to_sync_if_needed(func: Callable) -> Callable:
     if not iscoroutinefunction(func) or isinstance(func, AsyncToSync):
         return func
     return async_to_sync(func)
+
+
+# Helper aliases
+ensure_async = convert_to_async_if_needed
+ensure_sync = convert_to_sync_if_needed

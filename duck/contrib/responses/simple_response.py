@@ -13,7 +13,7 @@ from duck.utils.safemarkup import mark_safe
 from duck.utils.path import joinpaths
 
 
-FAVICON = os.getenv("SIMPLE_RESPONSE_DEFAULT_ICON") or joinpaths(str(SETTINGS["STATIC_URL"]), "images/duck-favicon.png")
+FAVICON = os.getenv("SIMPLE_RESPONSE_DEFAULT_ICON") or joinpaths("/" + str(SETTINGS["STATIC_URL"]), "/ducksite/duck-favicon.png")
 
 
 with open(joinpaths(duck_storage, "etc/templates/simple_response.html")) as fd:

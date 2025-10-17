@@ -13,4 +13,4 @@ def ducksite_home_view(request: HttpRequest):
     Home view for Duck's default site.
     """
     ctx = context.get_default_context()
-    return render(request, "home.html", ctx)
+    return render(request, "ducksite/home.html", ctx)

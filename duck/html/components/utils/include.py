@@ -13,6 +13,12 @@ BASE_MODULE = "duck.html.components"
 
 BUILTIN_COMPONENTS = [
     f"{BASE_MODULE}.{module}" for module in [
+        "page",
+        "paragraph",
+        "heading",
+        "snackbar",
+        "progressbar",
+        "section",
         "card",
         "icon",
         "link",
@@ -30,7 +36,8 @@ BUILTIN_COMPONENTS = [
         "navbar",
         "footer",
         "button",
-        "popup",
+        "modal",
+        "lively",
         "code",
         "label",
         "fileinput",
@@ -49,11 +56,16 @@ def components_include(modules: List[str]) -> Dict[str, str]:
     Returns:
         Dict[str, str]: A dictionary mapping component names to their full module path.
     """
+    from duck.html.components import ComponentError
+    
     components = {}
     
     for mod_name in modules:
-        mod = import_module_once(mod_name)  # Ensure module is imported
-        
+        try:
+            mod = import_module_once(mod_name)  # Ensure module is imported
+        except Exception as e:
+            raise ComponentError(f"Error importing component library '{mod_name}': {e} ")
+            
         if not mod:
             continue  # Skip if import fails
 
@@ -62,5 +74,4 @@ def components_include(modules: List[str]) -> Dict[str, str]:
                 cls = getattr(mod, attr_name)
                 if inspect.isclass(cls) and issubclass(cls, HtmlComponent):
                     components[attr_name] = f"{mod_name}.{attr_name}"  # Correct dictionary assignment
-
     return components

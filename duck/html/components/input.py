@@ -3,13 +3,14 @@ Input components module.
 """
 
 from duck.html.components import (
-    NoInnerHtmlComponent,
+    NoInnerComponent,
     Theme,
 )
-from .container import FlexContainer
+from duck.html.components.container import FlexContainer
+from duck.html.components.label import Label
 
 
-class BaseInput(NoInnerHtmlComponent):
+class BaseInput(NoInnerComponent):
     """
     Base Input component.
     """
@@ -17,6 +18,7 @@ class BaseInput(NoInnerHtmlComponent):
         return "input"
     
     def on_create(self):
+         super().on_create()
          style = {
             "padding": "10px",
             "border": "1px solid #ccc",
@@ -24,9 +26,6 @@ class BaseInput(NoInnerHtmlComponent):
             "font-size": Theme.normal_font_size,
          }
          self.style.setdefaults(style)
-         
-         if self.kwargs.get("value"):
-             self.properties.setdefault("value", self.kwargs.get("value"))
 
 
 class Input(BaseInput):
@@ -39,28 +38,39 @@ class Input(BaseInput):
          placeholder (str): Placeholder for input component.
          required (bool): Whether the field is required or not.
          maxlength (int): The maximum allowed characters.
+         minlength (int): The minimum allowed characters.
+         disabled (bool): Whether input is disabled.
+         
      """
     def on_create(self):
-        self.properties["min-width"] = "50%"
-        self.properties["min-height"] = "60px"
-        
         super().on_create()
+        self.props["min-width"] = "50%"
+        self.props["min-height"] = "60px"
         
         if "type" in self.kwargs:
-            self.properties["type"] = self.kwargs.get('type') or ''
-        
+            self.props["type"] = self.kwargs.get('type')
+            
+        if "value" in self.kwargs:
+             self.props["value"] = self.kwargs.get("value")
+             
         if "name" in self.kwargs:
-            self.properties["name"] = self.kwargs.get('name') or ''
+            self.props["name"] = self.kwargs.get('name') or ''
         
         if "placeholder" in self.kwargs:
             placeholder = self.kwargs.get('placeholder') or ''
-            self.properties["placeholder"] = placeholder
+            self.props["placeholder"] = placeholder
        
         if "required" in self.kwargs:
-            self.properties["required"] = "true"
+            self.props["required"] = "true"
        
         if "maxlength" in self.kwargs:
-           self.properties["maxlength"] = str(self.kwargs.get('maxlength')) or ''  
+           self.props["maxlength"] = str(self.kwargs.get('maxlength')) or ''  
+        
+        if "minlength" in self.kwargs:
+           self.props["minlength"] = str(self.kwargs.get('minlength')) or ''  
+        
+        if "disabled" in self.kwargs:
+            self.props["disabled"] = "true" if self.kwargs.get("disabled") else "false"
 
 
 class InputWithLabel(FlexContainer):
@@ -75,7 +85,7 @@ class InputWithLabel(FlexContainer):
     
     ```py
     fullname = InputWithLabel(
-        label_text="Full Name",
+        label_text="Full Name", # Or use label_html
         input=Input(
             type="text",
             name="fullname",
@@ -98,20 +108,24 @@ class InputWithLabel(FlexContainer):
     ```
     """
     def on_create(self):
+        super().on_create()
         self.style["gap"] = "10px"
         self.style["flex-direction"] = "column"
-        super().on_create()
         
-        if "label_text" in self.kwargs:
-            label_text = self.kwargs.get('label_text', '')
-            label = f"<label>{label_text}</label>"
-            self.inner_body += label
+        if "label_html" in self.kwargs:
+            label_html = self.kwargs.get('label_html')
+            self.label = Label(inner_html=label_html)
+            self.add_child(self.label)
+        
+        elif "label_text" in self.kwargs:
+            label_text = self.kwargs.get('label_text')
+            self.label = Label(text=label_text)
+            self.add_child(self.label)
         
         if "input" in self.kwargs:
-            inputfield = self.kwargs.get('input', '')
-            if inputfield:
-                inputfield = inputfield.to_string()
-                self.inner_body += inputfield
+            self.inputfield = self.kwargs.get('input')
+            if self.inputfield:
+                self.add_child(self.inputfield)
 
 
 class CSRFInput(Input):
@@ -120,17 +134,24 @@ class CSRFInput(Input):
     `csrf_token` tag. You only need to parse a request to generate `csrfmiddleware` field so as to avoid
     `cross site request forgery attacks`.
     """
-    def __init__(self, request,):
-        self.request = request
+    def __init__(self, request: "HttpRequest"):
+        from duck.http.request import HttpRequest
+        
+        self.request: HttpRequest = request
+        self.add_to_registry = False # we don't care about live changes.
+        
+        # Super initilization after setting attributes
         super().__init__()
         
     def on_create(self):
-        from duck.settings import SETTINGS
-        from duck.template.csrf import get_csrf_token
+        super().on_create()
+        from duck.shortcuts import csrf_token
         
-        # empty all styles and props
+        # Empty all styles and props
         self.style.clear()
-        self.properties.clear()
-        self.properties["type"] = "hidden"
-        self.properties["name"] = 'csrfmiddlewaretoken'
-        self.properties["value"] = get_csrf_token(self.request)
+        self.props.clear()
+        
+        # Set some useful properties
+        self.props["type"] = "hidden"
+        self.props["name"] = 'csrfmiddlewaretoken'
+        self.props["value"] = csrf_token(self.request)

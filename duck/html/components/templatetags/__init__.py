@@ -210,3 +210,7 @@ class HtmlComponentTemplateTag(TemplateTag):
         def jinja2_tag_wrapper(*args, **kwargs):
                 return self.component_cls(*args, **kwargs).to_string()
         environment.globals[self.tagname] = jinja2_tag_wrapper
+
+
+# Create a shorter alias
+ComponentTag = HtmlComponentTemplateTag

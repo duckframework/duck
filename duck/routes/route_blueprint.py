@@ -42,30 +42,30 @@ class Blueprint:
         name: str,
         urlpatterns: Optional[List[URLPattern]] = None,
         prepend_name_to_urls: bool = True,
-        is_builtin: bool = False,
-        template_dir: str = "templates",
-        enable_template_dir: bool = True,
         static_dir: str = "static",
+        template_dir: str = "templates",
         enable_static_dir: bool = True,
+        enable_template_dir: bool = True,
+        is_builtin: bool = False,
     ):
         """
         Initialize the Blueprint.
         
         Args:
-                location (str): The absolute path to where the blueprint is located.
-                name (str): A valid string.
-                urlpatterns (Optional[List[URLPattern]]): List of urlpatterns created using duck.urls.path or re_path.
-                prepend_name_to_urls (bool): Whether to prepend name to urlpatterns. Defaults to True.
-                is_builtin (bool): Flag the route blueprint as an internal builtin blueprint, Defaults to False (optional).
-                template_dir (str): The template directory for the blueprint.
-                enable_template_dir (bool): Expose the template dir for template resolving.
-                static_dir (str): The location of static files within the blueprint base directory.
-                enable_static_dir (bool): Boolean on whether to enable commands like `duck collectstatic` to access the blueprint staticfiles.
+            location (str): The absolute path to where the blueprint is located.
+            name (str): A valid string representing the blueprint's name.
+            urlpatterns (Optional[List[URLPattern]]): List of urlpatterns created using duck.urls.path or re_path.
+            prepend_name_to_urls (bool): Whether to prepend name to urlpatterns. Defaults to True.
+            static_dir (str): The location of static files within the blueprint base directory.
+            template_dir (str): The template directory for the blueprint.
+            enable_static_dir (bool): Boolean on whether to enable commands like `duck collectstatic` to access the blueprint staticfiles.
+            enable_template_dir (bool): Expose the template dir for template resolving.
+            is_builtin (bool): Flag the route blueprint as an internal builtin blueprint, Defaults to False (optional).
         """
 
         if not (name and isinstance(name, str)):
             raise BlueprintError(
-                "Name for the Blueprint should be a string valid to be a name."
+                "Name for the Blueprint must be a valid string"
             )
 
         elif name in self.__names:
@@ -79,11 +79,12 @@ class Blueprint:
         self.name = name
         self.urlpatterns = []
         self.prepend_name_to_urls = prepend_name_to_urls
-        self.is_builtin = is_builtin
-        self.template_dir = template_dir
-        self.enable_template_dir = enable_template_dir
         self.static_dir = static_dir
+        self.template_dir = template_dir
         self.enable_static_dir = enable_static_dir
+        self.enable_template_dir = enable_template_dir
+        self.is_builtin = is_builtin
+        
         urlpatterns = urlpatterns or []
 
         try:
@@ -100,11 +101,20 @@ class Blueprint:
     @property
     def root_directory(self) -> str:
         """
-        Returns the blueprint root path.
+        Returns the absolute blueprint root path.
         """
         root = str(pathlib.Path(self.location).parent)
         return root
-
+    
+    @property
+    def root_directory_name(self) -> str:
+        """
+        Returns the blueprint root path name.
+        """
+        location = pathlib.Path(self.location)
+        relative_root = location.relative_to(location.parent)
+        return relative_root.name
+        
     def add_urlpattern(
         self,
         urlpattern: URLPattern,

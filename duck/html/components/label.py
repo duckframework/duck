@@ -10,8 +10,3 @@ class Label(InnerHtmlComponent):
     """
     def get_element(self):
         return "label"
-    
-    def on_create(self):
-        if "text" in self.kwargs:
-            text = self.kwargs.get('text') or ''
-            self.inner_body += text

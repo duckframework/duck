@@ -43,10 +43,10 @@ video = Video(
 )
 component.add_child(video)
 """
-from duck.html.components import InnerHtmlComponent
+from duck.html.components import InnerComponent
 
 
-class Video(InnerHtmlComponent):
+class Video(InnerComponent):
     """
     HTML Video component.
     
@@ -65,28 +65,29 @@ class Video(InnerHtmlComponent):
         return "video"
         
     def on_create(self):
-        self.properties.setdefault("type", "video/mp4")
+        super().on_create()
+        self.props.setdefault("type", "video/mp4")
         
-        if self.kwargs.get("source"):
-            self.properties["src"] = self.kwargs.get("source", '')
+        if "source" in self.kwargs:
+            self.props["src"] = self.kwargs.get("source")
         
-        if self.kwargs.get("alt"):
-            self.properties["alt"] = self.kwargs.get("alt", '')
+        if "alt" in self.kwargs:
+            self.props["alt"] = self.kwargs.get("alt")
         
-        if self.kwargs.get("width"):
-            self.style["width"] = self.kwargs.get("width", '')
+        if "width" in self.kwargs:
+            self.style["width"] = self.kwargs.get("width")
             
-        if self.kwargs.get("height"):
+        if "height" in self.kwargs:
             self.style["height"] = self.kwargs.get("height", '')
         
         if self.kwargs.get("autoplay"):
-            self.properties["autoplay"] = "true"
+            self.props["autoplay"] = "true"
         
         if self.kwargs.get("loop"):
-            self.properties["loop"] = "true"
+            self.props["loop"] = "true"
             
         if self.kwargs.get("muted"):
-            self.properties["muted"] = "true"
+            self.props["muted"] = "true"
         
         if self.kwargs.get("playsinline"):
-            self.properties["playsinline"] = "true"
+            self.props["playsinline"] = "true"

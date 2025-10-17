@@ -9,9 +9,12 @@ Each `TableOfContentsSection` is added to the `TableOfContents` component, which
 automatically creates a clickable list of links for navigation.
 """
 
-from duck.html.components.container import FlexContainer
-from duck.html.components import quote
 from duck.utils.slug import slugify
+from duck.html.components import to_component
+from duck.html.components.container import FlexContainer
+from duck.html.components.heading import Heading
+from duck.html.components.paragraph import Paragraph
+from duck.html.components.link import Link
 
 
 class TableOfContentsSection(FlexContainer):
@@ -29,7 +32,7 @@ class TableOfContentsSection(FlexContainer):
         super().on_create()
         self.style["flex-direction"] = "column"
         self.style["margin-top"] = "10px"
-        self.properties["class"] = "toc-section"
+        self.klass = "toc-section"
         
         self.heading = None
         self.body = None
@@ -37,18 +40,13 @@ class TableOfContentsSection(FlexContainer):
         # Add heading if provided
         if "heading" in self.kwargs:
             heading_text = self.kwargs.get("heading") or ""
-            self.heading = quote(heading_text, "h1")
-            self.heading.properties["class"] = "toc-heading"
-            self.heading.properties["id"] = slugify(heading_text)
+            self.heading = Heading("h3", inner_html=heading_text, klass="toc-heading", id=slugify(heading_text))
             self.add_child(self.heading)
         
         # Add body content if provided
         if "body" in self.kwargs:
             body_content = self.kwargs.get("body") or ""
-            self.body = quote(body_content, "div")
-            self.body.style["display"] = "flex"
-            self.body.style["flex-direction"] = "column"
-            self.body.properties["class"] = "toc-body"
+            self.body = Paragraph(inner_html=body_content, klass="toc-body") # Allow html rendering
             self.add_child(self.body)
 
 
@@ -66,19 +64,17 @@ class TableOfContents(FlexContainer):
         super().on_create()
         self.style["flex-direction"] = "column"
         self.style["gap"] = "3px"
-        self.properties["class"] = "table-of-contents"
+        self.klass = "table-of-contents"
 
         # Set title
         title_text = self.kwargs.get("title", "Table of Contents")
-        self.title = quote(title_text, "h1")
-        self.title.properties["class"] = "toc-title"
-
+        self.title_heading = Heading("h1", text=title_text, klass="toc-title")
+        
         # Create list container for quick navigation links
-        self.list_container = quote("", "ul")
-        self.list_container.properties["class"] = "toc-list"
-
+        self.list_container = to_component("", tag="ul", klass="toc-list")
+        
         # Add title and list container to the component
-        super().add_child(self.title)
+        super().add_child(self.title_heading)
         super().add_child(self.list_container)
 
     def add_child(self, child: TableOfContentsSection, list_style: str = "circle"):
@@ -106,13 +102,14 @@ class TableOfContents(FlexContainer):
         assert isinstance(section, TableOfContentsSection), "Only a TableOfContentsSection component is allowed"
 
         if section.heading:
-            heading_text = section.heading.inner_body
-            heading_link = quote(heading_text, "a")
+            heading_text = section.heading.inner_html
+            heading_link = Link(text=heading_text)
             heading_link.style["text-decoration"] = "none"
-            heading_link.properties["href"] = f"#{section.heading.properties.get('id', '')}"
+            heading_link.props["href"] = f"#{section.heading.props.get('id', '')}"
 
-            list_item = quote(heading_link.to_string(), "li")
+            list_item = to_component("", tag="li")
             list_item.style["list-style"] = list_style
+            list_item.add_child(heading_link)
             self.list_container.add_child(list_item)
 
         # Add the section to the Table of Contents

@@ -22,13 +22,15 @@ from duck.exceptions.all import (
     RequestError,
     RequestUnsupportedVersionError,
     RequestSyntaxError,
+    ExpectingNoResponse,
 )
-from duck.http.core.handler import ResponseHandler
+from duck.http.core.handler import response_handler
 from duck.http.core.proxyhandler import (
     HttpProxyResponse,
+    AsyncHttpProxyResponse,
     BadGatewayError,
 )
-from duck.http.core.response_finalizer import ResponseFinalizer
+from duck.http.core.response_finalizer import async_response_finalizer
 from duck.http.response import HttpResponse
 from duck.http.request import HttpRequest
 from duck.http.request_data import RequestData
@@ -41,15 +43,8 @@ from duck.contrib.responses.errors import (
     get_bad_request_error_response,
 )
 from duck.contrib.sync import convert_to_async_if_needed
+from duck.utils.xsocket import xsocket
 from duck.settings import SETTINGS
-
-
-# Class for making final adjustments to responses
-response_finalizer = ResponseFinalizer()
-
-
-# Class for sending and logging resoponses
-response_handler = ResponseHandler()
 
 
 class ASGI:
@@ -62,7 +57,7 @@ class ASGI:
                 - The ASGI callable will handle the request and send the response to the client.
                 - The ASGI callable will be called with the following arguments:
                                 - application: The Duck application instance.
-                                - client_socket: The client socket object.
+                                - client_socket: The client xsocket object.
                                 - client_address: The client address tuple.
                                 - request_data: The raw request data from the client.
                 - The ASGI is also responsible for sending request to remote servers like Django for processing.
@@ -73,12 +68,10 @@ class ASGI:
 
     def __init__(self, settings: Dict[str, Any]):
         self.settings = settings
-        self.response_finalizer = response_finalizer
-        self.response_handler = response_handler
-
+        
     @staticmethod
     async def get_request(
-        client_socket: socket.socket,
+        client_socket: xsocket,
         client_address: Tuple[str, int],
         request_data: RequestData,
     ) -> HttpRequest:
@@ -86,7 +79,7 @@ class ASGI:
         Construct a Request object from the data received from the client
 
         Args:
-                client_socket (socket.socket): The client socket object.
+                client_socket (xsocket): The client xsocket object.
                 client_address (tuple): The client address tuple.
                 request_data (RequestData): The request data object
                      
@@ -108,32 +101,34 @@ class ASGI:
         )
         
         # Parse request data
-        await convert_to_async_if_needed(request.parse)(request_data)
+        request.parse(request_data)
         
         return request
 
-    async def finalize_response(self,
+    async def finalize_response(
+        self,
         response,
-        request: Optional[HttpRequest] = None):
+        request: Optional[HttpRequest] = None
+    ):
         """
         Finalizes response by adding final touches and sending response to client.
         """
         try:
-            await convert_to_async_if_needed(self.response_finalizer.finalize_response)(response, request)
+            await async_response_finalizer.finalize_response(response, request)
         except Exception as e:
             logger.log_exception(e)
 
     async def send_response(
         self,
         response,
-        client_socket: socket.socket,
+        client_socket: xsocket,
         request: Optional[HttpRequest] = None,
         disable_logging: bool = False,
     ):
         """
-        Sends response to client.
+        Asynchronously sends response to client.
         """
-        await self.response_handler.async_send_response(
+        await response_handler.async_send_response(
             response,
             client_socket,
             request=request,
@@ -157,7 +152,7 @@ class ASGI:
             middlewares = middlewares[:index]
 
         for middleware in reversed(middlewares):
-            await convert_to_async_if_needed(middleware.process_response)(response, request)
+            await convert_to_async_if_needed(middleware.process_response, thread_sensitive=False)(response, request)
     
     async def django_apply_middlewares_to_response(self, response: HttpProxyResponse, request):
         """
@@ -168,25 +163,28 @@ class ASGI:
             # this means all middlewares were successful.
             await self.apply_middlewares_to_response(response, request)
     
-    async def get_response(self, request: HttpRequest) -> Tuple[HttpResponse, bool]:
+    async def get_response(self, request: HttpRequest) -> HttpResponse:
         """
         Returns the full response for a request, with all middlewares and other configurations applied.
         
         Returns:
-            Tuple[HttpResponse, bool]: Http response and a boolean whether to log the response to the console.
+            HttpResponse: The corresponding HTTP response.
+        
+        Raises:
+            ExpectingNoResponse: Raised if we are never going to get a response e.g. when we reach a WebSocketView.
+                This handles everything on its own and it will never return a response.
         """
         from duck.http.core.processor import AsyncRequestProcessor
         
-        processor = None # initialize request processor
-        response = None
-        disable_logging = False
-        t0 = time.perf_counter()
+        processor: AsyncRequestProcessor # initialize request processor
+        response: HttpResponse
+        
         try:
             processor = AsyncRequestProcessor(request)
             
             if SETTINGS["USE_DJANGO"]:
                 # Obtain the http response for the request
-                response: HttpProxyResponse = await processor.process_django_request()
+                response: AsyncHttpProxyResponse = await processor.process_django_request()
                 
                 # Apply middlewares in reverse order
                 await self.django_apply_middlewares_to_response(response, request)
@@ -225,19 +223,21 @@ class ASGI:
                 # Retrieve the bad gateway error response
                 response = get_bad_gateway_error_response(e, request)
             
+            elif isinstance(e, ExpectingNoResponse):
+                # This is not an error as such but its a way to tell the server that it should not expect a 
+                # response because there is a lower-level handling of the client e.g. websocket protocol
+                raise e # reraise exception
+                        
             else:
                 # Retrieve ther server error response
                 response = get_server_error_response(e, request)
                 logger.log_exception(e)
             
-            # Disable logging as django already logged the response.
-            if SETTINGS["USE_DJANGO"]:
-                disable_logging = True
-        
         # Finalize and return response
         await self.finalize_response(response, request)
         
-        return (response, disable_logging)
+        # Finally, return response
+        return response
         
     async def start_response(self, request: HttpRequest):
         """
@@ -246,16 +246,108 @@ class ASGI:
         Args:
                 request (HttpRequest): The request object.
         """
-        response, disable_logging = await self.get_response(request)
-        
+        try:
+            response = await self.get_response(request)
+        except ExpectingNoResponse:
+            # Do nothing at this point.
+            return
+            
         # Send response to client
         await self.send_response(
             response,
             request.client_socket,
             request,
-            disable_logging=disable_logging,
+            disable_logging=False,
         )
         
+        # Check if another protocol is in use and the request is target on Django endpoint
+        if isinstance(response, AsyncHttpProxyResponse):
+            # If HttpProxyResponse, this mean this response is from Django remote server. 
+            if response.status_code == 101:
+                # Start loop for handling some protocol other than HTTP e.g., websockets
+                create_task(self.handle_django_connection_upgrade(request, response))
+                
+    async def handle_django_connection_upgrade(
+        self,
+        upgrade_request: HttpRequest,
+        upgrade_response: AsyncHttpProxyResponse,
+        protocol_receive_timeout: Union[int, float] =10,
+        protocol_receive_buffer: int = 4096,
+    ):
+        """
+        This starts a loop for handling any external protocol like `WebSockets` for Django.
+        
+        Notes:
+            This receives data to Django and sends the data back to client and it gets the
+                data from client and send it to Django forever.
+        """
+        # Upgrade response already sent at this point.
+        from duck.contrib.websockets import log_message
+        
+        upgrade = upgrade_request.get_header("upgrade", "").strip()
+        
+        if upgrade and upgrade_response.status_code == 101:
+            sock: xsocket = upgrade_request.client_socket
+            django_server_sock: xsocket = upgrade_response.target_socket
+            path = upgrade_request.path
+            is_ws_upgrade = False
+            
+            if upgrade.lower() == "websocket":
+                is_ws_upgrade = True
+                log_message(self.request, f"{path} [Django] [WebSocket] [OPEN]")
+            else:
+                log_message(self.request, f"{path} [Django] {upgrade.capitalize()} [OPEN]")
+            
+            # Now handle the new protocol
+            # Ensure both sockets are not in blocking mode.
+            sock.setblocking(False)
+            django_server_sock.setblocking(False)
+            
+            try:
+                # First receive something from client
+                while True:
+                    await asyncio.sleep(0)
+                    
+                    client_data = await SocketIO.async_receive(
+                        sock,
+                        protocol_receive_buffer,
+                        protocol_receive_timeout,
+                    )
+                    
+                    if client_data:
+                        # Send data to Django immediately
+                        await SocketIO.async_send(
+                            sock=django_server_sock,
+                            data=client_data,
+                            ignore_error_list=[ssl.SSLError],   
+                        )
+                    
+                    # Receive data from Django and send it to client
+                    django_data = await SocketIO.async_receive(django_server_sock, protocol_receive_buffer, protocol_receive_buffer)
+                    
+                    if django_data:
+                        # Send data to client immediately
+                        await self.response_handler.async_send_data(
+                            django_data,
+                            sock,
+                            ignore_error_list=[ssl.SSLError],   
+                        )
+                     
+            except (
+                ConnectionResetError,
+                OSError,
+                BrokenPipeError,
+                TimeoutError,
+            ):
+                # Ignore connection related errors.
+                pass
+            
+            finally:
+                if is_ws_upgrade:
+                    log_message(self.request, f"{path} [Django] [WebSocket] [OPEN]")
+                else:
+                     log_message(self.request, f"{path} [Django] {upgrade.capitalize()} [CLOSE]")     
+    
     async def __call__(
         self,
         application,

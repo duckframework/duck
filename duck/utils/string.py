@@ -61,11 +61,12 @@ def capitalize_words(text: str) -> str:
     return ' '.join(word.capitalize() for word in text.split())
 
 
-def clean_string(text: str, remove_chars: str = '') -> str:
+def clean_string(text: str, remove_chars: list[str] = None) -> str:
     """
     Removes unwanted characters (e.g., spaces or specific symbols) from the string.
     """
     cleaned_text = text.strip()  # Trim leading/trailing spaces
+    remove_chars = remove_chars or []
     for char in remove_chars:
         cleaned_text = cleaned_text.replace(char, '')
     return cleaned_text
@@ -74,6 +75,7 @@ def clean_string(text: str, remove_chars: str = '') -> str:
 def replace_multiple(text: str, replacements: dict) -> str:
     """
     Replaces multiple substrings with the provided replacements.
+    
     Example: {"old1": "new1", "old2": "new2"}
     """
     for old, new in replacements.items():
@@ -154,18 +156,24 @@ def remove_non_alphanumeric(text: str) -> str:
 
 
 def to_kebab_case(text: str) -> str:
-    """Convert a string to kebab-case."""
+    """
+    Convert a string to kebab-case.
+    """
     return re.sub(r'([a-z0-9])([A-Z])', r'\1-\2', text).lower()
 
 
-def to_camel_case(text: str) -> str:
-    """Convert a string to camelCase."""
-    words = text.split('_')
+def to_camel_case(text: str, separator: str = "_") -> str:
+    """
+    Convert a string to camelCase.
+    """
+    words = text.split(separator)
     return words[0] + ''.join(word.title() for word in words[1:])
 
 
 def find_and_replace(text: str, target: str, replacement: str) -> str:
-    """Replace all occurrences of a target substring with a replacement string."""
+    """
+    Replace all occurrences of a target substring with a replacement string.
+    """
     return text.replace(target, replacement)
 
 

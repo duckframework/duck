@@ -2,6 +2,7 @@
 Module containing runtests command class.
 """
 import os
+import sys
 import subprocess
 
 from duck.logging import console
@@ -15,22 +16,24 @@ class RuntestsCommand:
     @classmethod
     def setup(cls):
         # Setup before command execution
-        pass
+        os.environ["DUCK_SETTINGS_MODULE"] = "duck.etc.structures.projects.testing.web.settings"
         
     @classmethod
-    def main(cls):
+    def main(cls, verbose: bool = False):
         cls.setup()
-        cls.runtests()
+        cls.runtests(verbose)
      
     @classmethod
-    def runtests(cls):
+    def runtests(cls, verbose: bool = False):
         # Execute command after setup.
         from duck.settings import SETTINGS
         
-        python_path = SETTINGS["PYTHON_PATH"]
         tests_dir = joinpaths(duck_storage, "tests")
         
+        if verbose:
+            os.environ["DUCK_TESTS_VERBOSE"] = "true"
+            
         subprocess.call([
-            python_path, "-m", "unittest", "discover", "-s",
-            tests_dir, "-p", "test_*.py", "-t", tests_dir
+            sys.executable, "-m", "unittest", "discover", "-s",
+            tests_dir, "-p", "test_*.py", "-t", tests_dir,
         ])

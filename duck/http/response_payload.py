@@ -3,6 +3,7 @@ Module representing response payload classes.
 """
 import importlib
 
+from http.cookies import SimpleCookie, Morsel
 from datetime import (
     timedelta,
     datetime,
@@ -18,13 +19,6 @@ from duck.etc.statuscodes import responses
 from duck.http.headers import Headers
 from duck.utils.object_mapping import map_data_to_object
 from duck.utils.importer import import_module_once
-
-# Dynamically load the standard library module `http.cookies`
-# This is done to avoid using the duck.http module.
-cookies_module = import_module_once("http.cookies")
-
-# Use the module as usual
-SimpleCookie = cookies_module.SimpleCookie
 
 
 class BaseResponsePayload:
@@ -71,6 +65,18 @@ class BaseResponsePayload:
         for cookie_name, attributes in cookies.items():
             self.set_cookie(cookie_name, **attributes)
 
+    def get_cookie_obj(self, name: str) -> Optional[Morsel]:
+        """
+        Retrieves the cookie object/morsel of a specific cookie by name.
+        
+        Args:
+            name (str): The name of the cookie to retrieve.
+        
+        Returns:
+            Optional[Morsel]: The cookie object, or None if the cookie does not exist.
+        """
+        return self._cookies.get(name, '') if name in self._cookies else None
+        
     def get_cookie(self, name: str) -> str:
         """
         Retrieves the value of a specific cookie by name.
@@ -82,7 +88,22 @@ class BaseResponsePayload:
             str: The cookie value, or an empty string if the cookie does not exist.
         """
         return self._cookies.get(name, '').value if name in self._cookies else ''
-
+        
+    def get_cookie_str(self, name: str, include_cookie_name: bool = True) -> str:
+        """
+        Returns the cookie string for the provided name with all fields including max-age, domain, path, etc.
+        
+        Args:
+            include_cookie_name (bool): Whether to cookie name e.g. `cookie=something;`. Defaults to True.
+        """
+        cookie_obj = self.get_cookie_obj(name)
+        if not cookie_obj:
+            return ""
+        cookie_str = cookie_obj.output(header="").strip()
+        if not include_cookie_name:
+            cookie_str = cookie_str.split(name, 1)[-1].split('=', 1)[-1].strip()
+        return cookie_str
+        
     def get_all_cookies(self) -> Dict[str, str]:
         """
         Retrieves all cookies as a dictionary.

@@ -1,23 +1,25 @@
 """
 Checkbox component module.
 """
-from duck.html.components import NoInnerHtmlComponent
+from duck.html.components.input import Input
 
 
-class Checkbox(NoInnerHtmlComponent):
+class Checkbox(Input):
     """
     Basic Checkbox component.
     
     Args:
-        - checked (bool): Whether the checkbox is checked or not.
+     - checked (bool): Whether the checkbox is checked or not.
     """
-    def get_element(self):
-        return "input"
-    
     def on_create(self):
-        checkbox_style = {"margin": "10px", "cursor": "pointer"}
+        super().on_create()
+        self.props["type"] = "checkbox"
+        
+        checkbox_style = {
+            "margin": "10px",
+            "cursor": "pointer",
+        }
         self.style.setdefaults(checkbox_style)
-        self.properties["type"] = "checkbox" # overwrite input type absolutely
         
         if self.kwargs.get('checked'):
-            self.properties.setdefault("checked", "true")
+            self.props["checked"] = "true"

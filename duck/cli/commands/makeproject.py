@@ -13,7 +13,7 @@ class MakeProjectCommand:
     @classmethod
     def setup(cls):
         # Setup before command execution
-        os.environ.setdefault("DUCK_SETTINGS_MODULE", "duck.etc.structures.projects.testing.settings")
+        os.environ["DUCK_SETTINGS_MODULE"] = "duck.etc.structures.projects.testing.web.settings"
     
     @classmethod
     def main(

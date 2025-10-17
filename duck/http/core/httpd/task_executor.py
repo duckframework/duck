@@ -22,6 +22,8 @@ from duck.contrib.sync import (
     iscoroutinefunction,
 )
 from duck.settings import SETTINGS
+from duck.logging import logger
+from duck.utils.asyncio import create_task
 
 
 def get_max_workers() -> int:
@@ -79,87 +81,128 @@ def get_max_workers() -> int:
 
 class RequestHandlingExecutor:
     """
-    Handles execution of async coroutines and threaded tasks efficiently.
+    A hybrid task executor for handling both async coroutines and
+    blocking CPU-bound operations using threads efficiently.
     """
-    
-    def __init__(
-        self,
-        max_workers: int = None,  # Limits number of concurrent threads
-    ):
+
+    def __init__(self, max_workers: int = None):
         """
-        Initialize RequestHandlingExecutor.
+        Initialize the RequestHandlingExecutor.
 
         Args:
-            max_workers (int): Max threads for ThreadPoolExecutor. If None, the number will be dynamically calculated.
+            max_workers (int): Maximum number of threads for CPU-bound tasks.
+                               If None, it is determined automatically.
         """
-        # Thread pool for CPU-bound tasks
         self.max_workers = max_workers or get_max_workers()
+
+        # Thread pool executor for blocking (CPU-bound or I/O-bound) work
         self._thread_pool = concurrent.futures.ThreadPoolExecutor(self.max_workers)
-        
+
         if SETTINGS['ASYNC_HANDLING']:
-            # Deque for handling async tasks
-            self._task_queue = deque()
-            self._task_queue_lock = threading.Lock()
-            
-            def start_async(task_consumer):
-                loop = asyncio.new_event_loop()
-                loop.run_until_complete(task_consumer)
-                
-            # Start the asynchronous runner in a background thread
-            self._async_thread = threading.Thread(target=start_async, args=([self._task_consumer()]))
+            # Async task queue for coroutine execution (uses asyncio.Queue)
+            self._task_queue = asyncio.Queue()
+
+            # Start a new thread to run an asyncio event loop
+            self._async_thread = threading.Thread(target=self._start_loop)
             self._async_thread.start()
-            
+
+    def _start_loop(self):
+        """
+        Internal method to initialize and run the asyncio event loop
+        in a dedicated background thread.
+        """
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+
+        # Start the async task consumer
+        self._loop.create_task(self._task_consumer())
+
+        # Keep the loop running forever
+        self._loop.run_forever()
+
     async def _task_consumer(self):
         """
-        Async consumer to process tasks from the queue.
+        Coroutine that continuously consumes and executes async tasks
+        from the async task queue.
         """
         while True:
-            task = None
-            await asyncio.sleep(0.000001) # Yield control to event loop.
-            with self._task_queue_lock:
-                if self._task_queue:
-                    task = self._task_queue.popleft()
-            if task:
-                if iscoroutinefunction(task):
-                    await task()
-                elif iscoroutine(task):
-                    await task
-                else:
-                    raise TypeError("Task must be a coroutine or coroutine function")
+            task = await self._task_queue.get()
+            try:
+                # We are using duck.utils.asyncio.create_task as it is better than default asyncio.create_task as it
+                # avoids silent failures but it raises all exceptions by default.
+                if asyncio.iscoroutinefunction(task):
+                    # If it's a coroutine function, schedule it
+                    create_task(task()) # raises errors if any compared to default asyncio.create_task
                     
-    def on_thread_task_complete(self, future):
-         try:
-             future.result()
-         except Exception as e:
-             if hasattr(future, 'name'):
-                 if not e.args:
-                     e.args = ((),)
-                 e.args = (f"{e.args[0]}: [{future.name}]", )
-             raise e # reraise error, it will be handled
-        
+                elif asyncio.iscoroutine(task):
+                    # If it's already a coroutine object, schedule it directly
+                    create_task(task) # raises errors if any compared to default asyncio.create_task
+                
+                else:
+                    raise TypeError(f"Invalid task type: must be coroutine or coroutine function not {type(task)}")
+            
+            except Exception as e:
+                error_msg = f"Request handling task error: {e}"
+                
+                if hasattr(task, "name"):
+                    error_msg = f"Request handling task error [{task.name}]: {e}"
+                
+                # Log exception.    
+                logger.log(error_msg, level=logger.WARNING)
+                
+                if SETTINGS['DEBUG']:
+                    logger.log_exception(e)
+
+    def on_thread_task_complete(self, future: concurrent.futures.Future):
+        """
+        Callback to handle completion or failure of a thread-based task.
+
+        Args:
+            future (concurrent.futures.Future): Future object for the task.
+        """
+        try:
+            # Raises if the task failed
+            future.result()
+        except Exception as e:
+            error_msg = f"Request handling task error: {e}"
+            
+            # Enhance the exception with task name for debugging
+            if hasattr(future, 'name'):
+                e.args = (f"{e.args[0]}: [{future.name}]", )
+                error_msg = f"Request handling task error [{future.name}]: {e}"
+                
+            # Log exception.    
+            logger.log(error_msg, level=logger.WARNING)
+                
+            if SETTINGS['DEBUG']:
+                logger.log_exception(e)
+
     def execute(self, task: Union[Callable, Coroutine]):
         """
-        Execute a task using threads or async execution.
-        - Async tasks are added to a queue for non-blocking execution.
-        - CPU-bound tasks run in a thread pool.
-        
+        Public interface to execute a task. It routes the task to either
+        the async task queue or the thread pool, depending on its type.
+
         Args:
-            task (Union[Callable, Coroutine]): This accepts any callable, coroutine or coroutine function. If
-            coroutine function is parsed, it should accept no arguments.
+            task (Callable or Coroutine): The task to run.
+                                          - If async, it's queued to run in event loop.
+                                          - If sync, it's submitted to the thread pool.
         """
-        if iscoroutinefunction(task) or iscoroutine(task):
-            # Handle async tasks by adding them to the queue
-            # Add task directly to asyncio queue for non-blocking execution
-            with self._task_queue_lock:
-                self._task_queue.append(task)
-        
+        if asyncio.iscoroutinefunction(task) or asyncio.iscoroutine(task):
+            # Schedule coroutine in the asyncio loop from another thread
+            if not hasattr(self, '_loop'):
+                raise RuntimeError("Async loop is not initialized or ASYNC_HANDLING is disabled.")
+            
+            # Run the request handling task.
+            asyncio.run_coroutine_threadsafe(self._task_queue.put(task), self._loop)
+
         else:
-            # Handle CPU-bound tasks via thread pool
+            # Submit blocking or CPU-bound task to the thread pool
             try:
-                future = self._thread_pool.submit(task)  # Optimized thread execution
+                future = self._thread_pool.submit(task)
             except RuntimeError as e:
                 if "cannot schedule new futures after interpreter shutdown" in str(e):
-                    raise RuntimeError(f"{e}. This maybe caused when `disable_ipc_handler` is set to True for the main application instance.") from e
+                    raise RuntimeError(f"{e}. This may occur if the application is shutting down.") from e
+
+            # Attach name and callback for error handling
             future.name = getattr(task, 'name', repr(task))
             future.add_done_callback(self.on_thread_task_complete)
-        

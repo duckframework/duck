@@ -111,6 +111,41 @@ class Meta:
         return f"{protocol}://{domain}:{port}" if port else f"{protocol}://{domain}"
 
     @classmethod
+    def get_absolute_ws_server_url(cls) -> str:
+        """
+        Constructs and returns the absolute WebSockets server URL based on metadata stored for domain, port, and protocol.
+
+        Raises:
+            MetaError: If any of the required server configuration variables (DUCK_SERVER_DOMAIN, DUCK_SERVER_PORT, DUCK_SERVER_PROTOCOL, DUCK_USES_IPV6) are not set.
+
+        Returns:
+            str: The absolute WebSockets server URL.
+        """
+        domain = cls.get_metadata("DUCK_SERVER_DOMAIN", None)
+        port = cls.get_metadata("DUCK_SERVER_PORT", None)
+        protocol = cls.get_metadata("DUCK_SERVER_PROTOCOL", None)
+        uses_ipv6 = cls.get_metadata("DUCK_USES_IPV6", None)
+
+        if domain is None:
+            raise MetaError("Variable DUCK_SERVER_DOMAIN not set.")
+        
+        if port is None:
+            # Port is optional
+            pass
+            
+        if protocol is None:
+            raise MetaError("Variable DUCK_SERVER_PROTOCOL not set.")
+        
+        if uses_ipv6 is None:
+            raise MetaError("Variable DUCK_USES_IPV6 not set.")
+        
+        if protocol == "http":
+            protocol = "ws"
+        else:
+            protocol = "wss"
+        return f"{protocol}://{domain}:{port}" if port else f"{protocol}://{domain}"
+        
+    @classmethod
     def update_meta(cls, data: dict):
         """
         Updates the metadata with the provided dictionary.

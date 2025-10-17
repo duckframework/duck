@@ -2,7 +2,7 @@
 Hero component module.
 """
 from duck.html.components import Theme
-from .container import FlexContainer
+from duck.html.components.container import FlexContainer
 
 
 class Hero(FlexContainer):

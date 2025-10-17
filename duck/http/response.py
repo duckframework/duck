@@ -7,14 +7,26 @@ import os
 import json
 import importlib
 
+from http.cookies import SimpleCookie, Morsel
+from inspect import isasyncgen
 from datetime import datetime, timedelta
-from collections.abc import Iterable
+from collections.abc import (
+    Iterable,
+    Generator,
+    AsyncGenerator,
+)
 from typing import (
-    Dict, Optional,
-    Union, List,
-    Callable, Tuple, Any,
+    Dict,
+    Optional,
+    Union,
+    List,
+    Callable,
+    Tuple,
+    Any,
+    Awaitable,
 )
 
+from duck.settings import SETTINGS
 from duck.http.content import Content
 from duck.http.headers import Headers
 from duck.http.request import HttpRequest
@@ -26,8 +38,17 @@ from duck.template.environment import (
     Engine,
     Template,
 )
+from duck.html.components import Component
+from duck.contrib.sync import iscoroutinefunction
+from duck.exceptions.all import AsyncViolationError
 from duck.etc.statuscodes import responses
 from duck.utils.string import smart_truncate
+from duck.utils.asyncio import in_async_context
+from duck.utils.fileio import (
+    FileIOStream,
+    AsyncFileIOStream,
+    to_async_fileio_stream,
+)
 
 
 StreamingType = Union[
@@ -36,101 +57,14 @@ StreamingType = Union[
     Iterable[Union[bytes, str]]
 ]
 
-
-# Dynamically load the standard library module `http.cookies`
-# This is done to avoid using the duck.http module.
-cookies_module = importlib.import_module("http.cookies")
-
-
-# Use the module as usual
-SimpleCookie = cookies_module.SimpleCookie
-
-
-class FileIOStream(io.IOBase):
-    """
-    A custom class that mimics io.IOBase and streams file content efficiently.
-
-    This class allows you to interact with a file as an IOBase stream. You can read
-    file content in chunks and use seek/tell functionality to navigate through the file.
-    """
-
-    def __init__(self, filepath: str, chunk_size: int = 2 * 1024 * 1024):
-        """
-        Initializes the FileIOStream object with a file path and chunk size.
-
-        Args:
-            filepath (str): The path to the file to stream.
-            chunk_size (int, optional): The size of each chunk to read. Default is 2MB.
-        """
-        self.filepath = filepath
-        self.chunk_size = chunk_size
-        self._file = None
-        self._pos = 0  # Track the current position in the file
-        self._file_size = os.path.getsize(filepath)  # Store file size for possible range support
-
-    def _open(self):
-        """Open the file for reading in binary mode."""
-        if self._file is None:
-            self._file = open(self.filepath, "rb")
-
-    def read(self, size=-1):
-        """
-        Reads up to `size` bytes from the file. If `size` is negative, reads the entire file.
-        
-        Args:
-            size (int): The number of bytes to read. If -1, read the entire file.
-        
-        Returns:
-            bytes: A chunk of the file content.
-        """
-        self._open()
-
-        if size == -1:
-            content = self._file.read()  # Read the remaining content
-        else:
-            content = self._file.read(min(size, self.chunk_size))  # Read up to `size`
-
-        # Update the position
-        self._pos += len(content)
-        return content
-
-    def seek(self, offset, whence=0):
-        """
-        Move the file pointer to a specific position.
-        
-        Args:
-            offset (int): The position to move to.
-            whence (int): The reference point for offset (0: beginning, 1: current position, 2: file end).
-        
-        Returns:
-            None
-        """
-        self._open()
-        self._file.seek(offset, whence)
-        self._pos = self._file.tell()
-
-    def tell(self):
-        """
-        Returns the current position of the file pointer.
-        
-        Returns:
-            int: The current position in the file.
-        """
-        return self._pos
-
-    def close(self):
-        """Closes the file stream."""
-        if self._file is not None:
-            self._file.close()
-            self._file = None
-
-    def __del__(self):
-        """Ensure the file is closed when the object is deleted."""
-        self.close()
+RANGE_HEADER_PATTERN = re.compile(r"bytes=(\d+)-(\d+)?")
+NEGATIVE_RANGE_PATTERN = re.compile(r"bytes=(-\d+)")
 
 
 class BaseResponse:
-    """Response object to represent raw response"""
+    """
+    Response object to represent raw response
+    """
 
     def __init__(
         self,
@@ -183,10 +117,10 @@ class BaseResponse:
         Returns:
             bytes: The raw byte representation of the response.
         """
-        response = self.payload_obj.raw
-        response += b"\r\n\r\n" if not response.endswith(b"\r\n") else b"\r\n"
-        response += self.content or b""
-        return response
+        parts = [self.payload_obj.raw]
+        parts.append(b"\r\n\r\n" if not parts[0].endswith(b"\r\n") else b"\r\n")
+        parts.append(self.content or b"")
+        return b"".join(parts)
 
     @property
     def content(self) -> bytes:
@@ -228,7 +162,9 @@ class BaseResponse:
 
     @property
     def headers(self) -> Headers:
-        """Return the current response headers"""
+        """
+        Return the current response headers.
+        """
         return self.payload_obj.headers
 
     @property
@@ -299,9 +235,20 @@ class BaseResponse:
             cookies (Dict[str, Dict[str, Any]]): A dictionary where the key is the cookie name
                                                  and the value is another dictionary of cookie attributes.
         """
-        for cookie_name, attributes in cookies.items():
-            self.set_cookie(cookie_name, **attributes)
-
+        self.payload_obj.get_multiple_cookies(cookies)
+        
+    def get_cookie_obj(self, name: str) -> Optional[Morsel]:
+        """
+        Retrieves the cookie object/morsel of a specific cookie by name.
+        
+        Args:
+            name (str): The name of the cookie to retrieve.
+        
+        Returns:
+            Optional[Morsel]: The cookie object, or None if the cookie does not exist.
+        """
+        return self.payload_obj.get_cookie_obj(name)
+        
     def get_cookie(self, name: str) -> str:
         """
         Retrieves the value of a specific cookie by name.
@@ -312,8 +259,17 @@ class BaseResponse:
         Returns:
             str: The cookie value, or an empty string if the cookie does not exist.
         """
-        return self._cookies.get(name, '').value if name in self._cookies else ''
-
+        return self.payload_obj.get_cookie(name)
+        
+    def get_cookie_str(self, name: str, include_cookie_name: bool = True) -> str:
+        """
+        Returns the cookie string for the provided name with all fields including max-age, domain, path, etc.
+        
+        Args:
+            include_cookie_name (bool): Whether to cookie name e.g. `cookie=something;`. Defaults to True.
+        """
+        return self.payload_obj.get_cookie_str(name, include_cookie_name=include_cookie_name)
+        
     def get_all_cookies(self) -> Dict[str, str]:
         """
         Retrieves all cookies as a dictionary.
@@ -321,8 +277,8 @@ class BaseResponse:
         Returns:
             Dict[str, str]: A dictionary of all cookies, where the key is the cookie name and the value is the cookie value.
         """
-        return {key: morsel.value for key, morsel in self._cookies.items()}
-    
+        return self.payload_obj.get_all_cookies()
+        
     def set_cookie(
         self,
         key: str,
@@ -445,7 +401,7 @@ class HttpResponse(BaseResponse):
         )
         super().__init__(payload_obj, content_obj)
 
-
+    
 class StreamingHttpResponse(HttpResponse):
     """
     Class representing an HTTP streaming response.
@@ -454,6 +410,9 @@ class StreamingHttpResponse(HttpResponse):
     generated data, in chunks instead of loading the entire content into memory 
     at once. This is particularly useful for handling large files like videos, 
     audio, or data streams.
+    
+    Notes:
+    - If a stream provided has a method `close`, it will be called after the response has been sent.
     """
     
     def __init__(
@@ -501,8 +460,16 @@ class StreamingHttpResponse(HttpResponse):
         self.stream = stream
         
         # Store the content (which can be a callable or file-like object)
-        if callable(stream):
+        if isinstance(stream, io.IOBase):
+            self.content_provider = lambda: (
+                self._read_from_file(stream, chunk_size)
+                if not SETTINGS['ASYNC_HANDLING']
+                else self._async_read_from_file(stream, chunk_size)
+            )
+            
+        elif callable(stream):
             self.content_provider = stream
+            
             if chunk_size and chunk_size != default_chunk_size and not isinstance(stream, io.IOBase):
                 raise ValueError(f"Chunk size has been provided yet, the supplied `stream` is not an IO/file-like object. Got {type(stream)} instance.")
                 
@@ -510,46 +477,12 @@ class StreamingHttpResponse(HttpResponse):
             self.content_provider = lambda: stream
             if chunk_size and chunk_size != default_chunk_size and not isinstance(stream, io.IOBase):
                 raise ValueError(f"Chunk size has been provided yet, the supplied `stream` is not an IO/file-like object. Got {type(stream)} instance.")
-                
-        elif isinstance(stream, io.IOBase):
-            self.content_provider = lambda: self._read_from_file(stream, chunk_size)
         
         else:
             raise ValueError("Stream must be either a callable, iterable or a file-like object.")
-        
-    @classmethod
-    def file_stream(cls, filepath: str, chunk_size: int = 2 * 1024 * 1024):
-        """
-        Streams the content of a file in chunks for efficient handling of large files.
-        
-        This method reads a file at the given path and yields its content in chunks. 
-        Each chunk is of the size specified by `chunk_size` (default is 1024 bytes). 
-        This is useful for serving large files without loading the entire file into memory, 
-        which helps improve performance and reduces memory consumption.
-        
-        Args:
-            filepath (str): The path to the file that should be streamed.
-            chunk_size (int, optional): The size of each chunk in bytes. Defaults to 1024 bytes.
             
-        Yields:
-         - bytes: A chunk of the file content as a byte string. The size of each chunk will 
-                   be `chunk_size`, except possibly the last chunk which may be smaller.
-        
-        Example:
-            # Example usage for a file stream:
-            response = StreamingHttpResponse(StreamingHttpResponse.file_stream('large_file.txt'))
-            
-        Notes:
-            - This method ensures that the file is opened and closed properly using a context manager.
-            - The `yield` keyword ensures the file content is streamed lazily, making this method 
-              efficient for large files.
-        """
-        with open(filepath, "rb") as file:
-            while chunk := file.read(chunk_size):
-                yield chunk
-    
     @classmethod
-    def file_io_stream(cls, filepath: str, chunk_size: int = 2 * 1024 * 1024):
+    def file_io_stream(cls, filepath: str, chunk_size: int = 2 * 1024 * 1024) -> FileIOStream:
         """
         Creates an IOBase-like stream from a file for efficient handling of large files.
 
@@ -576,28 +509,132 @@ class StreamingHttpResponse(HttpResponse):
         - The file is opened lazily when the stream is accessed.
         - The `seek` and `tell` methods allow for random access to the file.
         """
-        return FileIOStream(filepath, chunk_size)
+        return FileIOStream(filepath, chunk_size, open_now=True)
 
-    def _read_from_file(self, file_obj: io.IOBase, chunk_size: int = 2 * 1024 * 1024):
+    def _read_from_file(self, file_obj: io.IOBase, chunk_size: int = 2 * 1024 * 1024) -> Generator:
         """
         Helper method to read the content from a file-like object in chunks.
         
         Args:
             file_obj (io.IOBase): The file-like object to stream content from.
             chunk_size (int): The size of each chunk to stream (default is 8192 bytes).
-        
+            
         Yields:
-            bytes: A chunk of data read from the file-like object.
+        - bytes: A chunk of data read from the file-like object.
         """
         while chunk := file_obj.read(chunk_size):
             yield chunk
-
-    def iter_content(self):
+                  
+    def iter_content(self) -> Iterable[bytes]:
         """
-        This method makes the response iterable so that the content can be streamed in chunks.
+        Returns an iterable (like a generator) over the response content.
+    
+        Ensures that the content provider yields chunks of bytes and not raw bytes or strings directly.
         """
-        return self.content_provider()
+        content = self.content_provider()
+    
+        if isinstance(content, (str, bytes)):
+            raise TypeError(
+                "Expected iterable or generator yielding bytes, got raw string or bytes. "
+                "Wrap your content in a generator or iterable."
+            )
+    
+        if not isinstance(content, Iterable):
+            raise TypeError(
+                f"Expected an iterable or generator, got {type(content).__name__}"
+            )
+    
+        return content
+    
+    # ASYNCHRONOUS IMPLEMENTATIONS
+    
+    @classmethod
+    def async_file_io_stream(cls, filepath: str, chunk_size: int = 2 * 1024 * 1024) -> AsyncFileIOStream:
+        """
+        Creates an asynchronous IOBase-like stream from a file for efficient handling of large files.
 
+        This method returns an object that mimics the behavior of an io.IOBase stream.
+        The stream can be used to read file content in chunks, and it supports
+        operations like `seek`, `tell`, and `read`. This is useful for streaming large
+        files with minimal memory usage.
+
+        Args:
+            filepath (str): The path to the file that should be streamed.
+            chunk_size (int, optional): The size of each chunk in bytes. Defaults to 2MB.
+
+        Returns:
+            FileIOStream: A custom stream object that behaves like io.IOBase.
+
+        Example:
+        
+        ```py
+        stream = StreamingHttpResponse.file_io_stream('large_file.txt')
+        response = StreamingHttpResponse(stream)
+        ```
+            
+        Notes:
+        - The file is opened lazily when the stream is accessed.
+        - The `seek` and `tell` methods allow for random access to the file.
+        """
+        return AsyncFileIOStream(filepath, chunk_size, open_now=True)
+
+    async def _async_read_from_file(self, file_obj: io.IOBase, chunk_size: int = 2 * 1024 * 1024) -> Generator:
+        """
+        Asynchronous helper method to read the content from a file-like object in chunks.
+        
+        Args:
+            file_obj (io.IOBase): The asynchronous file-like object to stream content from.
+            chunk_size (int): The size of each chunk to stream (default is 8192 bytes).
+        
+        Notes:
+            - This method closes the file-like object after yielding all data.
+        
+        Yields:
+        - bytes: A chunk of data read from the file-like object.
+        """
+        read_func = file_obj.read
+        
+        if not iscoroutinefunction(read_func):
+            raise AsyncViolationError(
+                f"Expected an asynchronous file-like object with an 'async def read(...)' method, "
+                f"but received a synchronous method '{type(file_obj).__name__}.read'. "
+                f"Consider using libraries like 'aiofiles' or implementing an async-compatible interface."
+            )
+        
+        if not iscoroutinefunction(file_obj.close):
+            raise AsyncViolationError(
+                f"Expected an asynchronous file-like object with an 'async def close(...)' method, "
+                f"but received a synchronous method '{type(file_obj).__name__}.close'. "
+                f"Consider using libraries like 'aiofiles' or implementing an async-compatible interface."
+            )
+            
+        while chunk:= await read_func(chunk_size):
+            yield chunk
+                
+    async def async_iter_content(self) -> Awaitable[Iterable[bytes]]:
+        """
+        Coroutine which returns an iterable (like an asynchronous generator) over the response content.
+    
+        Ensures that the content provider yields chunks of bytes and not raw bytes or strings directly.
+        """
+        if isinstance(self.stream, FileIOStream) and not isinstance(self.stream, AsyncFileIOStream):
+            self.stream = to_async_fileio_stream(self.stream)
+            
+        content = self.content_provider()
+        
+        if isinstance(content, (str, bytes)):
+            raise TypeError(
+                "Expected iterable or generator yielding bytes, got raw string or bytes. "
+                "Wrap your content in a generator or iterable."
+            )
+            
+        if not isinstance(content, Iterable) and not isasyncgen(content):
+            raise TypeError(
+                f"Expected an iterable, generator or async_generator, got {type(content).__name__}"
+            )
+    
+        return content
+        
     def __repr__(self):
         return f"<{self.__class__.__name__} (" f"'{self.status_code}'" f") {repr(self.stream).replace('<', '[').replace('>', ']')}>"
 
@@ -647,12 +684,14 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
         
         # Validate and assign the stream and content type
         if not isinstance(stream, io.IOBase):
-            raise ValueError("The 'stream' argument must be a file-like object (io.IOBase).")
+            raise ValueError(f"The 'stream' argument must be a file-like object (io.IOBase) not {type(stream)}.")
         
+        # Check stream compatibility
+        self.validate_stream(stream)
+        
+        # Validate positions
         assert isinstance(start_pos, int), "Argument start_pos must be an integer"
         assert isinstance(end_pos, int), "Argument end_pos must be an integer"
-        
-        self._stream = stream
         
         # Initialize the base StreamingHttpResponse
         super().__init__(
@@ -662,58 +701,9 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
             content_type=content_type,
             chunk_size=chunk_size,
         )
+        
+        # Parse range.
         self.parse_range(start_pos, end_pos)
-        
-    def parse_range(self, start_pos: int, end_pos: int) -> int:
-        """
-        Parses content range and sets the respective content range headers.
-        
-        Returns:
-            int: The stream size or length.
-        """
-        if not hasattr(self._stream, 'seek') or not hasattr(self._stream, 'tell'):
-            raise ValueError("Stream must support seeking to determine start and end position. Must have `seek` and `tell` methods.")
-        
-        default_offset = self._stream.tell() # get current offset
-        self._stream.seek(0, io.SEEK_END) # seek to EOF
-        stream_length = self._stream.tell()
-        
-        # If end_pos is -1, calculate it based on the stream length
-        if end_pos == -1:
-            end_pos = stream_length
-            
-        # Handle negative start_pos (e.g., -n means starting from the last n bytes)
-        if start_pos < 0:
-            # Calculate offset from the end of the stream
-            # Avoid negative numbers using the max function
-            start_pos = max(0, stream_length + start_pos)
-        
-        # Reset stream to beginning
-        self._stream.seek(default_offset)
-        
-        self.start_pos = start_pos
-        self.end_pos = end_pos
-        
-        # Set content range headers
-        self.set_content_range_headers()
-        
-        self.content_provider = lambda: self._get_stream()
-        
-        return stream_length        
-    
-    def set_content_range_headers(self):
-        """
-        Sets the content range headers based on current content range.
-        """
-        self.set_header('Content-Range', f"bytes {self.start_pos}-{self.end_pos}/*")
-        self.set_header('Accept-Ranges', 'bytes')
-    
-    def clear_content_range_headers(self):
-        """
-        Clear or deletes the content range headers.
-        """
-        self.headers.delete_header("Content-Range", failsafe=True)
-        self.headers.delete_header("Accept-Ranges", failsafe=True)
         
     @classmethod
     def extract_range(cls, range_header: str) -> Optional[Tuple[int, int]]:
@@ -735,7 +725,7 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
             return None  # No range specified
         
         # Match standard byte ranges (e.g., bytes=1000-2000)
-        match = re.match(r"bytes=(\d+)-(\d+)?", range_header)
+        match = RANGE_HEADER_PATTERN.match(range_header)
         
         if match:
             start = int(match.group(1))  # Always present
@@ -754,7 +744,7 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
             return (start, end)
     
         # Handle the case for negative ranges (e.g., bytes=-5000)
-        negative_range_match = re.match(r"bytes=(-\d+)", range_header)
+        negative_range_match = NEGATIVE_RANGE_PATTERN.match(range_header)
         
         if negative_range_match:
             # For negative ranges, calculate start as the last 'n' bytes and end as the last byte
@@ -776,23 +766,130 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
         
         raise ValueError(f"Invalid Range header format: {range_header}")
     
-    def _get_stream(self):
+    def validate_stream(self, stream):
+        """
+        Validates that the given stream has the necessary methods and 
+        ensures coroutine compatibility in async context.
+        
+        Raises:
+            ValueError: If a required method is missing.
+            AsyncViolationError: If a required method is not asynchronous in async context.
+        """
+        # List of required methods for file-like objects
+        required_methods = {"read", "seek", "tell", "close"} # we don't care about open, assuming io already open.
+        required_async_methods = {"read", "close"} # need to be async if in async context.
+        
+        # Check stream compatibility
+        for method_name in required_methods:
+            method = getattr(stream, method_name, None)
+            if method is None:
+                raise ValueError(f"Missing required method `{method_name}` in stream object.")
+                
+            if in_async_context() and SETTINGS["ASYNC_HANDLING"]:
+                if method_name in required_async_methods:
+                    if not iscoroutinefunction(method):
+                        raise AsyncViolationError(
+                            f"In async context, stream method `{method_name}` must be asynchronous."
+                        )
+                        
+    def parse_range(self, start_pos: int, end_pos: int) -> int:
+        """
+        Parses content range and sets the respective content range headers.
+        
+        Returns:
+            int: The stream size or length.
+        """
+        if not hasattr(self.stream, 'seek') or not hasattr(self.stream, 'tell'):
+            raise ValueError("Stream must support seeking to determine start and end position. Must have `seek` and `tell` methods.")
+        
+        default_offset = self.stream.tell() # get current offset
+        self.stream.seek(0, io.SEEK_END) # seek to EOF
+        stream_length = self.stream.tell()
+        
+        # If end_pos is -1, calculate it based on the stream length
+        if end_pos == -1:
+            end_pos = stream_length
+            
+        # Handle negative start_pos (e.g., -n means starting from the last n bytes)
+        if start_pos < 0:
+            # Calculate offset from the end of the stream
+            # Avoid negative numbers using the max function
+            start_pos = max(0, stream_length + start_pos)
+        
+        # Reset stream to beginning
+        self.stream.seek(default_offset)
+        
+        self.start_pos = start_pos
+        self.end_pos = end_pos
+        
+        # Set content range headers
+        self.set_content_range_headers()
+        
+        # Set content provider
+        self.content_provider = lambda: (
+            self._get_range_stream() if not in_async_context()
+            else self._async_get_range_stream()
+        )
+        
+        # Finally, return stream length
+        return stream_length        
+    
+    def set_content_range_headers(self):
+        """
+        Sets the content range headers based on current content range.
+        """
+        self.set_header('Content-Range', f"bytes {self.start_pos}-{self.end_pos}/*")
+        self.set_header('Accept-Ranges', 'bytes')
+    
+    def clear_content_range_headers(self):
+        """
+        Clear or deletes the content range headers.
+        """
+        self.headers.delete_header("Content-Range", failsafe=True)
+        self.headers.delete_header("Accept-Ranges", failsafe=True)
+        
+    def _get_range_stream(self) -> Generator:
         """
         Generator that yields chunks of the stream, starting from start_pos and ending at end_pos.
         The stream will be read in chunks defined by `chunk_size`.
         """
         # Ensure the stream is seekable before seeking to the start position
-        if not hasattr(self._stream, 'seek') or not hasattr(self._stream, 'tell'):
+        if not hasattr(self.stream, 'seek') or not hasattr(self.stream, 'tell'):
             raise ValueError("Stream must support seeking to handle partial content.")
     
-        self._stream.seek(self.start_pos)
+        self.stream.seek(self.start_pos)
         
         # If start_pos == end_pos, this mean last byte is required. This is represented by `or 1` statement.
         remaining = (self.end_pos - self.start_pos) or 1
         
         while remaining > 0:
             chunk_size = min(self.chunk_size, remaining)
-            chunk = self._stream.read(chunk_size)
+            chunk = self.stream.read(chunk_size)
+            
+            if not chunk:
+                break  # No more data to read
+            
+            yield chunk
+            
+            remaining -= len(chunk)
+    
+    async def _async_get_range_stream(self) -> AsyncGenerator:
+        """
+        Asynchronous generator that yields chunks of the stream, starting from start_pos and ending at end_pos.
+        The stream will be read in chunks defined by `chunk_size`.
+        """
+        # Ensure the stream is seekable before seeking to the start position
+        if not hasattr(self.stream, 'seek') or not hasattr(self.stream, 'tell'):
+            raise ValueError("Stream must support seeking to handle partial content.")
+    
+        self.stream.seek(self.start_pos)
+        
+        # If start_pos == end_pos, this mean last byte is required. This is represented by `or 1` statement.
+        remaining = (self.end_pos - self.start_pos) or 1
+        
+        while remaining > 0:
+            chunk_size = min(self.chunk_size, remaining)
+            chunk = await self.stream.read(chunk_size)
             
             if not chunk:
                 break  # No more data to read
@@ -802,7 +899,7 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
             remaining -= len(chunk)
     
     def __repr__(self):
-        return f"<{self.__class__.__name__} (" f"'{self.status_code}'" f") {repr(self._stream).replace('<', '[').replace('>', ']')}>"
+        return f"<{self.__class__.__name__} (" f"'{self.status_code}'" f") {repr(self.stream).replace('<', '[').replace('>', ']')}>"
 
 
 class FileResponse(StreamingRangeHttpResponse):
@@ -855,8 +952,15 @@ class FileResponse(StreamingRangeHttpResponse):
             )
             ```
         """
+        file_stream: Union[FileIOStream, AsyncFileIOStream]
+        
+        if SETTINGS['ASYNC_HANDLING']:
+            file_stream = StreamingHttpResponse.async_file_io_stream(filepath)
+        else:
+            file_stream = StreamingHttpResponse.file_io_stream(filepath)
+        
         super().__init__(
-            stream=StreamingHttpResponse.file_io_stream(filepath),
+            stream=file_stream,
             status_code=status_code,
             headers=headers,
             content_type=content_type,
@@ -944,10 +1048,10 @@ class JsonResponse(HttpResponse):
         content_type = "application/json",
     ):
         self.json_obj = content or {}
-        json_content = json.dumps(self.json_obj).encode('utf-8')
+        self.json_content = json.dumps(self.json_obj).encode('utf-8')
         
         super().__init__(
-            json_content,
+            self.json_content,
             status_code,
             headers=headers,
             content_type=content_type,
@@ -967,8 +1071,7 @@ class HttpErrorRequestResponse(HttpResponse):
         content_type: Optional[str] = None,
     ):
         if not content:
-            short_msg, content = responses.get(status_code,
-                                               ("", "Sorry, Error In Request"))
+            short_msg, content = responses.get(status_code, (f"{status_code}", "Sorry, There is an error in request"))
 
         super().__init__(
             content,
@@ -991,10 +1094,12 @@ class HttpRangeNotSatisfiableResponse(HttpErrorRequestResponse):
     ):
         status_code = 416
 
-        super().__init__(content,
-                         status_code,
-                         headers=headers,
-                         content_type=content_type)
+        super().__init__(
+            content,
+            status_code,
+            headers=headers,
+            content_type=content_type,
+        )
 
 
 class HttpBadRequestResponse(HttpErrorRequestResponse):
@@ -1010,10 +1115,12 @@ class HttpBadRequestResponse(HttpErrorRequestResponse):
     ):
         status_code = 400
 
-        super().__init__(content,
-                         status_code,
-                         headers=headers,
-                         content_type=content_type)
+        super().__init__(
+            content,
+            status_code,
+            headers=headers,
+            content_type=content_type,
+        )
 
 
 class HttpForbiddenRequestResponse(HttpErrorRequestResponse):
@@ -1029,10 +1136,12 @@ class HttpForbiddenRequestResponse(HttpErrorRequestResponse):
     ):
         status_code = 403
 
-        super().__init__(content,
-                         status_code,
-                         headers=headers,
-                         content_type=content_type)
+        super().__init__(
+            content,
+            status_code,
+            headers=headers,
+            content_type=content_type,
+        )
 
 
 class HttpBadRequestSyntaxResponse(HttpErrorRequestResponse):
@@ -1048,10 +1157,11 @@ class HttpBadRequestSyntaxResponse(HttpErrorRequestResponse):
     ):
         status_code = 400
 
-        super().__init__(content,
-                         status_code,
-                         headers=headers,
-                         content_type=content_type)
+        super().__init__(
+            content,
+            status_code,
+            headers=headers,
+            content_type=content_type)
 
 
 class HttpUnsupportedVersionResponse(HttpErrorRequestResponse):
@@ -1067,10 +1177,11 @@ class HttpUnsupportedVersionResponse(HttpErrorRequestResponse):
     ):
         status_code = 505
 
-        super().__init__(content,
-                         status_code,
-                         headers=headers,
-                         content_type=content_type)
+        super().__init__(
+            content,
+            status_code,
+            headers=headers,
+            content_type=content_type)
 
 
 class HttpNotFoundResponse(HttpErrorRequestResponse):
@@ -1205,19 +1316,71 @@ class TemplateResponse(HttpResponse):
         self.template = template
         self.request = request
         self.context = context or {}
-        self.engine = engine or ten
+        self.engine = engine
+        
+        # Update the context
         self.context.update({"request": request})  # add request to context
-        self.context.update({"template_engine":
-                             "django"})  # add the template engine
-
-        self._template = Template(
+        
+        # Create template object for rendering.
+        self._template_obj = Template(
             name=template,
             context=self.context,
             engine=engine,
         )
+        
+        # Render template
+        rendered = self._template_obj.render_template()
+        
+        # Initialize response object.
         super().__init__(
-            self._template.render_template(),
+            rendered,
             status_code,
             headers=headers,
             content_type=content_type,
         )
+
+
+class ComponentResponse(HttpResponse):
+    """
+    HTTP response that streams the rendered output of an HTML component.
+    
+    Args:
+        component (Component): The component to be rendered in the response.
+        status_code (int, optional): HTTP status code. Defaults to 200.
+        headers (Dict, optional): Response headers. Defaults to empty dict.
+        content_type (str, optional): Content-Type header. If not provided, it may be inferred.
+    
+    Raises:
+        ValueError: If the component is None.
+        TypeError: If the component is not an instance of Component.
+    """
+    def __init__(
+        self,
+        component: Component,
+        status_code: int = 200,
+        headers: Optional[Dict[str, str]] = None,
+        content_type: Optional[str] = "text/html",
+    ):
+        if component is None:
+            raise ValueError("Component is required for this response.")
+
+        if not isinstance(component, Component):
+            raise TypeError(f"Component should be an instance of Component, not {type(component).__name__}.")
+
+        self.component = component
+        
+        # Render component
+        rendered = component.render().encode('utf-8')
+        
+        # Initialize response object.
+        super().__init__(
+            rendered,
+            status_code,
+            headers=headers or {},
+            content_type=content_type,
+        )
+        
+        # Process some data
+        if hasattr(component, "fullpage_reload_headers"):
+            if any([h.lower() in self.headers for h in component.fullpage_reload_headers]):
+                component.fullpage_reload = True

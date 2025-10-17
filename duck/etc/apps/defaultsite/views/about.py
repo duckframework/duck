@@ -13,4 +13,4 @@ def ducksite_about_view(request: HttpRequest):
     About view for Duck's default site.
     """
     ctx = context.get_default_context()
-    return render(request, "about.html", ctx)
+    return render(request, "ducksite/about.html", ctx)

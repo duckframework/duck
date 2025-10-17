@@ -27,14 +27,22 @@ from duck.exceptions.all import (
 )
 from duck.http.core.proxyhandler import HttpProxyHandler
 from duck.http.request import HttpRequest
-from duck.html.components.templatetags import HtmlComponentTemplateTag
 from duck.automation import Automation
 from duck.automation.dispatcher import AutomationDispatcher
 from duck.automation.trigger import AutomationTrigger
 from duck.routes import Blueprint
+from duck.html.components.core.system import LivelyComponentSystem
 from duck.settings import SETTINGS
 from duck.utils.importer import (import_module_once, x_import)
 from duck.utils.lazy import Lazy
+from duck.backend.django.setup import prepare_django
+
+
+# Try preparing Django backend
+try:
+    prepare_django(True)
+except Exception as e:
+    pass
 
 
 def get_wsgi() -> Any:
@@ -46,8 +54,10 @@ def get_wsgi() -> Any:
     """
 
     wsgi_path = SETTINGS.get("WSGI")
+    
     if not wsgi_path:
         raise SettingsError("Please define WSGI in `settings.py`.")
+    
     try:
         return x_import(wsgi_path)(SETTINGS)
     except Exception as e:
@@ -63,8 +73,10 @@ def get_asgi() -> Any:
     """
 
     asgi_path = SETTINGS.get("ASGI")
+    
     if not asgi_path:
         raise SettingsError("Please define ASGI in `settings.py`.")
+    
     try:
         return x_import(asgi_path)(SETTINGS)
     except Exception as e:
@@ -80,8 +92,7 @@ def get_file_upload_handler() -> Any:
     """
     handler_path = SETTINGS.get("FILE_UPLOAD_HANDLER")
     if not handler_path:
-        raise SettingsError(
-            "Please define FILE_UPLOAD_HANDLER in `settings.py`.")
+        raise SettingsError("Please define FILE_UPLOAD_HANDLER in `settings.py`.")
     try:
         return x_import(handler_path)
     except Exception as e:
@@ -101,27 +112,6 @@ def get_user_templatetags() -> List[TemplateTag | TemplateFilter]:
         return list(templatetags)
     except Exception as e:
         raise SettingsError(f"Failed to templatetags: {str(e)}")
-
-
-def get_html_component_tags() -> List[HtmlComponentTemplateTag]:
-    """
-    Returns loaded HTML component template tags defined in `settings.py`.
-
-    Raises:
-        SettingsError: If any component cannot be imported or instantiated.
-    """
-    component_tags = []
-    try:
-        for name, cls_path in SETTINGS.get("HTML_COMPONENTS", {}).items():
-            cls = x_import(cls_path)
-            try:
-                component_tags.append(HtmlComponentTemplateTag(name, cls))
-            except (TemplateTagError):
-                # template tag already in existence
-                component_tags.append(HtmlComponentTemplateTag.get_tag(name))
-    except Exception as e:
-        raise SettingsError(f"Error loading HTML components: {e}") from e
-    return component_tags
 
 
 def get_request_class() -> Type[Any]:
@@ -176,22 +166,32 @@ def get_content_compression_settings():
             f"Failed to load content compression settings: {e}") from e
 
 
-def get_proxy_handler() -> Type[Any]:
+def get_proxy_handlers() -> List[Type[Any]]:
     """
-    Returns loaded proxy handler class.
+    Returns loaded proxy handler classes, i.e. synchronous & asynchronous handlers..
     """
     proxy_handler = SETTINGS.get("PROXY_HANDLER")
-    if not proxy_handler:
-        raise SettingsError("Please define PROXY_HANDLER in `settings.py`.")
-    try:
-        proxy_handler = x_import(proxy_handler)
-        if not issubclass(proxy_handler, HttpProxyHandler):
-            raise Exception(
-                "Invalid proxy handler, should be a subclass of HttpProxyHandler."
-            )
-        return proxy_handler
-    except Exception as e:
-        raise SettingsError(f"Failed to load proxy handler: {e}") from e
+    async_proxy_handler = SETTINGS.get("ASYNC_PROXY_HANDLER")
+    handlers = []
+    
+    for proxy_handler in [proxy_handler, async_proxy_handler]: 
+        if not proxy_handler:
+            if proxy_handler == async_proxy_handler:
+                raise SettingsError("Please define ASYNC_PROXY_HANDLER in `settings.py`.")
+            raise SettingsError("Please define PROXY_HANDLER in `settings.py`.")
+        
+        try:
+            proxy_handler = x_import(proxy_handler)
+            if not issubclass(proxy_handler, HttpProxyHandler):
+                raise Exception(
+                    "Invalid proxy handler, should be a subclass of HttpProxyHandler."
+                )
+            handlers.append(proxy_handler)
+        except Exception as e:
+            if proxy_handler == async_proxy_handler:
+                 raise SettingsError(f"Failed to load async proxy handler: {e}") from e
+            raise SettingsError(f"Failed to load proxy handler: {e}") from e
+    return handlers
 
 
 def get_automation_dispatcher() -> AutomationDispatcher:
@@ -291,9 +291,10 @@ def get_blueprints() -> List[Blueprint]:
             if blueprint.is_builtin:
                 builtins_count += 1
             final_blueprints.append(blueprint)
-        if not URLPATTERNS and len(blueprints) == builtins_count:
-            # no urlpatterns defined
-            # no blueprints defined or all of the defined blueprints are builtins
+        
+        if SETTINGS['DEBUG'] and not URLPATTERNS and len(blueprints) == builtins_count:
+            # No urlpatterns defined
+            # No blueprints defined or all of the defined blueprints are builtins
             final_blueprints.append(ducksite_blueprint)
         return final_blueprints
     except Exception as e:
@@ -358,46 +359,6 @@ def get_session_store():
     return import_module_once(session_engine).SessionStore  # get SessionStore from session engine.
 
 
-def get_frontend() -> Dict[str, Dict[str, str]]:
-    """
-    Returns the frontend settings for Duck.
-    """
-    frontend = SETTINGS["FRONTEND"]
-    frontend = frontend or {}
-    react_settings = {}
-    
-    if not frontend:
-        return frontend
-    
-    try:
-        for key, value in frontend.items():
-            if key != "REACT":
-                raise SettingsError("Fronted configuration invalid, only React fronted supported.")
-            else:
-                react_settings = frontend["REACT"]
-        if "scripts" not in react_settings.keys():
-             raise SettingsError("Frontend configuration for React should contain `scripts`.")
-        else:
-             scripts = react_settings.get("scripts")
-             if not scripts:
-                 raise SettingsError("Scripts for React fronted configuration not set.")
-        if "root_url" not in react_settings.keys():
-             raise SettingsError("Frontend configuration for React should contain `root_url`.")
-        else:
-             root_url = react_settings.get("root_url")
-             if not root_url:
-                 raise SettingsError("Root URL for React frontend configuration not set.")
-        if "scripts_url" not in react_settings.keys():
-             raise SettingsError("Frontend configuration for React should contain `scripts_url`.")
-        else:
-             scripts_url = react_settings.get("scripts_url")
-             if not scripts_url:
-                 raise SettingsError("Scripts URL for React frontend configuration not set.")
-    except Exception as e:
-       raise SettingsError(f"Error loading frontend: {str(e)}")
-    return frontend
-
-
 def get_request_handling_task_executor():
     """
     Returns the request handling callable for executing 
@@ -416,36 +377,37 @@ def get_preferred_log_style() -> str:
     """
     style = SETTINGS["PREFERRED_LOG_STYLE"]
     supported = {"duck", "django"}
+    
     if style and style not in supported:
         raise SettingsError(f"PREFERRED_LOG_STYLE unsupported. Supported styles: {supported}")
 
 
 # Initialize components based on settings
-WSGI = Lazy(get_wsgi)
+WSGI = get_wsgi() if not SETTINGS['ASYNC_HANDLING'] else Lazy(get_wsgi)
 
-ASGI = Lazy(get_asgi)
+ASGI = get_asgi()
 
 FILE_UPLOAD_HANDLER = Lazy(get_file_upload_handler)
 
 USER_TEMPLATETAGS = get_user_templatetags()
 
-HTML_COMPONENT_TAGS = (
-    get_html_component_tags()
-    if  SETTINGS.get("ENABLE_HTML_COMPONENTS")
+TEMPLATE_HTML_COMPONENT_TAGS = (
+    LivelyComponentSystem.get_html_tags()
+    if  SETTINGS.get("ENABLE_COMPONENT_SYSTEM")
     else []
 )
 
 ALL_TEMPLATETAGS = (
     USER_TEMPLATETAGS
     + BUILTIN_TEMPLATETAGS
-    + HTML_COMPONENT_TAGS
+    + TEMPLATE_HTML_COMPONENT_TAGS
 )
 
 REQUEST_CLASS = get_request_class()
 
 CONTENT_COMPRESSION = get_content_compression_settings()
 
-PROXY_HANDLER = Lazy(get_proxy_handler) if SETTINGS["USE_DJANGO"] else None
+PROXY_HANDLER, ASYNC_PROXY_HANDLER = get_proxy_handlers() if SETTINGS["USE_DJANGO"] else (None, None)
 
 AUTOMATION_DISPATCHER, AUTOMATIONS = (
     Lazy(get_automation_dispatcher), Lazy(get_triggers_and_automations)
@@ -464,8 +426,6 @@ NORMALIZERS = get_normalizers()
 SESSION_STORAGE = get_session_storage()
 
 SESSION_STORE = get_session_store()
-
-FRONTEND = Lazy(get_frontend)
 
 REQUEST_HANDLING_TASK_EXECUTOR = Lazy(get_request_handling_task_executor)
 

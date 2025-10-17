@@ -1,22 +1,22 @@
 """
 Container components module.
 """
-from duck.html.components import HtmlComponent, InnerHtmlComponent
+from duck.html.components import (
+    Component,
+    InnerComponent
+)
 
 
-class Container(InnerHtmlComponent):
+class Container(InnerComponent):
     """
     Basic Container component derived from <div> tag.
-    
-    Args:
-        inner_body (str): Body for the component.
     """
     def get_element(self):
         return "div"
     
     def set_background(
         self,
-        component: HtmlComponent,
+        component: Component,
         bg_size: str = 'cover',
         repeat: str = "no-repeat",
         position: str = "center center",
@@ -26,13 +26,13 @@ class Container(InnerHtmlComponent):
         Attach a component as a background with optional styling and default full-size fallback.
     
         Args:
-            component (HtmlComponent): The component to use as the background.
+            component (Component): The component to use as the background.
             bg_size (str): CSS background-size value (e.g., 'cover', 'contain', or specific dimensions).
             repeat (str): CSS background-repeat value (e.g., 'no-repeat', 'repeat', 'repeat-x').
             position (str): CSS background-position value (e.g., 'center center', 'top left').
             z_index (str): Z-index to assign to the background component (as a string).
         """
-        if not isinstance(component, HtmlComponent):
+        if not isinstance(component, Component):
             raise TypeError(
                 f"Component argument should be an instance of HtmlComponent, not {type(component).__name__}"
             )
@@ -63,7 +63,11 @@ class FlexContainer(Container):
     Flex container component.
     """
     def on_create(self):
+        super().on_create()
         self.style.setdefault("display", "flex")
+        self.style.setdefault("flex-direction", "row") # use browser's default.
+        if "direction" in self.kwargs:
+            self.style["flex-direction"] = self.kwargs.get("direction")
 
 
 class GridContainer(Container):
@@ -71,6 +75,7 @@ class GridContainer(Container):
     Grid container component.
     """
     def on_create(self):
+        super().on_create()
         self.style.setdefault("display", "grid")
 
 
@@ -79,6 +84,7 @@ class FluidContainer(Container):
     A full-width container component.
     """
     def on_create(self):
+        super().on_create()
         self.style.setdefault("width", "100%")
 
 
@@ -87,6 +93,7 @@ class FixedContainer(Container):
     Container component with a fixed maximum width.
     """
     def on_create(self):
+        super().on_create()
         default_style = {
             "max-width": "1200px",
             "margin": "0 auto",

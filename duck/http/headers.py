@@ -23,6 +23,7 @@ class Headers(dict):
         Returns a header value of default_value if not found.
         """
         last_header_value = None
+        
         for hd in self.keys():
             if hd.lower() == header.lower():
                 last_header_value = self[hd]

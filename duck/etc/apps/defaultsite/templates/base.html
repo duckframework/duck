@@ -11,7 +11,213 @@
 
   {% block stylesheets %}
     <link rel="stylesheet" href="/duck-static/css/base.css" type="text/css" />
-    {% block extra_stylesheets %}{% endblock extra_stylesheets %}
+    {% block extra_stylesheets %}
+    <style>
+      :root{
+        --duck-width: 240px;
+        --ripple-color: rgba(0,150,255,0.18);
+        --sparkle-yellow: rgba(255,200,50,0.95);
+        --sparkle-blue: rgba(0,150,255,0.9);
+        --page-bg: #f0f2f5;
+        --container-bg: #ffffff;
+      }
+
+      /* Page */
+      html,body{height:100%}
+      body {
+        margin: 0;
+        -webkit-font-smoothing:antialiased;
+        -moz-osx-font-smoothing:grayscale;
+        color: #222;
+        overflow-x: hidden;
+      }
+
+      /* Container */
+      .duck-box {
+        width: 80%;
+        max-width: 760px;
+        margin: 48px auto;
+        background: var(--container-bg);
+        border-radius: 18px;
+        box-shadow: 0px 0px 10px 2px rgba(0,0,0,0.08);
+        padding: 36px 24px;
+        position: relative;
+        overflow: visible;
+        text-align: center;
+      }
+
+      /* Duck positioning area */
+      #duck-container {
+        position: relative;
+        width: var(--duck-width);
+        margin: 0 auto 20px;
+        height: calc(var(--duck-width) * 0.75);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none; /* decorative */
+      }
+
+      /* Rotation wrapper (slow subtle sway) */
+      #duck-rotator {
+        display: inline-block;
+        transform-origin: 50% 80%;
+        will-change: transform;
+        animation: duckSway 8.2s cubic-bezier(.22,.9,.28,1) infinite;
+      }
+
+      /* Vertical float wrapper (smooth up/down + scale) */
+      #duck-floater {
+        display: inline-block;
+        transform-origin: 50% 80%;
+        will-change: transform;
+        animation: duckFloat 2.8s ease-in-out infinite;
+      }
+
+      /* The image itself */
+      #duck-img {
+        width: var(--duck-width);
+        max-width: 100%;
+        display: block;
+        filter: drop-shadow(0 10px 18px rgba(0,0,0,0.18));
+        will-change: transform;
+      }
+
+      /* --- Smooth keyframes for sway and float --- */
+      @keyframes duckSway {
+        0%   { transform: rotate(-0.4deg); }
+        25%  { transform: rotate(0.8deg); }
+        50%  { transform: rotate(-0.8deg); }
+        75%  { transform: rotate(0.5deg); }
+        100% { transform: rotate(-0.4deg); }
+      }
+
+      /* Replaced with many small steps for buttery smooth float */
+      @keyframes duckFloat {
+        0%   { transform: translateY(0) scale(1); }
+        10%  { transform: translateY(-3px) scale(1.005); }
+        20%  { transform: translateY(-6px) scale(1.01); }
+        30%  { transform: translateY(-9px) scale(1.015); }
+        40%  { transform: translateY(-12px) scale(1.02); }
+        50%  { transform: translateY(-15px) scale(1.025); }
+        60%  { transform: translateY(-12px) scale(1.02); }
+        70%  { transform: translateY(-9px) scale(1.015); }
+        80%  { transform: translateY(-6px) scale(1.01); }
+        90%  { transform: translateY(-3px) scale(1.005); }
+        100% { transform: translateY(0) scale(1); }
+      }
+
+      /* Ripples directly beneath the duck (closer & smoother) */
+      #ripples {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 6px; /* close under duck */
+        width: calc(var(--duck-width) * 0.54);
+        height: 12px;
+        z-index: 3;
+        pointer-events: none;
+      }
+
+      .ripple {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        transform: translateX(-50%) scale(0.8);
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        background: var(--ripple-color);
+        filter: blur(3px);
+        opacity: 0.48;
+        will-change: transform, opacity;
+        animation: ripplePulse 4.4s ease-in-out infinite;
+      }
+
+      .ripple.r2 { animation-delay: 1.0s; opacity: 0.36; transform: translateX(-50%) scale(0.6); filter: blur(4px); }
+      .ripple.r3 { animation-delay: 2.0s; opacity: 0.26; transform: translateX(-50%) scale(0.45); filter: blur(5px); }
+
+      @keyframes ripplePulse {
+        0%   { transform: translateX(-50%) scale(0.75); opacity: 0.5; }
+        40%  { transform: translateX(-50%) scale(1.05); opacity: 0.28; }
+        80%  { transform: translateX(-50%) scale(0.95); opacity: 0.12; }
+        100% { transform: translateX(-50%) scale(0.75); opacity: 0; }
+      }
+
+      /* Sparkles: many small elements with varied durations/delays */
+      .sparkles {
+        position: absolute;
+        left: 50%;
+        top: 6%;
+        transform: translateX(-50%);
+        width: calc(var(--duck-width) * 1.2);
+        height: calc(var(--duck-width) * 0.9);
+        pointer-events: none;
+        z-index: 8;
+      }
+
+      .sparkle {
+        position: absolute;
+        border-radius: 50%;
+        opacity: 0;
+        will-change: transform, opacity;
+        box-shadow: 0 0 8px rgba(255,255,255,0.15);
+      }
+
+      /* individual sparkles: position, color, size, duration, delay */
+      .sparkle.s01 { width:6px; height:6px; left:18%; top:40%; background:var(--sparkle-yellow); animation: sparkleA 2.8s linear infinite; animation-delay: 0s; }
+      .sparkle.s02 { width:5px; height:5px; left:26%; top:28%; background:var(--sparkle-blue); animation: sparkleB 3.6s linear infinite; animation-delay: 0.2s; }
+      .sparkle.s03 { width:7px; height:7px; left:36%; top:18%; background:var(--sparkle-yellow); animation: sparkleC 3.2s linear infinite; animation-delay: 0.4s; }
+      .sparkle.s04 { width:4px; height:4px; left:52%; top:6%;  background:var(--sparkle-blue); animation: sparkleA 2.6s linear infinite; animation-delay: 0.6s; }
+      .sparkle.s05 { width:6px; height:6px; left:66%; top:12%; background:var(--sparkle-yellow); animation: sparkleB 3.1s linear infinite; animation-delay: 0.9s; }
+      .sparkle.s06 { width:5px; height:5px; left:74%; top:30%; background:var(--sparkle-blue); animation: sparkleC 2.9s linear infinite; animation-delay: 1.2s; }
+      .sparkle.s07 { width:4px; height:4px; left:58%; top:44%; background:var(--sparkle-yellow); animation: sparkleA 3.4s linear infinite; animation-delay: 1.6s; }
+      .sparkle.s08 { width:5px; height:5px; left:44%; top:36%; background:var(--sparkle-blue); animation: sparkleB 3.8s linear infinite; animation-delay: 2.0s; }
+      .sparkle.s09 { width:6px; height:6px; left:30%; top:48%; background:var(--sparkle-yellow); animation: sparkleC 3.3s linear infinite; animation-delay: 2.4s; }
+      .sparkle.s10 { width:4px; height:4px; left:70%; top:50%; background:var(--sparkle-blue); animation: sparkleA 2.7s linear infinite; animation-delay: 2.8s; }
+
+      /* varied sparkle motion patterns (horizontal drift + rise + fade) */
+      @keyframes sparkleA {
+        0%   { transform: translate(0,0) scale(0.6); opacity: 0; }
+        8%   { transform: translate(-6px,-6px) scale(1.05); opacity: 1; }
+        40%  { transform: translate(-12px,-18px) scale(0.9); opacity: 0.6; }
+        100% { transform: translate(-18px,-36px) scale(0.6); opacity: 0; }
+      }
+      @keyframes sparkleB {
+        0%   { transform: translate(0,0) scale(0.6); opacity: 0; }
+        10%  { transform: translate(6px,-6px) scale(1.1); opacity: 1; }
+        45%  { transform: translate(18px,-22px) scale(0.9); opacity: 0.55; }
+        100% { transform: translate(28px,-46px) scale(0.6); opacity: 0; }
+      }
+      @keyframes sparkleC {
+        0%   { transform: translate(0,0) scale(0.6); opacity: 0; }
+        6%   { transform: translate(0,-8px) scale(1.1); opacity: 1; }
+        38%  { transform: translate(-8px,-22px) scale(0.95); opacity: 0.55; }
+        100% { transform: translate(-12px,-44px) scale(0.6); opacity: 0; }
+      }
+
+      /* subtle focus outline for accessibility (keyboard) */
+      #duck-img:focus { outline: 2px dashed rgba(0,0,0,0.08); outline-offset: 6px; }
+
+      /* Respect reduced motion */
+      @media (prefers-reduced-motion: reduce) {
+        #duck-rotator, #duck-floater, .ripple, .sparkle {
+          animation: none !important;
+        }
+      }
+
+      /* responsive */
+      @media (max-width:420px){
+        :root{ --duck-width: 180px; }
+        #ripples{ bottom: 8px; width: calc(var(--duck-width) * 0.56); }
+      }
+
+      /* small helper to keep main container clean on homepage (optional) */
+      {% if request.path == "/" %}
+      .container { box-shadow: none; }
+      {% endif %}
+    </style>
+    {% endblock extra_stylesheets %}
   {% endblock stylesheets %}
 
   <title>{% block title %}Duck Server{% endblock title %}</title>
@@ -21,13 +227,13 @@
   {% block header %}
     <header>
       <h1 class="header-title">
-        <a href="{{ home }}" aria-label="Navigate Home">Duck Server</a>
+        <a href="{{ home }}" aria-label="Navigate Home">Duck Framework</a>
       </h1>
     </header>
   {% endblock header %}
 
   {% block nav %}
-    <nav>
+    <nav id="nav-links">
       {% block nav_links %}
         <a href="{{ home }}" aria-label="Home">Home</a>
         <a href="{{ about }}" aria-label="About">About</a>
@@ -38,12 +244,48 @@
 
   <main class="container">
     {% block main %}
-      <h1>Welcome to Duck Server {{ server_version }}</h1>
-      <a href="{{ duck_main_site }}">Visit Duck main website</a>
-      <p>You are seeing this because DEBUG=True in settings.</p>
-      <img src="{{ duck_image }}" alt="A beautiful duck illustration" />
-      <p>Experience the best server for all your duck needs! Ready to startup.</p>
-      <button class="button" id="alertButton">Click Me</button>
+      <h2>Welcome to Duck Server {{ server_version }}</h2>
+      
+      <!-- Duck container -->
+      <div class="duck-box" role="region" aria-label="Duck illustration">
+        <div id="duck-container" aria-hidden="false">
+          <!-- rotator & floater wrappers prevent transform conflicts and make motion smooth -->
+          <div id="duck-rotator" aria-hidden="true">
+            <div id="duck-floater" aria-hidden="true">
+              <img id="duck-img" src="{{ duck_image }}" alt="Cute duck illustration" />
+            </div>
+          </div>
+
+          <!-- Ripples layered directly under duck -->
+          <div id="ripples" aria-hidden="true">
+            <div class="ripple r1" aria-hidden="true"></div>
+            <div class="ripple r2" aria-hidden="true"></div>
+            <div class="ripple r3" aria-hidden="true"></div>
+          </div>
+
+          <!-- Many sparkles close to duck for richness -->
+          <div class="sparkles" aria-hidden="true">
+            <div class="sparkle s01" aria-hidden="true"></div>
+            <div class="sparkle s02" aria-hidden="true"></div>
+            <div class="sparkle s03" aria-hidden="true"></div>
+            <div class="sparkle s04" aria-hidden="true"></div>
+            <div class="sparkle s05" aria-hidden="true"></div>
+            <div class="sparkle s06" aria-hidden="true"></div>
+            <div class="sparkle s07" aria-hidden="true"></div>
+            <div class="sparkle s08" aria-hidden="true"></div>
+            <div class="sparkle s09" aria-hidden="true"></div>
+            <div class="sparkle s10" aria-hidden="true"></div>
+          </div>
+        </div>
+
+        <!-- Text and button below the duck (outside the decorative area) -->
+        <p>Experience the best server for all your duck needs!</p>
+        <button class="button" id="alertButton">Click Me</button>
+      </div>
+      
+      <!-- Add some info -->
+      <a href="{{ duck_main_site }}">Visit Main Website</a>
+      <p>You are seeing this because <code>DEBUG=True</code> in settings and no urlpatterns or blueprints have been defined.</p>
     {% endblock main %}
   </main>
 
@@ -58,7 +300,7 @@
           </a>
         </div>
         <p>
-          Explore or contribute to our 
+          Explore or contribute to our
           <a href="{{ repo_url }}" aria-label="GitHub Repository">GitHub Repository</a>.
         </p>
       {% endblock footer_content %}
@@ -69,7 +311,7 @@
     <script>
       document.addEventListener("DOMContentLoaded", function () {
         const button = document.getElementById("alertButton");
-        if (button) {
+        if(button){
           button.addEventListener("click", function () {
             alert("Duck has been setup, ready to deploy!");
           });

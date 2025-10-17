@@ -27,8 +27,7 @@ class AutomationTrigger:
         if name:
             assert isinstance(name, str), "Name should be a string"
         if description:
-            assert isinstance(description,
-                              str), "Description should be a string"
+            assert isinstance(description,str), "Description should be a string"
 
     def check_trigger(self) -> bool:
         """

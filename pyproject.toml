@@ -20,12 +20,15 @@ dependencies = [
     "watchdog>=4.0.1",
     "requests>=2.31.0",
     "h2>=4.2.0",
+    "msgpack>=1.1.1",
     "diskcache",
     "colorama",
     "tzdata",
     "click",
     "asgiref>=3.8.1",
     "psutil>=7.0.0",
+    "rich>=14.1.0",
+    "setproctitle",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

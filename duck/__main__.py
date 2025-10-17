@@ -2,16 +2,16 @@
 """
 Main entry to Duck command-line tool.
 """
+import os
 import sys
 import click
-import os
+import setproctitle
 
+from duck.art import duck_art_small
 from duck.version import server_version
 from duck.logging import console
-from duck.art import duck_art_small
 
 from duck.cli.commands.collectstatic import CollectStaticCommand
-from duck.cli.commands.collectscripts import CollectScriptsCommand
 from duck.cli.commands.makeproject import MakeProjectCommand
 from duck.cli.commands.makeblueprint import MakeBlueprintCommand
 from duck.cli.commands.django import DjangoCommand
@@ -20,6 +20,8 @@ from duck.cli.commands.runtests import RuntestsCommand
 from duck.cli.commands.ssl_gen import SSLGenCommand
 from duck.cli.commands.service import ServiceCommand
 from duck.cli.commands.integration import DjangoAddCommand
+from duck.cli.commands.logs import LogsCommand
+from duck.cli.commands.monitor import MonitorCommand
 
 
 EXAMPLES = f"""
@@ -36,11 +38,11 @@ Examples:
 or with DUCK_SETTINGS_MODULE set: {console.Style.RESET_ALL}
    
    duck collectstatic ...
-   duck collectscripts ...
    duck django ...
    duck ssl-gen ...
    duck runserver ... (Use --file or --settings to bypass this requirement)
    duck django-add ...
+   duck logs ...
    ...etc
 """
 
@@ -51,16 +53,18 @@ def cli(ctx, version):
     """
     Duck CLI - Manage your projects with ease.
     """
-    # Add current directory to python path
-    curdir = os.path.abspath('.')
-    sys.path.insert(0, curdir)
+    subcommand = ctx.invoked_subcommand
+    
+    if subcommand:
+        # Set process name dynamically
+        setproctitle.setproctitle(f"duck-{subcommand}")
     
     if version:
         # Show the version
         click.echo(server_version)
     elif not ctx.invoked_subcommand:
         # Print usage if no subcommands are invoked
-        click.echo(click.style(duck_art_small, fg='green', bold=True))
+        click.echo(click.style(duck_art_small, fg='white', bold=True))
         click.echo(ctx.get_help())
         click.echo(EXAMPLES)
 
@@ -72,15 +76,6 @@ def collectstatic(skip_confirmation):
     Collect static files from Blueprints' directories.
     """
     CollectStaticCommand.main(skip_confirmation)
-
-
-@cli.command()
-@click.option('-y', '--skip-confirmation', is_flag=True, default=False, help="Skip confirmation prompts")
-def collectscripts(skip_confirmation):
-    """
-    Collect React scripts for the frontend.
-    """
-    CollectScriptsCommand.main(skip_confirmation)
 
 
 @cli.command(help="Create a Duck project")
@@ -104,12 +99,15 @@ def makeproject(name, dest, overwrite, project_type):
 def makeblueprint(name, dest, overwrite):
    """
    Create a new Blueprint for organizing routes, similar to Flask's Blueprint system.
+   
+   Notes:
+   - It's recommended to provide camelCased names like `CounterApp`.
    """
    MakeBlueprintCommand.main(name, destination=dest, overwrite_existing=overwrite)
 
 
-@cli.command(help="Execute Django management commands for your project")
-@click.argument('args', nargs=-1)  # Accept multiple arguments
+@cli.command(help="Execute Django management commands for your project", context_settings=dict(ignore_unknown_options=True))
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)  # Accept multiple arguments
 def django(args):
     """
     Run Django-related commands in your project.
@@ -140,15 +138,17 @@ def runserver(address, port, domain, settings, ipv6, file, reload, use_django):
         settings_module=settings,
         mainfile=file,
         uses_ipv6=ipv6,
-        reload=reload)
+        reload=reload,
+    )
 
 
 @cli.command(help="Run default tests using unittest module")
-def runtests():
+@click.option("-v", "--verbose", default=False, is_flag=True, help="More verbose tests by enabling printing to the console.")
+def runtests(verbose):
     """
     Run pre-built Duck test cases.
     """
-    RuntestsCommand.main()
+    RuntestsCommand.main(verbose)
 
 
 @cli.command(help="Generate a self-signed SSL certificate")
@@ -178,9 +178,41 @@ def service():
     CUSTOMIZE the service in settings.py.
     """
 
+@cli.group()
+def logs():
+    """
+    Manage Duck project logs.
+    """
+    pass
 
-# Register subcommands the duck service command
+
+@cli.command(help="Real-time system monitor for Duck processes")
+@click.option('--interval', default=1.0, help="Refresh interval in seconds")
+@click.option('--duck-process', default="duck*", help="Partial name of Duck processes to monitor (wildcards supported)")
+@click.option('--pid', type=int, multiple=True, help="Specific Duck process IDs to monitor instead of name")
+@click.option('--cpu-warning', default=80.0, help="CPU usage threshold for warning highlight")
+@click.option('--ram-warning', default=80.0, help="RAM usage threshold for warning highlight")
+def monitor(interval, duck_process, pid, cpu_warning, ram_warning):
+    """
+    Monitor Duck system metrics in real-time.
+
+    Supports:
+    - Multiple Duck servers by name
+    - Filtering by specific process IDs
+    - CPU/RAM threshold highlighting
+    """
+    MonitorCommand.main(
+        interval=interval,
+        duck_process_name=duck_process,
+        duck_pids=list(pid) if pid else None,
+        cpu_warning=cpu_warning,
+        ram_warning=ram_warning
+    )
+
+
+# Register subcommands the duck commands.
 ServiceCommand.register_subcommands(main_command=service)
+LogsCommand.register_subcommands(main_command=logs)
 
 
 if __name__ == "__main__":

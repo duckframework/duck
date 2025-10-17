@@ -27,7 +27,9 @@ class BaseRouteRegistry:
     """
 
     url_map = defaultdict(dict)  # {normalized_url: {name: (handler, methods, pattern)}}
-    """Mapping of URLs to route details"""
+    """
+    Mapping of URLs to route details
+    """
 
     def __init__(self):
         pass
@@ -165,7 +167,8 @@ class BaseRouteRegistry:
          handler: Callable,
          name: Optional[str] = None,
          methods: Optional[List[str]] = None,):
-        """Registers a Regular expression route
+        """
+        Registers a Regular expression route
 
         Args:
             url_path (str): Regular expression route (e.g /some/path/.*)
@@ -179,14 +182,10 @@ class BaseRouteRegistry:
         """
         methods = methods or []
         
-        assert callable(
-            handler
-        ), f"Handler/View argument should be a callable not '{handler}' "
+        assert callable(handler), f"Handler/View argument should be a callable not '{handler}' "
         
         if "*" in url_path:
-            raise RouteError(
-                f"Aterisks not supported, please use method regex_register instead. Route: {url_path}"
-            )
+            raise RouteError(f"Aterisks not supported, please use method regex_register instead. Route: {url_path}")
 
         original_url = url_path
         
@@ -195,7 +194,7 @@ class BaseRouteRegistry:
         
         normalized_url = normalize_url_path(url_path.strip("/"))
         normalized_original_url = normalize_url_path(original_url, ignore_chars=["<", ">"])
-
+        
         if not name:
             name = f"route_{len(self.url_map) + 1}"  # Auto-generate names
 
@@ -203,23 +202,13 @@ class BaseRouteRegistry:
         pattern = re.escape(normalized_url).replace(r"\*", ".*")
 
         # check for conflicts with existing patterns
-        for (
-                registered_url,
-                route_info,
-        ) in self.url_map.items():  # iterate over registered URLs
-            for registered_name, (
-                    _,
-                    _,
-                    existing_pattern,
-            ) in route_info.items():
+        for (registered_url, route_info,) in self.url_map.items():  # iterate over registered URLs
+            for registered_name, (_, _, existing_pattern,) in route_info.items():
                 if name == registered_name:
-                    raise RouteError(
-                        f"URL '{url_path}' with name '{name}' already registered.")
-                if existing_pattern.fullmatch(normalized_url) or re.compile(
-                        pattern).fullmatch(registered_url):
-                    raise RouteError(
-                        f"URL '{url_path}' conflicts with existing registered route '{registered_url}'."
-                    )
+                    raise RouteError(f"URL '{url_path}' with name '{name}' already registered.")
+                if existing_pattern.fullmatch(normalized_url) or re.compile(pattern).fullmatch(registered_url):
+                    raise RouteError(f"URL '{url_path}' conflicts with existing registered route '{registered_url}'.")
+        
         type(self).url_map[normalized_original_url][name] = (
             handler,
             methods,
@@ -228,7 +217,8 @@ class BaseRouteRegistry:
 
     @functools.lru_cache(maxsize=256)
     def fetch_route_info_by_name(self, name: str) -> Dict:
-        """Fetches the handler, allowed methods, URL pattern for a route, etc by its name
+        """
+        Fetches the handler, allowed methods, URL pattern for a route, etc by its name
 
         Note: this does not generate any handler kwargs because a real URL is needed not a Name only
 
@@ -258,7 +248,8 @@ class BaseRouteRegistry:
 
     @functools.lru_cache(maxsize=256)
     def fetch_route_info_by_url(self, url_path: str) -> Dict:
-        """Fetches the handler and allowed methods for a given URL path.
+        """
+        Fetches the handler and allowed methods for a given URL path.
 
         This generates handler kwargs rather than method fetch_route_info_by_name
 

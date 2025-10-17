@@ -5,7 +5,7 @@ import re
 import os
 import pathlib
 
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from .urlcrack import URL
 
@@ -28,18 +28,20 @@ def normalize_url_path(url_path: str, ignore_chars: Optional[List[str]] = None) 
     return URL.normalize_url_path(url_path, ignore_chars)
 
 
-def joinpaths(path1: str, path2: str, *more):
+def joinpaths(path1: Union[str, pathlib.Path], path2: Union[str, pathlib.Path], *more):
     """
     Returns joined paths but makes sure all paths are included in the final path rather than `os.path.join`.
     """
+    path1 = str(path1) if isinstance(path1, pathlib.Path) else path1
+    path2 = str(path2) if isinstance(path2, pathlib.Path) else path2
+    
+    # Clean paths and join
     path1 = path1.rstrip("/")
     path2 = path2.lstrip("/")  # clean paths
     finalpath = os.path.join(path1, path2)
 
     for p in more:
-        finalpath = finalpath.rstrip("/")
-        p = p.lstrip("/")
-        finalpath = os.path.join(finalpath, p)
+        finalpath = joinpaths(finalpath, p)
     return finalpath
 
 
@@ -57,7 +59,9 @@ def sanitize_path_segment(segment):
 
 
 def paths_are_same(path1, path2):
-    """Checks if two paths point to the same location, handling case-insensitivity and different separators."""
+    """
+    Checks if two paths point to the same location, handling case-insensitivity and different separators.
+    """
 
     # Convert to Path objects for easier manipulation
     path1 = pathlib.Path(path1)
@@ -69,14 +73,22 @@ def paths_are_same(path1, path2):
     return path1 == path2
 
 
-def build_absolute_uri(root_url: str, path: str) -> str:
-    """This builds an absolute url from provided root_url and path"""
-    url_obj = URL(root_url)
+def build_absolute_uri(root_url: str, path: str, normalization_ignore_chars: Optional[List[str]] = None) -> str:
+    """
+    This builds an absolute url from provided root_url and path.
+    
+    Args:
+        path (str): The path to join with the root url.
+        normalization_ignore_chars (Optional[List[str]]): List of characters to ignore when normalizing the url path.
+            By default, all unsafe characters are stripped. 
+    """
+    url_obj = URL(root_url, normalization_ignore_chars)
+    path = "/" + path
     
     if not url_obj.scheme:
         raise ValueError("Root URL provided should start with a scheme (e.g 'http' or 'https'): "+ root_url)
     
-    url_obj.innerjoin(URL.normalize_url_path(path))
+    url_obj.innerjoin(path, normalization_ignore_chars=normalization_ignore_chars)
     
     return url_obj.to_str()
 

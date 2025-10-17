@@ -5,12 +5,12 @@ This module provides reusable `Select` and `Option` components for creating drop
 """
 
 from duck.html.components import (
-    InnerHtmlComponent,
+    InnerComponent,
     Theme,
 )
 
 
-class Option(InnerHtmlComponent):
+class Option(InnerComponent):
     """
     Represents an individual option within a `Select` dropdown.
 
@@ -36,7 +36,7 @@ class Option(InnerHtmlComponent):
         return "option"
 
 
-class Select(InnerHtmlComponent):
+class Select(InnerComponent):
     """
     A reusable HTML `<select>` component for creating dropdown menus.
 
@@ -77,11 +77,16 @@ class Select(InnerHtmlComponent):
     """
 
     def get_element(self):
-        """Returns the HTML tag for the component."""
+        """
+        Returns the HTML tag for the component.
+        """
         return "select"
 
     def on_create(self):
-        """Initializes the component with default styles and options."""
+        """
+        Initializes the component with default styles and options.
+        """
+        super().on_create()
         select_style = {
             "padding": "10px",
             "border": "1px solid #ccc",
@@ -91,5 +96,5 @@ class Select(InnerHtmlComponent):
         self.style.setdefaults(select_style)
 
         if "options" in self.kwargs:
-            for option_html in self.kwargs.get("options"):
-                self.add_child(Option(inner_body=option_html))
+            for option in self.kwargs.get("options"):
+                self.add_child(option if isinstance(option, Option) else Option(text=option))

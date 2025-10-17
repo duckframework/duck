@@ -21,42 +21,36 @@ from typing import (
 
 from h2.config import H2Configuration
 from h2.connection import H2Connection
-from asgiref.sync import sync_to_async
 
 from duck.settings import SETTINGS
 from duck.http.response import (
     HttpResponse,
     HttpSwitchProtocolResponse,
 )
-from duck.http.request_data import RawRequestData
+from duck.http.request_data import RequestData, RawRequestData
 from duck.http.core.httpd.httpd import (
     BaseServer,
     response_handler,
 )
-from duck.utils.sockservers import xsocket
 from duck.logging import logger
-from duck.eventloop import AsyncioLoopManager
+from duck.utils.xsocket import xsocket
+from duck.utils.xsocket.io import SocketIO
+from duck.utils.asyncio.eventloop import AsyncioLoopManager
 
-
-asyncio_loop_manager = None
 
 # Regex to match "Upgrade: h2" or "Upgrade: h2c" in headers only
-upgrade_h2_regex = re.compile(
+H2_UPGRADE_REGEX = re.compile(
     rb'^(?:[^\r\n]*\r\n)*Upgrade:\s*h2c?\s*(?:\r\n[^\r\n]*)*\r\n\r\n',
     re.IGNORECASE | re.MULTILINE
 )             
 # Regex to extract HTTP2-Settings header value
-settings_h2_pattern = re.compile(
+H2_SETTINGS_REGEX = re.compile(
     rb"HTTP2-Settings:\s*([A-Za-z0-9+\/=]+)",
     re.IGNORECASE | re.MULTILINE,
 )
-             
-if not SETTINGS["ASYNC_HANDLING"] and SETTINGS["SUPPORT_HTTP_2"]:
-    asyncio_loop_manager = AsyncioLoopManager()
-    asyncio_loop_manager.start()
 
 
-class BaseHttp2Server(BaseServer):
+class BaseHTTP2Server(BaseServer):
     """
     Base HTTP/2 server with HTTP/1.1 backward compatibility.
     
@@ -75,22 +69,9 @@ class BaseHttp2Server(BaseServer):
             h2.settings.SettingCodes.MAX_CONCURRENT_STREAMS: 100
         })
         
-    def failsafe_process_and_handle_request(self, sock, addr, request_data):
-        """
-        Processes and handles a request but logs any encountered error.
-        """
-        def inner(sock, addr, request_data):
-            try:
-                self.process_and_handle_request(sock, addr, request_data)
-            except Exception as e:
-                # processing and handling error resulted in an error
-                # log the error message
-                logger.log_exception(e)
-        inner(sock, addr, request_data)
-        
     def handle_conn(
         self,
-        sock: socket.socket,
+        sock: xsocket,
         addr: Tuple[str, int],
         flowinfo: Optional = None,
         scopeid: Optional = None,
@@ -100,13 +81,12 @@ class BaseHttp2Server(BaseServer):
         Main entry point to handle new connection (supports both ipv6 and ipv4).
 
         Args:
-            sock (socket.socket): The client socket object.
+            sock (xsocket): The client socket object.
             addr (Tuple[str, int]): Client ip and port.
             flowinfo (Optional): Flow info if IPv6.
             scopeid (Optional): Scope id if IPv6.
             strictly_http2 (bool): Whether to srtrictly use `HTTP/2` without checking if user selected it.
         """
-        sock = xsocket.from_socket(sock)
         has_h2_alpn = hasattr(sock, 'selected_alpn_protocol') and sock.selected_alpn_protocol() == 'h2'
         
         if not has_h2_alpn or not strictly_http2:
@@ -115,7 +95,7 @@ class BaseHttp2Server(BaseServer):
              
              try:
                 # Receive the full request (in bytes)
-                data = self.receive_full_request(sock, self.request_timeout)
+                data = SocketIO.receive_full_request(sock=sock)
             
              except TimeoutError:
                 # For the first request, client took too long to respond.
@@ -124,14 +104,14 @@ class BaseHttp2Server(BaseServer):
             
              if not data:
                 # Client sent an empty request, terminate the connection immediately
-                self.close_socket(sock)
+                SocketIO.close(sock)
                 return
              
-             if upgrade_h2_regex.match(data):
+             if H2_UPGRADE_REGEX.match(data):
                  try:
                     # Lets upgrade to HTTP/2
                     settings_header = None
-                    settings_match = settings_h2_pattern.search(data)
+                    settings_match = H2_SETTINGS_REGEX.search(data)
                     
                     if settings_match:
                         settings_header = settings_match.group(1)
@@ -153,16 +133,16 @@ class BaseHttp2Server(BaseServer):
                     
                     response_handler.send_response(
                         switching_proto_response,
-                        client_socket=sock,
+                        sock=sock,
                         request=None,
                         strictly_http1=True,
                      )
                     
                     # Send pending HTTP/2 data.
                     try:
-                        response_handler.send_data(
-                            h2_connection.data_to_send(),
-                            client_socket=sock,
+                        SocketIO.send(
+                            sock=sock,
+                            data=h2_connection.data_to_send(),
                             suppress_errors=False,
                         )
                     except (BrokenPipeError, ConnectionResetError):
@@ -180,19 +160,19 @@ class BaseHttp2Server(BaseServer):
              # Hang here...
              return
          
-        # Initiate and Send HTTP/2 Preamble
+        # Initiate and send HTTP/2 preamble
         config = H2Configuration(client_side=False)
         h2_connection = H2Connection(config=config)
         
-        # Set H2 settings and initiate connection
+        # Set HTTP/2 settings and initiate connection
         self.set_h2_settings(h2_connection)
         h2_connection.initiate_connection()
         
-        # Send pending Preamble HTTP/2 data.
+        # Send pending HTTP/2 preamble data.
         try:
-            response_handler.send_data(
-                h2_connection.data_to_send(),
-                client_socket=sock,
+            SocketIO.send(
+                sock=sock,
+                data=h2_connection.data_to_send(),
                 suppress_errors=False,
             )
         except (BrokenPipeError, ConnectionResetError):
@@ -202,24 +182,39 @@ class BaseHttp2Server(BaseServer):
         # Start handling H2 frames
         self.start_http2_loop(sock, addr, h2_connection)
     
-    def start_http2_loop(self, sock, addr, h2_connection: H2Connection):
+    @logger.handle_exception
+    def handle_request_data(
+        self,
+        sock: xsocket,
+        addr: Tuple[str, int],
+        request_data: RequestData,
+    ) -> None:
         """
-        This starts the loop for handling HTTP/2 connection.
+        Processes and handles a request but logs any encountered error (but doesn't raise exception).
+        """
+        super().handle_request_data(sock, addr, request_data)
+        
+    def start_http2_loop(
+        self,
+        sock: xsocket,
+        addr: Tuple[str, int],
+        h2_connection: H2Connection,
+    ) -> None:
+        """
+        Starts the loop for handling HTTP/2 connection.
         """
         from duck.http.core.httpd.http2.protocol import H2Protocol
         from duck.http.core.httpd.http2.event_handler import EventHandler
         
         # Assume client supports HTTP/2
-        event_loop = asyncio_loop_manager.loop or asyncio.get_event_loop()
-        asyncio_loop_manager.loop = event_loop # set loop if not set
+        event_loop = AsyncioLoopManager.get_event_loop()
         
         protocol = H2Protocol(
             sock=sock,
             addr=addr,
             conn=h2_connection,
-            server=self,
             event_handler=None,
-            event_loop=event_loop,
+            event_loop=event_loop, # required in sync mode.
             sync_queue=queue.Queue(),
         )
         
@@ -227,43 +222,35 @@ class BaseHttp2Server(BaseServer):
         protocol.send_pending_data()
         
         # Set some values.
-        protocol.event_handler = EventHandler(protocol=protocol)
+        protocol.event_handler = EventHandler(protocol=protocol, server=self)
         sock.h2_protocol = protocol
         coro = protocol.run_forever()
         
         # Submit coroutine for sending/receiving data asynchronously
         # but we create a loop for executing synchronous tasks out of async context, in the current thread.
-        asyncio_loop_manager.submit_task(coro)
+        AsyncioLoopManager.submit_task(coro)
         
         # As h2 is asynchrous, some tasks may require to be executed directly in current thread, thats the
         # use of the following loop.
         while not protocol._closing:
             # Listen for synchronous tasks to handle only when h2 connection is valid
             try:
-                func, future = protocol.sync_queue.get(timeout=0.000001)
+                func = protocol.sync_queue.get(timeout=0.000000001)
+                
+                # Execute function synchronously in current thread
                 result = func()
-                future.set_result(result)
+                
             except queue.Empty:
                 continue
+            
             except Exception as e:
-                future.set_exception(e)
-                
-    async def async_failsafe_process_and_handle_request(self, sock, addr, request_data):
-        """
-        Processes and handles a request asynchronously but logs any encountered error.
-        """
-        async def inner(sock, addr, request_data):
-            try:
-                await self.async_process_and_handle_request(sock, addr, request_data)
-            except Exception as e:
-                # processing and handling error resulted in an error
-                # log the error message
                 logger.log_exception(e)
-        await inner(sock, addr, request_data)
-    
+                
+    # ASYNCHRONOUS IMPLEMENTATIONS
+     
     async def async_handle_conn(
         self,
-        sock: socket.socket,
+        sock: xsocket,
         addr: Tuple[str, int],
         flowinfo: Optional = None,
         scopeid: Optional = None,
@@ -273,13 +260,12 @@ class BaseHttp2Server(BaseServer):
         Main entry point to handle new connection asynchronously (supports both ipv6 and ipv4).
 
         Args:
-            sock (socket.socket): The client socket object.
+            sock (xsocket): The client socket object.
             addr (Tuple[str, int]): Client ip and port.
             flowinfo (Optional): Flow info if IPv6.
             scopeid (Optional): Scope id if IPv6.
             strictly_http2 (bool): Whether to srtrictly use `HTTP/2` without checking if user selected it.
         """
-        sock = xsocket.from_socket(sock)
         has_h2_alpn = hasattr(sock, 'selected_alpn_protocol') and sock.selected_alpn_protocol() == 'h2'
         
         if not has_h2_alpn or not strictly_http2:
@@ -288,7 +274,7 @@ class BaseHttp2Server(BaseServer):
              
              try:
                 # Receive the full request (in bytes)
-                data = await self.async_receive_full_request(sock, self.request_timeout)
+                data = await SocketIO.async_receive_full_request(sock=sock)
             
              except TimeoutError:
                 # For the first request, client took too long to respond.
@@ -297,14 +283,14 @@ class BaseHttp2Server(BaseServer):
             
              if not data:
                 # Client sent an empty request, terminate the connection immediately
-                self.close_socket(sock)
+                SocketIO.close(sock)
                 return
              
-             if upgrade_h2_regex.match(data):
+             if H2_UPGRADE_REGEX.match(data):
                  try:
                     # Lets upgrade to HTTP/2
                     settings_header = None
-                    settings_match = settings_h2_pattern.search(data)
+                    settings_match = H2_SETTINGS_REGEX.search(data)
                     
                     if settings_match:
                         settings_header = settings_match.group(1)
@@ -326,16 +312,16 @@ class BaseHttp2Server(BaseServer):
                     
                     await response_handler.async_send_response(
                         switching_proto_response,
-                        client_socket=sock,
+                        sock=sock,
                         request=None,
                         strictly_http1=True,
                      )
                     
                     # Send pending HTTP/2 data.
                     try:
-                        await response_handler.async_send_data(
-                            h2_connection.data_to_send(),
-                            client_socket=sock,
+                        await SocketIO.async_send(
+                            sock=sock,
+                            data=h2_connection.data_to_send(),
                             suppress_errors=False,
                         )
                     except (BrokenPipeError, ConnectionResetError):
@@ -353,7 +339,7 @@ class BaseHttp2Server(BaseServer):
              # Hang here...
              return
         
-        # Initiate and Send HTTP/2 Preamble
+        # Initiate and send HTTP/2 preamble
         config = H2Configuration(client_side=False)
         h2_connection = H2Connection(config=config)
         
@@ -361,21 +347,38 @@ class BaseHttp2Server(BaseServer):
         self.set_h2_settings(h2_connection)
         h2_connection.initiate_connection()
         
-        # Send pending Preamble HTTP/2 data.
+        # Send pending HTTP/2 preamble data.
         try:
-            await response_handler.async_send_data(
-                h2_connection.data_to_send(),
-                client_socket=sock,
+            await SocketIO.async_send(
+                sock=sock,
+                data=h2_connection.data_to_send(),
                 suppress_errors=False,
             )
         except (BrokenPipeError, ConnectionResetError):
-            # Client disconnected 
+            # Client disconnected
             return
         
         # Start handling H2 frames
         await self.async_start_http2_loop(sock, addr, h2_connection)
     
-    async def async_start_http2_loop(self, sock, addr, h2_connection: H2Connection):
+    @logger.handle_exception
+    async def async_handle_request_data(
+        self,
+        sock: xsocket,
+        addr: Tuple[str, int],
+        request_data: RequestData
+    ) -> None:
+        """
+        Processes and handles a request asynchronously but logs any encountered error (but doesn't raise exception).
+        """
+        await super().async_handle_request_data(sock, addr, request_data)
+        
+    async def async_start_http2_loop(
+        self,
+        sock: xsocket,
+        addr: Tuple[str, int],
+        h2_connection: H2Connection
+    ) -> None:
         """
         This starts the asynchronous loop for handling HTTP/2 connection.
         """
@@ -386,18 +389,18 @@ class BaseHttp2Server(BaseServer):
             sock=sock,
             addr=addr,
             conn=h2_connection,
-            server=self,
             event_handler=None,
-            event_loop=None,
+            event_loop=None, # optional in async mode.
         )
         
         # Send pending H2 data.
         await protocol.async_send_pending_data()
         
         # Set some values.
-        protocol.event_handler = EventHandler(protocol=protocol)
+        protocol.event_handler = EventHandler(protocol=protocol, server=self)
         sock.h2_protocol = protocol
         coro = protocol.run_forever()
         
         # Wait for coroutine to finish
         await coro
+        

@@ -52,7 +52,8 @@ class CollectStaticCommand:
             console.log_raw(
                 f"\nWould you like to copy {staticfiles_len} staticfile(s) to {static_root} (y/N): ",
                 end="",
-                level=console.DEBUG)
+                level=console.DEBUG,
+            )
             
             # Obtain confirmation from console.
             choice = input("")
@@ -67,16 +68,31 @@ class CollectStaticCommand:
                 shutil.copytree(static_dir, dst, dirs_exist_ok=True)
             
         for static_dir, blueprint in blueprint_static_dirs:
+            # Convert staticdir to relative path
+            abs_static_dir = static_dir
+            relative_static_dir = pathlib.Path(static_dir).relative_to(pathlib.Path(blueprint.location).parent)
+            
+            # The blueprint stripped_staticdir is a dir with removed staticdir name from it
+            # so that function static() can resolve files correctly in production.
+            parts = pathlib.Path(relative_static_dir).parts
+            staticdir_name = ""
+            
+            if parts:
+                staticdir_name = parts[0]
+            
+            # Set staticdir without staticdir name
+            blueprint_stripped_staticdir = str(relative_static_dir).lstrip(staticdir_name)
+            
             dst = joinpaths(
                 static_root,
                 blueprint.name,
-                blueprint.static_dir,
+                blueprint_stripped_staticdir,
             )
-            shutil.copytree(static_dir, dst, dirs_exist_ok=True)
+            
+            # Copy static files
+            shutil.copytree(abs_static_dir, dst, dirs_exist_ok=True)
     
-        console.log_raw(
-            f"\nSuccessfully copied {staticfiles_len} staticfile(s) to {static_root}",
-            custom_color=console.Fore.GREEN)
+        console.log_raw(f"\nSuccessfully copied {staticfiles_len} staticfile(s) to {static_root}", level=console.SUCCESS)
         
     @classmethod
     def recursive_getfiles(cls, directory: str) -> Generator:
@@ -101,11 +117,20 @@ class CollectStaticCommand:
         Returns:
             Generator: The generator of static directory and blueprint pair.
         """
+        from duck.settings import SETTINGS
         from duck.settings.loaded import BLUEPRINTS
+        from duck.etc.apps.defaultsite.blueprint import DuckSite
         
-        for blueprint in BLUEPRINTS:
+        _blueprints = BLUEPRINTS
+        
+        # The DuckSite blueprint might not be available in BLUEPRINTS
+        # yet it might have some static files it would like to share with the whole app.
+        if DuckSite not in _blueprints:
+            _blueprints.append(DuckSite)
+        
+        for blueprint in _blueprints:
             if blueprint.enable_static_dir:
-                # access to to blueprint static files is allowed.
+                # Access to blueprint static files is allowed.
                 static_dir = joinpaths(
                     blueprint.root_directory,
                     blueprint.static_dir,

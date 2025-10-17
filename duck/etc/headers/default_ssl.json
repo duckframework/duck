@@ -1,14 +1,12 @@
 {
   "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-  "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src *; img-src 'self'; ",
   "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Cache-Control": "public, max-age=86400",
-  "Cross-Origin-Embedder-Policy": "require-corp",
+  "Cross-Origin-Embedder-Policy": "unsafe-none",
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Resource-Policy": "same-origin",
-  "Expect-CT": "max-age=86400, enforce",
   "Server": "webserver",
   "X-DNS-Prefetch-Control": "off"
 }

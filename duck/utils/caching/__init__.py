@@ -2,148 +2,164 @@
 Caching module which leverages the use of diskcache python library. Essential methods mandatory to any Cache class: [set, get, delete, clear]
 """
 
-import datetime
-import random
-import shutil
-import string
+import os
 import time
 import uuid
-import os
-
+import shutil
+import string
+import datetime
+import random
 import diskcache
 
-from collections import defaultdict, deque
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from collections import (
+    deque,
+    defaultdict,
+    OrderedDict,
+)
+from functools import lru_cache
 
 
 class CacheBase:
-    """Base class for caching"""
+    """
+    Base class for caching
+    """
 
     def set(self, key: str, value: Any, expiry: int | float = None):
-        """Set a value in the cache."""
-        raise NotImplementedError
+        """
+        Set a value in the cache.
+        """
+        raise NotImplementedError("Implement this method for setting keys.")
 
     def get(self, key: str) -> Any:
-        """Get a value from the cache. Returns None if the key is not found."""
-        raise NotImplementedError
+        """
+        Get a value from the cache. Returns None if the key is not found.
+        """
+        raise NotImplementedError("Implement this method to retrieve values.")
 
     def delete(self, key: str):
-        """Delete a value from the cache."""
-        raise NotImplementedError
+        """
+        Delete a value from the cache.
+        """
+        raise NotImplementedError("Implement this method for deleting keys.")
 
     def save(self):
         pass
 
     def clear(self):
-        """Clear all values from the cache."""
-        raise NotImplementedError
+        """
+        Clear all values from the cache.
+        """
+        raise NotImplementedError("Implement this method for clearing key pairs.")
 
 
 class InMemoryCache(CacheBase):
-
+    """
+    InMemoryCache with LRU eviction.
+    """
     def __init__(self, maxkeys=None, *_):
-        self.expiry_map = defaultdict()
-        self.cache = dict()
+        self.expiry_map = {}
+        self.cache = OrderedDict()
         self.maxkeys = maxkeys
 
     def set(self, key: str, value: Any, expiry=None):
-        """Set a value in the cache."""
-
-        if self.maxkeys and len(self.cache.keys()) >= self.maxkeys:
-            self.cache.popitem()
-        if expiry:
-            self.expiry_map.setdefault(
-                key,
-                datetime.datetime.now() + datetime.timedelta(seconds=expiry),
-            )
+        """
+        Set a value in the cache.
+        """
+        if key in self.cache:
+            self.cache.move_to_end(key)
         self.cache[key] = value
 
-    def get(self, key: str, pop:bool = False) -> Any:
+        if expiry:
+            self.expiry_map[key] = datetime.datetime.now() + datetime.timedelta(seconds=expiry)
+
+        if self.maxkeys and len(self.cache) > self.maxkeys:
+            oldest_key, _ = self.cache.popitem(last=False)  # LRU
+            self.expiry_map.pop(oldest_key, None)
+
+    def get(self, key: str, default: Any = None, pop: bool = False) -> Any:
         """
         Get a value from the cache.
-        
-        Args:
-            key (str): The target key
-            pop (bool): Whether to remove key after removing it.
-
-        Returns:
-                None if the key is not found or expired.
         """
-        if key in self.expiry_map.keys():
-            expiry_date = self.expiry_map.get(key)
-            if key and datetime.datetime.now() >= expiry_date:
-                self.cache.pop(key)
-                return
-        
-        if not pop:
-            value = self.cache.get(key)
-        else:
-            try:
-                value = self.cache.pop(key)
-            except Exception:
-                value = None
-        return value
+        if key in self.expiry_map:
+            expiry_date = self.expiry_map[key]
+            if datetime.datetime.now() >= expiry_date:
+                self.cache.pop(key, None)
+                self.expiry_map.pop(key, None)
+                return None
+
+        if key in self.cache:
+            self.cache.move_to_end(key)  # Mark as recently used
+        return self.cache.pop(key, default) if pop else self.cache.get(key, default)
 
     def delete(self, key: str):
-        """Delete a value from the cache."""
-        if key in self.cache:
-            self.cache.pop(key)
+        self.cache.pop(key, None)
+        self.expiry_map.pop(key, None)
 
     def clear(self):
-        """Clear all values from the cache."""
         self.cache.clear()
         self.expiry_map.clear()
 
     def close(self):
-        """This closes the cache"""
         self.clear()
 
 
 class PersistentFileCache(CacheBase):
-    """Implementation of caching using diskcache library"""
-
+    """
+    Implementation of caching using the `diskcache` library
+    """
     def __init__(self, path: str, cache_size: int = None):
+        
         if os.path.isfile(path):
-            raise FileExistsError(
-                f"Path should be a directory, not a file: {path}")
+            raise FileExistsError(f"Path should be a directory, not a file: {path}")
+        
         self.path = path
         self.cache_size = cache_size
-        self._cache = (diskcache.Cache(
-            path, size_limit=cache_size, sqlite_timeout=30) if cache_size else
-                       diskcache.Cache(path, sqlite_timeout=30))
         self._closed = False
-
+        self._cache = (diskcache.Cache(path, size_limit=cache_size, sqlite_timeout=30) if cache_size
+            else diskcache.Cache(path, sqlite_timeout=30)
+        )
+        
     @property
     def closed(self):
-        """Checks whether the cache is closed"""
+        """
+        Checks whether the cache is closed.
+        """
         return self._closed
 
     def set(self, key: str, _obj: Any, expiry: int | float = None):
-        """Sets the cache with an optional expiry in seconds"""
+        """
+        Sets the cache with an optional expiry in seconds.
+        """
         if not isinstance(key, str):
-            raise KeyError(
-                f"Key should be an instance of str, not {type(key)}")
+            raise KeyError(f"Key should be an instance of str, not {type(key)}")
         self._cache.set(key, _obj, expire=expiry)
 
     def get(self, key: str):
-        """Retrieves the cache"""
+        """
+        Retrieves the key value from cache.
+        """
         if not isinstance(key, str):
-            raise KeyError(
-                f"Key should be an instance of str, not {type(key)}")
+            raise KeyError(f"Key should be an instance of str, not {type(key)}")
         return self._cache.get(key)
 
     def delete(self, key: str):
-        """Delete a value from the cache."""
+        """
+        Delete a key from the cache.
+        """
         self._cache.delete(key)
 
     def clear(self):
-        """Clear all values from the cache."""
+        """
+        Clears all data from the cache.
+        """
         self._cache.clear()
 
     def close(self):
-        """This closes the cache"""
+        """
+        This closes the cache.
+        """
         self._closed = True
         self._cache.close()
 
@@ -152,7 +168,6 @@ class DynamicFileCache(CacheBase):
     """
     Manages a cache of files, dynamically creating new files when existing ones reach a size limit.
     """
-
     def __init__(
         self,
         cache_dir: str,
@@ -164,11 +179,14 @@ class DynamicFileCache(CacheBase):
 
         if not os.path.isdir(self.cache_dir):
             raise FileNotFoundError(f"Directory {cache_dir} not found")
+        
         self._loaded_cache_objs = deque(maxlen=cached_objs_limit)
         self._reload_cache_files()
 
     def _reload_cache_files(self):
-        """This reloads existing cache files in a directory"""
+        """
+        This reloads existing cache files in a directory.
+        """
         self._cache_files = [
             Path(dir_entry.path) for dir_entry in os.scandir(self.cache_dir)
             if dir_entry.is_dir()
@@ -176,7 +194,9 @@ class DynamicFileCache(CacheBase):
         self._cache_files.sort()
 
     def _get_cache_path(self) -> str:
-        """Returns the path to a cache dir that is not at the size limit."""
+        """
+        Returns the path to a cache dir that is not at the size limit.
+        """
         for dir_entry in self._cache_files:
             size = sum(f.stat().st_size for f in dir_entry.iterdir())
             if size < self.cache_limit:
@@ -187,7 +207,9 @@ class DynamicFileCache(CacheBase):
         return new_path
 
     def _create_new_cache_path(self):
-        """This retrieves new cache path with a unique name using uuid module"""
+        """
+        This retrieves new cache path with a unique name using uuid module.
+        """
         name = f"{len(self._cache_files)}-{str(uuid.uuid4())[:5]}"
         path = os.path.join(self.cache_dir, name)
         os.makedirs(path, exist_ok=True)
@@ -195,7 +217,9 @@ class DynamicFileCache(CacheBase):
 
     @property
     def cache_obj(self):
-        """This returns the Cache object for the current cache file that is not at its limit"""
+        """
+        Returns the Cache object for the current cache file that is not at its limit.
+        """
         current_cache_path = self._get_cache_path()
 
         for obj in self._loaded_cache_objs:
@@ -215,20 +239,27 @@ class DynamicFileCache(CacheBase):
         return cache_obj
 
     def set(self, key: str, data: Any, expiry: float | int = None):
-        """Set cache data with persistence"""
+        """
+        Set cache data with persistence.
+        """
         self.cache_obj.set(key, data, expiry=expiry)
 
     def get(self, key: str) -> Any:
-        """Retrieve cache data"""
+        """
+        Retrieve cache data.
+        """
         data = self.cache_obj.get(key)
+        
         if data is not None:
             return data
 
         for dir_entry in reversed(self._cache_files):
             if dir_entry.samefile(self.cache_obj.path):
                 continue
+            
             cache = PersistentFileCache(str(dir_entry))
             data = cache.get(key)
+            
             if data:
                 return data
         return None
@@ -239,7 +270,9 @@ class DynamicFileCache(CacheBase):
         return PersistentFileCache(path)
 
     def delete(self, key: str):
-        """Delete a key pair from the cache."""
+        """
+        Delete a key pair from the cache.
+        """
         for p in self._cache_files:
             try:
                 obj = self.get_cache_obj(p)
@@ -248,7 +281,9 @@ class DynamicFileCache(CacheBase):
                 pass
 
     def clear(self):
-        """Clear all data from the cache."""
+        """
+        Clears all data from the cache.
+        """
         for p in self._cache_files:
             try:
                 obj = self.get_cache_obj(p)
@@ -257,7 +292,9 @@ class DynamicFileCache(CacheBase):
                 pass
 
     def close(self):
-        """Close the cache"""
+        """
+        Close the cache.
+        """
         for p in self._cache_files:
             try:
                 obj = self.get_cache_obj(p)
@@ -267,15 +304,18 @@ class DynamicFileCache(CacheBase):
 
 
 class KeyAsFolderCache(CacheBase):
-    """Caching which stores cache data in folders with the name of cache keys"""
-
+    """
+    Caching which stores cache data in folders with the name of cache keys.
+    """
     def __init__(self, cache_dir: str):
         self.cache_dir = cache_dir
         if not os.path.isdir(self.cache_dir):
             raise FileNotFoundError(f"Directory {cache_dir} not found")
 
     def set(self, key: str, data: Any, expiry: int | float = None):
-        """Set some cache data"""
+        """
+        Set some cache data.
+        """
         cache_data_path = os.path.join(self.cache_dir, key)
         cache_obj = self.get_cache_obj(cache_data_path)
         cache_obj.set(key, data, expiry=expiry)
@@ -286,7 +326,9 @@ class KeyAsFolderCache(CacheBase):
         return PersistentFileCache(path)
 
     def get(self, key: str) -> Any:
-        """This lookup for a folder in cache_dir with the name of the parsed key and returns the cache data"""
+        """
+        This lookup for a folder in cache_dir with the name of the parsed key and returns the cache data.
+        """
         cache_data_path = os.path.join(self.cache_dir, key or "")
 
         if not os.path.isdir(cache_data_path):
@@ -308,14 +350,18 @@ class KeyAsFolderCache(CacheBase):
     @staticmethod
     @lru_cache
     def get_cache_files(d: str):
-        """This gets the directories in cache_dir"""
+        """
+        This gets the directories in cache_dir.
+        """
         return [
             Path(dir_entry.path) for dir_entry in os.scandir(d)
             if dir_entry.is_dir()
         ]
 
     def delete(self, key: str):
-        """Delete a key pair from the cache."""
+        """
+        Delete a key pair from the cache.
+        """
         key_cache_dir = os.path.join(self.cache_dir, key)
 
         if not os.path.isdir(key_cache_dir):
@@ -328,7 +374,9 @@ class KeyAsFolderCache(CacheBase):
             pass
 
     def clear(self):
-        """Clear all data from the cache."""
+        """
+        Clear all data from the cache.
+        """
         for p in self.get_cache_files(self.cache_dir):
             try:
                 obj = self.get_cache_obj(p)
@@ -337,7 +385,9 @@ class KeyAsFolderCache(CacheBase):
                 pass
 
     def close(self):
-        """Close the cache"""
+        """
+        Closes the cache.
+        """
         for p in self.get_cache_files(self.cache_dir):
             try:
                 obj = self.get_cache_obj(p)
@@ -347,8 +397,10 @@ class KeyAsFolderCache(CacheBase):
 
 
 class CacheSpeedTest:
-    """This class performs speed test of Cache classes"""
-
+    """
+    This class performs speed test of Cache classes.
+    """
+    
     instances = [
         InMemoryCache,
         DynamicFileCache,

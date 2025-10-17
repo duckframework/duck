@@ -8,28 +8,35 @@ import shutil
 from pathlib import Path
 
 from duck.utils.path import joinpaths
+from duck.utils.dateutils import gmt_date
+from duck.utils.string import to_camel_case
 from duck.logging import console
 from duck.storage import duck_storage
 
 
-BLUEPRINT_TEMPLATE = """
+BLUEPRINT_TEMPLATE = '''
+"""
+Blueprint `{blueprint_name_camel_cased}` created on {gmt_date}
+"""
 from duck.routes import Blueprint
 from duck.urls import path, re_path
 
 from . import views
 
-{blueprint_name_title} = Blueprint(
+{blueprint_name_camel_cased} = Blueprint(
     location=__file__,
     name="{blueprint_name_lower}",
     urlpatterns=[
         # URL patterns here
     ],
-    prepend_name_to_urls=False,
+    prepend_name_to_urls=True,
+    static_dir="static",
+    template_dir="templates",
     enable_static_dir=True,
     enable_template_dir=True,
-    static_dir="static",
 )
-"""
+'''.lstrip()
+
 
 def ignore_pycache(dir_path, contents):
     """
@@ -60,8 +67,9 @@ def create_blueprint_py(blueprint_name: str, dest_directory):
     with open(blueprint_path, "w") as f:
         f.write(
             BLUEPRINT_TEMPLATE.format(
-                blueprint_name_title=blueprint_name.title(),
-                blueprint_name_lower=blueprint_name.lower()
+                blueprint_name_camel_cased=to_camel_case(blueprint_name),
+                blueprint_name_lower=blueprint_name.lower(),
+                gmt_date=gmt_date(),
         ))
 
 
@@ -75,9 +83,11 @@ def makeblueprint(
     """
     if not name:
         raise TypeError("Please provide a name for blueprint (preferrebly TitleCase)")
-        
+    
+    original_name = name
+    name = name.lower()
     blueprint_dir = joinpaths(duck_storage, f"etc/structures/blueprint")
-    destination_dir = os.path.join(base_dir, name.lower())
+    destination_dir = os.path.join(base_dir, name)
 
     if overwrite_existing:
         # Overwrite existing project.
@@ -93,4 +103,4 @@ def makeblueprint(
          dirs_exist_ok=overwrite_existing,
          ignore=ignore_pycache,
      )
-    create_blueprint_py(name, destination_dir)
+    create_blueprint_py(original_name, destination_dir)

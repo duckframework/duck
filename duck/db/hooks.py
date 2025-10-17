@@ -30,8 +30,9 @@ def close_old_connections():
     
         for conn in connections.all(initialized_only=True):
             conn.close_if_unusable_or_obsolete()
-    except (ImproperlyConfigured, KeyError):
+    except (ImproperlyConfigured, KeyError, ImportError):
         # User not using Django DB models, keyerror is raised when importing Django settings
+        # Importing Django settings module failed, partially means the Django DB is not being used by the user    
         pass
 
 
@@ -49,7 +50,7 @@ def view_wrapper(handler):
         Callable: A wrapped view that handles DB connection cleanup.
     """
     def wrapped(*args, **kwargs):
-        close_old_connections()  # Before request
+        close_old_connections()  # Before request    
         try:
             return handler(*args, **kwargs)
         finally:
@@ -79,5 +80,4 @@ def async_view_wrapper(handler):
             return await handler(*args, **kwargs)
         finally:
             await close()  # After request
-
     return wrapped

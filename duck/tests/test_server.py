@@ -2,24 +2,32 @@
 Minimal test base for Duck webserver using external BASE_URL.
 """
 import os
-import time
-import atexit
 import urllib3
 import unittest
-import threading
-import requests
 import warnings
 import random
 
 from typing import Any, Dict
 
 
-def set_settings(settings):
-    from duck.meta import Meta
+VERBOSE_TESTS = os.getenv("DUCK_TESTS_VERBOSE")
+
+
+def set_settings(settings: Dict[str, Any]):
+    # This must be called before any use of the duck.settings module e.g. through duck.app
+    os.environ.setdefault("DUCK_SETTINGS_MODULE", "duck.etc.structures.projects.testing.web.settings")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "duck.etc.structures.projects.testing.web.backend.django.duckapp.duckapp.settings")
     
-    os.environ.setdefault("DUCK_SETTINGS_MODULE", "duck.etc.structures.testing.settings")
-    Meta.set_metadata('DUCK_EXTRA_SETTINGS', settings)
+    # Import settings after setting the settings module
+    from duck.settings import SETTINGS
     
+    # Edit settings inplace.
+    for key, value in settings.items():
+        SETTINGS[key.upper()] = value
+    
+    if VERBOSE_TESTS:
+        SETTINGS['SILENT'] = SETTINGS['DJANGO_SILENT'] = False
+
 
 class TestBaseServer(unittest.TestCase):
     """
@@ -63,10 +71,6 @@ class TestBaseServer(unittest.TestCase):
         warnings.filterwarnings("ignore", category=ResourceWarning)
         warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
         
-        def wait_for_server():
-            while not self.app.started:
-                time.sleep(.001)
-                
         if not self.app.started:
             self.app.run()
             

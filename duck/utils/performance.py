@@ -6,8 +6,10 @@ and optimizing operations.
 """
 import time
 
+from duck.logging import console # better than print()
 
-def time_execution(func):
+
+def exec_time(func):
     """
     A decorator that measures the execution time of a function.
     
@@ -21,9 +23,28 @@ def time_execution(func):
         start_time = time.time()
         result = func(*args, **kwargs)
         end_time = time.time()
-        print(f"Execution time: {end_time - start_time:.4f} seconds")
+        console.log_raw(f'Execution time: "{func.__name__}": {(end_time - start_time)/1000:.8f} ms')
         return result
     return wrapper
+
+
+def async_exec_time(func):
+    """
+    A decorator that measures the execution time of a function.
+    
+    Args:
+        func (function): The function to measure.
+    
+    Returns:
+        function: The wrapped asynchronous function that will time its execution.
+    """
+    async def async_wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = await func(*args, **kwargs)
+        end_time = time.time()
+        console.log_raw(f'Execution time: "{func.__name__}": {(end_time - start_time)/1000:.8f} ms')
+        return result
+    return async_wrapper
 
 
 def measure_time(func):

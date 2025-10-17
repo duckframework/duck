@@ -19,7 +19,9 @@ from duck.db.hooks import (
 from duck.contrib.sync import (
     convert_to_async_if_needed,
     convert_to_sync_if_needed,
+    iscoroutinefunction,
 )
+from duck.views import View
 from duck.settings import SETTINGS
 from duck.settings.loaded import (
     WSGI,
@@ -27,6 +29,7 @@ from duck.settings.loaded import (
     MIDDLEWARES,
     NORMALIZERS,
     PROXY_HANDLER,
+    ASYNC_PROXY_HANDLER,
 )
 from duck.exceptions.all import (
     MiddlewareError,
@@ -34,8 +37,12 @@ from duck.exceptions.all import (
     RouteError,
     MethodNotAllowedError,
     RequestError,
+    ExpectingNoResponse,
 )
-from duck.http.core.proxyhandler import HttpProxyResponse
+from duck.http.core.proxyhandler import (
+    HttpProxyResponse,
+    AsyncHttpProxyResponse,
+)
 from duck.http.middlewares import BaseMiddleware
 from duck.http.request import HttpRequest
 from duck.http.response import HttpResponse
@@ -43,10 +50,11 @@ from duck.routes import RouteRegistry
 from duck.shortcuts import to_response        
 from duck.logging import logger
 from duck.meta import Meta
+from duck.utils.threading import SyncFuture
+from duck.utils.asyncio.eventloop import AsyncioLoopManager
 
 
 DJANGO_SIDE_PATTERNS = [re.compile(p) for p in SETTINGS["DJANGO_SIDE_URLS"] or []]
-
 DUCK_EXPLICIT_PATTERNS = [re.compile(p) for p in SETTINGS["DUCK_EXPLICIT_URLS"] or []]
 
 
@@ -75,7 +83,7 @@ def is_duck_explicit_url(url: str) -> bool:
     # They are handled directly by within Duck.
     return any(p.fullmatch(url) for p in DUCK_EXPLICIT_PATTERNS)
 
-        
+
 class RequestProcessor:
     """
     RequestProcessor class for enforcing middleware checks and processing requests.
@@ -135,7 +143,7 @@ class RequestProcessor:
         request processing ("ok", None).
 
         Notes:
-                - If the request failed to satisfy any middleware, the key "FAIL_MIDDLEWARE" will be set.
+        - If the request failed to satisfy any middleware, the key "FAIL_MIDDLEWARE" will be set.
 
         Returns:
             tuple[str, BaseMiddleware]: A tuple containing two elements:
@@ -199,30 +207,61 @@ class RequestProcessor:
         Raises:
             MethodNotAllowedError: If the requested method is not allowed for the current request.
             RouteNotFoundError: If the requested url doesn't match any registered routes.
-        
+            ExpectingNoResponse: Raised if we are never going to get a response e.g. when we reach a WebSocketView.
+                This handles everything on its own and it will never return a response.
+            Exception: Any other exceptions.
+            
+        Returns:
+            HttpResponse: Returns the appropriate http response.
+            
         Notes:
         - This also closes Django DB connections if any connection was made in view.
         """
+        from duck.contrib.websockets import WebSocketView
+        
         url = self.request.path
         
         # Check for errors
         self.check_errors()
+        
+        is_ws_view = False
         
         try:
             url = self.route_info["url"]  # set the url set in registry
             view_kwargs = self.route_info["handler_kwargs"]
             view_callable = self.route_info["handler"]
             
-            # Execute the view callable and retrieve the http response
-            view_callable = convert_to_sync_if_needed(view_callable)
-            response = view_wrapper(view_callable)(request=self.request, **view_kwargs)
+            if type(view_callable) == type and issubclass(view_callable, WebSocketView):
+                is_ws_view = True
+            
+            if is_ws_view or (type(view_callable) == type and issubclass(view_callable, View)):
+                view = view_callable(self.request, **view_kwargs)
+                
+                if view.strictly_async():
+                    # View needs to be run asynchonously.
+                    if not iscoroutinefunction(view.run):
+                        raise TypeError("View is set to be strictly asynchronous yet entry method `run` is synchronous.")
+                    
+                    # Submit the coroutine to queue
+                    response_coro = async_view_wrapper(view.run)()
+                    future: SyncFuture = AsyncioLoopManager.submit_task(response_coro, return_sync_future=True)
+                    
+                    # Wait for response from coroutine.
+                    response = future.result()
+                else:
+                    # Convert the run method to sync if not.
+                    run = convert_to_sync_if_needed(view.run)
+                    response = view_wrapper(run)()
+            else:
+                view_callable = convert_to_sync_if_needed(view_callable)
+                response = view_wrapper(view_callable)(request=self.request, **view_kwargs)
             
         except Exception as e:
             logger.log_raw(
-                f'\nError invoking response view for URL "{url}" ',
+                f'\nError invoking {"response" if not is_ws_view else "websocket"} view for URL "{url}" ',
                 level=logger.ERROR,
                 custom_color=logger.Fore.YELLOW,
-            )
+            ) if not isinstance(e, ExpectingNoResponse) else None
             raise e
         
         # Check and convert the data returned by the view to Http response.
@@ -238,8 +277,9 @@ class RequestProcessor:
         Returns the streaming http response fetched from django server.
         
         Raises:
-            MethodNotAllowedError: If the requested method is not allowed for the current request.
-            RouteNotFoundError: If the requested url doesn't match any registered routes.
+            MethodNotAllowedError: If the requested method is not allowed for the current request if not django_sided request.
+            RouteNotFoundError: If the requested url doesn't match any registered routes if not django_sided request.
+            Exception: Any other exceptions.
         """
         # create proxy handler
         uses_ipv6 = Meta.get_metadata("DUCK_USES_IPV6")
@@ -262,10 +302,6 @@ class RequestProcessor:
                 uses_ipv6=uses_ipv6,
                 uses_ssl=False,
             ) # build a proxy handler
-            
-            # Ensure http version is HTTP/1.1
-            if "/2" in str(self.request.http_version):
-                self.request.http_version = "HTTP/1.1"
             
             # Retrieve the http response from django server.
             streaming_proxy_response = proxy_handler.get_response(
@@ -292,14 +328,28 @@ class RequestProcessor:
         Returns the full response for a request, with all middlewares and other configurations applied.
         
         Returns:
-            HttpResponse: Http response
+            HttpResponse: Http response.
+            
+        Raises:
+            ExpectingNoResponse: Raised if we are never going to get a response e.g. when we reach a WebSocketView.
+                This handles everything on its own and it will never return a response.
         """
-        response, disable_logging = WSGI.get_response(request)
+        response = WSGI.get_response(request)
         return response
         
     def process_request(self) -> HttpResponse:
         """
         Processes the http request and returns the appropriate http response.
+        
+        Raises:
+            MethodNotAllowedError: If the requested method is not allowed for the current request.
+            RouteNotFoundError: If the requested url doesn't match any registered routes.
+            RequestSyntaxError: Raised if request has syntax error.
+            RequestUnsupportedVersionError: If request has unsupported HTTP version.
+            RequestError: If request has some errors.
+            ExpectingNoResponse: Raised if we are never going to get a response e.g. when we reach a WebSocketView.
+                This handles everything on its own and it will never return a response.
+            Exception: Any other exceptions.
         """
         self.check_base_errors() # check base errors like request syntax error, etc
         
@@ -321,6 +371,16 @@ class RequestProcessor:
         """
         Processes the request and send it to Django proxy for 
         receiving the appropriate http response.
+        
+        Raises:
+            MethodNotAllowedError: If the requested method is not allowed for the current request.
+            RouteNotFoundError: If the requested url doesn't match any registered routes.
+            RequestSyntaxError: Raised if request has syntax error.
+            RequestUnsupportedVersionError: If request has unsupported HTTP version.
+            RequestError: If request has some errors.
+            ExpectingNoResponse: Raised if we are never going to get a response e.g. when we reach a WebSocketView.
+                This handles everything on its own and it will never return a response.
+            Exception: Any other exceptions.
         """
         self.check_base_errors() # check base errors like request syntax error, etc
         
@@ -388,7 +448,7 @@ class AsyncRequestProcessor(RequestProcessor):
         """
         for middleware in MIDDLEWARES:
             if issubclass(middleware, BaseMiddleware):
-                middleware_state = await convert_to_async_if_needed(middleware.process_request)(self.request)
+                middleware_state = await convert_to_async_if_needed(middleware.process_request, thread_sensitive=False)(self.request)
                 if middleware_state == BaseMiddleware.request_ok:
                     pass
                 else:
@@ -414,31 +474,45 @@ class AsyncRequestProcessor(RequestProcessor):
         Raises:
             MethodNotAllowedError: If the requested method is not allowed for the current request.
             RouteNotFoundError: If the requested url doesn't match any registered routes.
-        
+            ExpectingNoResponse: Raised if we are never going to get a response e.g. when we reach a WebSocketView.
+                This handles everything on its own and it will never return a response.
+            Exception: Any other exceptions.
+            
         Notes:
         - This also closes Django DB connections if any connection was made in view.
-        
         """
+        from duck.contrib.websockets import WebSocketView
+        
         url = self.request.path
         
         # Check for errors
         self.check_errors()
-
+        
+        is_ws_view = False
+        
         try:
             url = self.route_info["url"]  # set the url set in registry
             view_kwargs = self.route_info["handler_kwargs"]
             view_callable = self.route_info["handler"]
             
-            # Execute the view callable and retrieve the http response
-            view_callable = convert_to_async_if_needed(view_callable)
-            response = await async_view_wrapper(view_callable)(request=self.request, **view_kwargs)
+            if type(view_callable) == type and issubclass(view_callable, WebSocketView):
+                is_ws_view = True
+            
+            if is_ws_view or (type(view_callable) == type and issubclass(view_callable, View)):
+                view = view_callable(self.request, **view_kwargs) # initialize view
+                run = convert_to_async_if_needed(view.run, thread_sensitive=False)
+                response = await async_view_wrapper(run)()
+                
+            else:
+                view_callable = convert_to_async_if_needed(view_callable, thread_sensitive=False)
+                response = await async_view_wrapper(view_callable)(request=self.request, **view_kwargs)
         
         except Exception as e:
             logger.log_raw(
-                f'\nError invoking response view for URL "{url}" ',
+                f'\nError invoking {"response" if not is_ws_view else "websocket"} view for URL "{url}" ',
                 level=logger.ERROR,
                 custom_color=logger.Fore.YELLOW,
-            )
+            ) if not isinstance(e, ExpectingNoResponse) else None
             raise e # reraise exception
         
         # Check and convert the data returned by the view to Http response.
@@ -450,13 +524,14 @@ class AsyncRequestProcessor(RequestProcessor):
         
         return response
 
-    async def get_django_response(self) -> HttpProxyResponse:
+    async def get_django_response(self) -> AsyncHttpProxyResponse:
         """
         Returns the streaming http response fetched from django server.
         
         Raises:
-            MethodNotAllowedError: If the requested method is not allowed for the current request.
-            RouteNotFoundError: If the requested url doesn't match any registered routes.
+            MethodNotAllowedError: If the requested method is not allowed for the current request if not a django_sided request.
+            RouteNotFoundError: If the requested url doesn't match any registered routes if not a django_sided request.
+            Exception: Any other exceptions.
         """
         # create proxy handler
         uses_ipv6 = Meta.get_metadata("DUCK_USES_IPV6")
@@ -473,19 +548,15 @@ class AsyncRequestProcessor(RequestProcessor):
                 raise e # reraise error
         
         try:
-            proxy_handler = PROXY_HANDLER(
+            proxy_handler = ASYNC_PROXY_HANDLER(
                 target_host=django_host,
                 target_port=django_port,
                 uses_ipv6=uses_ipv6,
                 uses_ssl=False,
             ) # build a proxy handler
             
-            # Ensure http version is HTTP/1.1
-            if "/2" in str(self.request.http_version):
-                self.request.http_version = "HTTP/1.1"
-            
             # Retrieve the http response from django server.
-            streaming_proxy_response = await convert_to_async_if_needed(proxy_handler.get_response)(
+            streaming_proxy_response = await proxy_handler.get_response(
                 self.request,
                 self.request.client_socket,
             )
@@ -502,7 +573,7 @@ class AsyncRequestProcessor(RequestProcessor):
         """
         Returns middleware error response.
         """
-        return await convert_to_async_if_needed(middleware.get_error_response)(self.request)
+        return await convert_to_async_if_needed(middleware.get_error_response, thread_sensitive=False)(self.request)
 
     async def get_response(self, request: HttpRequest) -> HttpResponse:
         """
@@ -511,12 +582,22 @@ class AsyncRequestProcessor(RequestProcessor):
         Returns:
             HttpResponse: Http response
         """
-        response, disable_logging = await ASGI.get_response(request)
+        response = await ASGI.get_response(request)
         return response
         
     async def process_request(self) -> HttpResponse:
         """
         Processes the http request and returns the appropriate http response.
+        
+        Raises:
+           MethodNotAllowedError: If the requested method is not allowed for the current request.
+            RouteNotFoundError: If the requested url doesn't match any registered routes.
+            RequestSyntaxError: Raised if request has syntax error.
+            RequestUnsupportedVersionError: If request has unsupported HTTP version.
+            RequestError: Request based errors.
+            ExpectingNoResponse: Raised if we are never going to get a response e.g. when we reach a WebSocketView.
+                This handles everything on its own and it will never return a response.
+            Exception: Any other exceptions.  
         """
         self.check_base_errors() # check base errors like request syntax error, etc
         
@@ -538,6 +619,16 @@ class AsyncRequestProcessor(RequestProcessor):
         """
         Processes the request and send it to Django proxy for 
         receiving the appropriate http response.
+        
+        Raises:
+            MethodNotAllowedError: If the requested method is not allowed for the current request.
+            RouteNotFoundError: If the requested url doesn't match any registered routes.
+            RequestSyntaxError: Raised if request has syntax error.
+            RequestUnsupportedVersionError: If request has unsupported HTTP version.
+            RequestError: Request based errors.
+            ExpectingNoResponse: Raised if we are never going to get a response e.g. when we reach a WebSocketView.
+                This handles everything on its own and it will never return a response.
+            Exception: Any other exceptions.
         """
         self.check_base_errors() # check base errors like request syntax error, etc
         

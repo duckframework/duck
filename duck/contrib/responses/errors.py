@@ -30,7 +30,7 @@ from duck.exceptions.all import (
     RequestSyntaxError,
     RequestUnsupportedVersionError,
 )
-
+from duck.html import escape
 from duck.meta import Meta
 from duck.routes import RouteRegistry
 from duck.logging import logger
@@ -44,7 +44,7 @@ debug_error_style = """
   }
   .request-info .inner {
      background-color: #fdf2f2; /* Soft red background for better readability */
-     border-radius: 4px;
+     border-radius: 12px;
      padding: 4px 4px;
      list-style: none;
   }
@@ -59,11 +59,6 @@ def get_debug_error_as_html(exception: Exception, request: Optional = None):
     """
     Returns the exception as html (only if DEBUG=True, else None).
     """
-    def escape(content: str):
-        """
-        Returns escaped html content.
-        """
-        return content.replace("<", "&lt;").replace(">", "&gt;")
     
     if not SETTINGS["DEBUG"]:
         # return None immediately
@@ -130,6 +125,9 @@ def get_timeout_error_response(timeout: Optional[Union[int, float]]) -> HttpRequ
         )
     else:
         response = simple_response(HttpRequestTimeoutResponse)
+    
+    # Finally return response.
+    return response
 
 
 def get_server_error_response(exception: Exception, request: Optional = None):
@@ -187,8 +185,8 @@ def get_404_error_response(request: HttpRequest):
             body = f'<p>Specified URI not found</p>'
         
         if SETTINGS["USE_DJANGO"]:
-            body += "<p>It seems like USE_DJANGO=True in settings, maybe this url is registered and only known to Django.</p>"
-            body += "<p>You may add this url to DJANGO_SIDE_URLS if that is the case.</p>"
+            body += "<p>It seems like <code>USE_DJANGO=True</code> in settings, maybe this URL is registered and only known to Django.</p>"
+            body += "<p>You may add this URL to <code>DJANGO_SIDE_URLS</code> if that is the case.</p>"
         
         # Add a list of registered routes
         body += "<h3>Duck tried the following routes</h3>"

@@ -5,6 +5,8 @@ Module containing classes for storing uploaded file data.
 import io
 import os
 
+from typing import Optional
+
 from duck.settings import SETTINGS
 from duck.utils.object_mapping import map_data_to_object
 
@@ -15,6 +17,13 @@ class FileUploadError(Exception):
     """
 
 
+
+class FileVerificationError(FileUploadError):
+    """
+    Raised on verification failure for uploaded files.
+    """
+
+
 class BaseFileUpload(io.BytesIO):
     """
     Base class for storing file uploads data.
@@ -22,12 +31,17 @@ class BaseFileUpload(io.BytesIO):
     Attributes:
         initial_bytes (bytes): The initial byte content of the file.
         filename (str): The name of the file.
+        name (str, optional): Name of the form field for this File. (optional)
+        content_type (str, optional): The mimetype of the uploaded content. (optional)
+        content_disposition (str, optional): The file upload content disposition. (optional)
     """
 
     def __init__(self, filename: str, initial_bytes: bytes = b"", **kw):
         self.initial_bytes = initial_bytes
         self.filename = filename
-
+        self.name = None
+        self.content_type = None
+        self.content_disposition = None
         assert filename or False, "Filename is required"
 
         if not isinstance(initial_bytes, bytes):
@@ -38,6 +52,44 @@ class BaseFileUpload(io.BytesIO):
         # Map additional keyword arguments to instance attributes
         map_data_to_object(self, kw)
 
+    def getsize(self):
+        """
+        Returns the file IO object total bytes.
+        """
+        curpos = self.tell() 
+        self.seek(0, 2) # end of file
+        size = self.tell()
+        self.seek(curpos)
+        return size
+    
+    def guess_mimetype(self) -> Optional[str]:
+        """
+        Returns the guessed mimetype for the uploaded file.
+        
+        Notes
+        - This method guesses the mimetype for the file upload using the provided bytes rather than the 
+               the filename, because it bypasses altered filenames thereby increasing security.
+        """
+        from duck.http.mimes import guess_data_mimetype
+        return guess_data_mimetype(self.getvalue())
+        
+    def verify(self):
+        """
+        Verifies the uploaded file if the content type matches the guessed mimetype.
+        
+        Raises:
+            FileVerificationError: If the specified content type doesn't match the guessed mimetype.
+        
+        Notes:
+        - This method guesses the mimetype for the file upload using the provided bytes rather than the 
+               the filename, because it bypasses altered filenames thereby increasing security.
+        """
+        content_type = getattr(self, "content_type", None)
+        if content_type:
+            mimetype = self.guess_mimetype()
+            if mimetype and mimetype.lower() != content_type.lower():
+                raise FileVerificationError("File upload verification failure: Received `{content_type}` as content_type yet the guessed mimetype is `{mimetype}`.")
+        
     def save_to_file(self, filepath: str):
         """
         Save the uploaded data to a file.
@@ -58,8 +110,7 @@ class BaseFileUpload(io.BytesIO):
         Raises:
             NotImplementedError: If the method is not implemented by subclasses.
         """
-        raise NotImplementedError(
-            "Implementation of the method 'save' is required")
+        raise NotImplementedError("Implementation of the method 'save' is required")
 
     def __repr__(self):
         r = f"<{self.__class__.__name__} {self.filename}"
@@ -110,9 +161,8 @@ class PersistentFileUpload(BaseFileUpload):
             raise FileNotFoundError(f"Directory {directory} does not exist")
 
         if not filename:
-            raise FileUploadError(
-                f"Please provide filename, should not be '{filename}' ")
-
+            raise FileUploadError(f"Please provide filename, should not be '{filename}' ")
+            
         self.filepath = os.path.join(directory, filename)
 
         if os.path.isfile(self.filepath) and not overwrite_existing_file:

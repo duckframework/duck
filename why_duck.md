@@ -2,7 +2,7 @@
 
 Tired of bulky web frameworks that slow you down or overcomplicate your stack?
 
-Say hello to **Duck** — a lightweight, high-performance Python web framework that **integrates seamlessly with Django**. Whether you're crafting a microservice or a full-scale app, Duck gives you **simplicity**, **speed**, and **security**, without the overhead.
+Say hello to **Duck** — a high-performance Python web framework built for building modern production-ready web applications with minimalistic code. Whether you're crafting a microservice or a full-scale app, Duck gives you **simplicity**, **speed**, and **security**, without the overhead.
 
 ---
 

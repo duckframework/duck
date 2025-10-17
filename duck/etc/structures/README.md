@@ -1,1 +1,1 @@
-# Directory containing blueprint and project structures!
+Directory containing Duck template directories e.g. blueprint and project structures.

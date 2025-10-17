@@ -4,6 +4,7 @@
 Watches for file changes and enables dynamic reloading in **DEBUG mode**.
 """
 import os
+import sys
 import time
 import signal
 import fnmatch
@@ -11,6 +12,7 @@ import platform
 import traceback
 import subprocess
 import multiprocessing
+import setproctitle
 
 import duck.processes as processes
 
@@ -27,7 +29,6 @@ from duck.utils import ipc
 
 # Define the base directory for the application
 BASE_DIR = str(SETTINGS["BASE_DIR"]).rstrip("/")
-PYTHON_PATH = str(SETTINGS["PYTHON_PATH"])
 
 
 def set_state(state: str) -> str:
@@ -43,7 +44,7 @@ def set_state(state: str) -> str:
     Raises:
         TypeError: If the provided state is not 'alive' or 'dead'.
     """
-    state_file = joinpaths(BASE_DIR, ".ducksight-state")
+    state_file = joinpaths(BASE_DIR, ".ducksight")
 
     if state not in {"alive", "dead"}:
         raise TypeError("State should be one of ['alive', 'dead']")
@@ -63,7 +64,7 @@ def get_state() -> str:
     Returns:
         str: Current state of the reloader ('dead' or 'alive').
     """
-    state_file = joinpaths(BASE_DIR, ".ducksight-state")
+    state_file = joinpaths(BASE_DIR, ".ducksight")
 
     if not os.path.isfile(state_file):
         return "dead"
@@ -87,6 +88,7 @@ def _cleanup_current_webserver() -> list:
     try:
         data = processes.get_process_data("main")
         server_sys_argv = data.get("sys_argv")
+        
         if not server_sys_argv:
             raise RuntimeError(
                 "Failed to retrieve Duck application process `sys.argv`, ensure the app is running."
@@ -104,9 +106,12 @@ def _cleanup_current_webserver() -> list:
     return data
 
 
-def _restart_webserver():
+def _restart_webserver() -> dict:
     """
     Restart the webserver by terminating the current process and re-executing the command.
+    
+    Returns:
+        dict: Old server data.
     """
     server_data = _cleanup_current_webserver() # cleanup the current running server
     server_sys_argv = server_data.get("sys_argv")  # sys.argv for the cleaned webserver
@@ -116,9 +121,9 @@ def _restart_webserver():
         Builds and returns the command to start a new Duck webserver instance, using arguments from the current instance.
         """
         if (server_sys_argv[0].endswith(".py") and not "runserver" in server_sys_argv):
-            # server was started directly from py file
+            # Server was started directly from py file
             cmd = [
-                PYTHON_PATH,
+                sys.executable,
                 "-m",
                 "duck",
                 "runserver",
@@ -133,9 +138,11 @@ def _restart_webserver():
                 cmd.extend(["--reload"])
         return cmd
 
-    # continue to re-start server again
+    # Continue to re-start server again
     cmd = get_server_command()
-    p = subprocess.run(cmd)  # replace the current process
+    
+    # Run as a child process.
+    subprocess.run(cmd)
 
 
 def restart_webserver():
@@ -145,11 +152,14 @@ def restart_webserver():
     try:
         _restart_webserver()
     except Exception as e:
-        logger.log_raw("".join(
-            traceback.format_exception(type(e), e, e.__traceback__)))
-
+        logger.log_exception(e)
+        
 
 def _start_reloader():
+    # This is run in new process, set process name
+    setproctitle.setproctitle("duck-reloader")
+    
+    # Initialize and start reloader.
     reloader = DuckSightReloader(BASE_DIR)
     reloader.run()
 
@@ -166,6 +176,8 @@ def start_ducksight_reloader_process():
     """
     process = multiprocessing.Process(target=_start_reloader, daemon=False)
     process.start()
+    
+    # Set process data.
     processes.set_process_data(
         "ducksight-reloader", {
             "pid": process.pid,
@@ -203,6 +215,7 @@ def ducksight_reloader_process_alive() -> bool:
         bool: True if the process is running, False otherwise.
     """
     state = get_state() == "alive"
+    
     try:
         pid = processes.get_process_data("ducksight-reloader").get("pid")
         
@@ -360,6 +373,7 @@ class Handler(FileSystemEventHandler):
                     custom_color=logger.Fore.YELLOW,
                  )
             
+            # Restart webserver
             restart_webserver()
             self.restarting = False
             self.latest_event = None  # Clear the latest event after handling

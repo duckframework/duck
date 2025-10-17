@@ -11,11 +11,11 @@ import threading
 from typing import Union
 
 from duck.settings import SETTINGS
-from duck.http.core.httpd.servers import (
-    MicroHttpServer,
-    MicroHttpsServer,
+from duck.http.core.httpd.servers import MicroHTTPServer
+from duck.http.core.processor import (
+    AsyncRequestProcessor,
+    RequestProcessor,
 )
-from duck.http.core.processor import AsyncRequestProcessor, RequestProcessor
 from duck.http.request import HttpRequest
 from duck.http.response import (
     HttpRedirectResponse,
@@ -38,23 +38,25 @@ class MicroApp:
     you can create multiple micro apps in a single Duck application.
 
     Notes:
-            - MicroApp should be used when you want to create a new server with its own address and port.
-            - Every request to the micro app will be handled by the `view` method, no request will be passed to WSGI.
-            - Everything is to be handled manually in the view method and none of all available middlewares will be applied.
+    - MicroApp should be used when you want to create a new server with its own address and port.
+    - Every request to the micro app will be handled by the `view` method, no request will be passed to WSGI.
+    - Everything is to be handled manually in the view method and none of all available middlewares will be applied.
     """
 
     all_threads: list = []
-    """List of all threads created by initializing micro-application instances."""
+    """
+    List of all threads created by initializing micro-application instances.
+    """
 
     def __init__(
         self,
         addr: str = "localhost",
         port: int = 8080,
-        enable_https: bool = False,
-        parent_app=None,
-        no_logs: bool = True,
+        parent_app: "App" = None,
         domain: str = None,
         uses_ipv6: bool = False,
+        enable_https: bool = False,
+        no_logs: bool = True,
     ):
         """
         Initialize the MicroApp class.
@@ -62,18 +64,18 @@ class MicroApp:
         Args:
             add (str): Micro application address, defaults to localhost.
             port (int): Micro application port. Defaults to 8080.
-            enable_https (bool): Whether to enable `https`. Defaults to False.
-            parent_app (Application): The root Duck application instance.
-            no_logs (bool): Whether to log anything to console.
+            parent_app (App): The root Duck application instance.
             domain (str): Micro application domain. Defaults to None.
             uses_ipv6 (bool): Whether to use `IPV6`. Defaults to False.
+            enable_https (bool): Whether to enable `https`. Defaults to False.
+            no_logs (bool): Whether to log anything to console.
         """
         self.addr = addr
         self.port = port
-        self.no_logs = no_logs
         self.parent_app = parent_app
         self.uses_ipv6 = uses_ipv6
         self.enable_https = enable_https
+        self.no_logs = no_logs
         
         # Set appropriate domain
         self.domain = domain or addr if not uses_ipv6 else f"[{addr}]"
@@ -84,24 +86,19 @@ class MicroApp:
         
         # Record port as used
         PortRecorder.add_new_occupied_port(port, f"{self}")
-
-        if enable_https:
-            self.server = MicroHttpsServer(
-                microapp=self,
-                addr=(addr, port),
-                uses_ipv6=uses_ipv6,
-            )
-        else:
-            self.server = MicroHttpServer(
-                microapp=self,
-                addr=(addr, port),
-                uses_ipv6=uses_ipv6,
-            )
-
+        
+        self.server = MicroHTTPServer(
+            addr=(addr, port),
+            microapp=self,
+            domain=self.domain,
+            uses_ipv6=uses_ipv6,
+            enable_ssl=self.enable_https,
+            no_logs=no_logs,
+        )
+        
         # creating vital threads without running them
         self.duck_server_thread = threading.Thread(
             target=self.server.start_server,
-            args=[self.no_logs, domain]
         )
         type(self).all_threads.append(self.duck_server_thread)
 
@@ -223,8 +220,8 @@ class HttpsRedirectMicroApp(MicroApp):
         dest_url = dest_url.to_str()
         redirect = HttpRedirectResponse(location=dest_url, permanent=False)
         
-        # Apply middlewares in reverse order
-        WSGI.apply_middlewares_to_response(redirect, request)
+        # Finalize response
+        WSGI.finalize_response(redirect, request)
         return redirect
 
     async def async_view(self, request: HttpRequest, request_processor: RequestProcessor) -> HttpResponse:
@@ -239,8 +236,8 @@ class HttpsRedirectMicroApp(MicroApp):
         dest_url = dest_url.to_str()
         redirect = HttpRedirectResponse(location=dest_url, permanent=False)
         
-        # Apply middlewares in reverse order
-        await ASGI.apply_middlewares_to_response(redirect, request)
+        # Finalize response
+        await ASGI.finalize_response(redirect, request)
         return redirect
 
 

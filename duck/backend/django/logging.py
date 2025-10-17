@@ -3,14 +3,11 @@ Logging configuration for Django, ensuring compatibility with Duck logs.
 """
 from duck.logging import logger
 from duck.settings import SETTINGS
+from duck.env import is_testing_environment
 
-
-LATEST_LOGFILE = logger.get_current_log_file()
 
 HANDLERS = ["error_console"]
 
-if SETTINGS["LOG_TO_FILE"]:
-    HANDLERS.append("error_file")
 
 # Simple Logging Configuration,
 # This only log exceptions to console and to file (if LOG_TO_FILE=True) and then
@@ -25,12 +22,6 @@ SIMPLE_CONFIG  = {
         }
     },
     "handlers": {
-        "error_file": {
-            "level": "ERROR",
-            "class": "logging.FileHandler",
-            "filename": LATEST_LOGFILE,
-            "formatter": "exception_only",
-        },
         "error_console": {
             "level": "ERROR",
             "class": "logging.StreamHandler",
@@ -52,6 +43,24 @@ SIMPLE_CONFIG  = {
     },
 }
 
+
+if (
+    SETTINGS["LOG_TO_FILE"]
+    and not is_testing_environment()
+    and not SETTINGS['DJANGO_SILENT']
+):
+    LATEST_LOGFILE = (
+        logger.Logger.get_latest_logfile()
+        or logger.Logger.get_current_logfile()
+    )
+    SIMPLE_CONFIG["handlers"]["error_file"] = {
+        "level": "ERROR",
+        "class": "logging.FileHandler",
+        "filename": LATEST_LOGFILE,
+        "formatter": "exception_only",
+    }
+    HANDLERS.append("error_file")
+    
 
 if SETTINGS["DJANGO_SILENT"]:
     # Disable Django console and file logs
