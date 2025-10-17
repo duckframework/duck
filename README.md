@@ -1,5 +1,5 @@
 # Duck Framework
-![Duck image](./images/duck-cover.png)
+![Duck image](./images/duck-icon.png)
 
 **Duck** is a powerful, open-source, full-fledged Python-based **web server**, **framework**, and **reverse proxy** designed for building modern, customizable web applications — from small sites to large-scale platforms.  
 
@@ -14,7 +14,7 @@
 7. Automatic **content compression** using `gzip`, `deflate` or `brotli`
 8. Support for **chunked transfer encoding**  
 9. Easy integration with existing **Django** projects using `django-add`  
-10. Organized routing with Duck [`Blueprints`](https://duckframework.xyz/documentation/blueprints.html)
+10. Organized routing with **Duck** [`Blueprints`](https://duckframework.xyz/documentation/blueprints.html)
 11. Full support for **async views** or asynchronous code even in `WSGI` environment
 12. Dynamic project generation with `makeproject` (`mini`, `normal`, or `full`)  
 13. Runs on both `WSGI` and `ASGI` environments, can even run `async` protocols like `HTTP/2` or `WebSockets` on `WSGI`.  
@@ -31,8 +31,6 @@
 
 And more — see [feature list](https://duckframework.xyz/features)
 
----
-
 ## Upcoming Features
 
 1. **HTTP/3 with QUIC** – Faster, modern transport for improved performance.  
@@ -45,8 +43,15 @@ And more — see [feature list](https://duckframework.xyz/features)
 
 ---
 
+## 🦆 Fun Facts
+
+- The **Duck** official website is powered by the **Duck** framework itself—showcasing a true "dogfooding" approach!
+- **Duck's Lively components** bring you a **Lively UI** that's exceptionally fast and responsive, eliminating slow page re-rendering for a seamless user experience.
+
+---
+
 > ⚠️ **Repository Notice**  
-> _We're currently making significant upgrades to ensure this project is **production-ready**!_
+> We're currently making significant upgrades to ensure this project is **production-ready**!
 
 
 ### 🚀 What's Changing?
@@ -59,12 +64,12 @@ And more — see [feature list](https://duckframework.xyz/features)
 
 ## Getting Started
 
-It is recommended to use **pipx** for installing Duck, as it allows you to run Duck system-wide in an isolated environment without affecting your main **Python** installation.  
+It is recommended to use **pipx** for installing **Duck**, as it allows you to run **Duck** system-wide in an isolated environment without affecting your main **Python** installation.  
 
 **Install Duck using `pipx`:**
 
 ```sh
-pipx install git+https://github.com/digreatbrian/duck.git
+pipx install git+https://github.com/duckframework/duck.git
 ```
 
 ---
