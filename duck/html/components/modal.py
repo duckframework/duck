@@ -66,7 +66,7 @@ class Modal(FlexContainer):
             "box-shadow": "0 8px 30px rgba(0,0,0,0.18)",
             "position": "fixed",
             "display": "flex",
-            "justify-content": "center",
+            "align-items": "center",
             "flex-direction": "column",
             "overflow": "auto",              # Only modal content scrolls
             "scroll-behavior": "smooth",     # Smooth scroll for modal content

@@ -142,6 +142,10 @@ def get_django_formatted_log(
             info += reset + debug_message + "\n"
     
     # Add the main log information with date, status code, content size, and request info
+    if request and not request.topheader:
+        if not request.http_version:
+            request.http_version = "HTTP/1.1"
+        request.topheader = f"{request.method or 'UNKNOWN_METHOD'} {request.fullpath} {request.http_version}"
     topheader = request.topheader if request else ""
     
     if topheader and h2_handling:
@@ -182,6 +186,10 @@ def get_duck_formatted_log(
     if request and request.client_address:
         addr = request.client_address
     
+    if request and not request.topheader:
+        if not request.http_version:
+            request.http_version = "HTTP/1.1"
+        request.topheader = f"{request.method or 'UNKNOWN_METHOD'} {request.fullpath} {request.http_version}"
     topheader = request.topheader if request else ""
     
     if topheader and h2_handling:

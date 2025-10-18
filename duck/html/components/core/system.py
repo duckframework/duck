@@ -2,6 +2,7 @@
 Manages the registration and lifecycle of HTML components, and enables communication
 with the browser via WebSocket to dispatch events and execute JavaScript in real-time.
 """
+import os
 
 from typing import (
     List,
@@ -14,6 +15,7 @@ from pathlib import Path
 
 from duck.shortcuts import not_found404
 from duck.urls import path, URLPattern
+from duck.utils.path import joinpaths
 from duck.settings import SETTINGS
 from duck.utils.importer import x_import
 from duck.utils.caching import InMemoryCache
@@ -54,9 +56,9 @@ class LivelyComponentSystem:
             Function to serve static files for the component system e.g. serving msgpack.js & lively.js.
             """
             staticdir = Path(__file__).resolve().parent / "staticfiles"
-            staticfile = staticdir / staticfile
+            staticfile = joinpaths(staticdir, staticfile)
             
-            if not staticfile.exists():
+            if not os.path.isfile(staticfile):
                 return not_found404(request)
             return FileResponse(staticfile)
                 

@@ -174,8 +174,7 @@ class BaseServer:
         
         if SETTINGS["DEBUG"]:
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        
+            
         self.sock.bind(self.addr)  # bind socket to (address, port)
         self.sock.listen(SETTINGS["REQUESTS_BACKLOG"]) # 200 by default
         

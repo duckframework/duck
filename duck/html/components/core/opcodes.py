@@ -120,10 +120,11 @@ class EventOpCode(enum.IntEnum):
     """
     int: Navigation request from client to server.
     
-    Format: [120, [prev_component_uid, path, headers]]
+    Format: [120, [prev_component_uid, next_component_uid, path, headers]]
     
     Where:
-        prev_component_uid: This is the previous root component UID. The component last rendered as full webpage on client side.
+        prev_component_uid: This is the previous root/page component UID. The component last rendered as full webpage on client side.
+        next_component_uid: This is the next root/page component UID. This can be useful on previous navigations. (optional)
         path: Full URL path matching a registered urlpattern.
         headers: The headers for the request, usually default browser headers. Referer header is needed for diffing.
     """

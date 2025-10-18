@@ -18,6 +18,7 @@ from typing import (
 from duck.settings import SETTINGS
 from duck.logging import logger
 from duck.http.request import HttpRequest
+from duck.http.response import HttpResponse
 from duck.http.core.handler import ResponseHandler
 from duck.utils.asyncio import create_task
 from duck.contrib.sync import convert_to_async_if_needed
@@ -452,7 +453,7 @@ class EventHandler:
         from duck.http.response import ComponentResponse
         from duck.html.components.core.system import LivelyComponentSystem
         
-        # Recv Format [120, [prev_root_component_uid, path, headers]]
+        # Recv Format [120, [prev_root_component_uid, next_component_uid, path, headers]]
         # Send Format: [121, path, fullreload, component_uid, patches_list]
         fullpath = None
         total_patches = 0
@@ -481,7 +482,7 @@ class EventHandler:
                 
         # Try producing minimal patches for the new page.
         try:
-            prev_component_uid, fullpath, headers = data
+            prev_component_uid, next_component_uid, fullpath, headers = data
             root_component_uid = prev_component_uid # Same as prev_component uid
             
             if prev_component_uid and fullpath and headers:
@@ -491,30 +492,51 @@ class EventHandler:
                     prev_component_uid,
                 )
                 
-                if prev_component:
-                    # This is the last rendered component which was used to fill up the client whole page., usually the Page component.
-                    topheader = f"GET {fullpath} HTTP/1.1"
-                    request = HttpRequest(
-                        client_socket=self.ws_view.request.client_socket,
-                        client_address=self.ws_view.request.client_address
+                # Try getting the next component if available
+                next_component = None
+                if next_component_uid:
+                    next_component = LivelyComponentSystem.get_from_registry(
+                        next_component_uid,
+                        next_component_uid,
                     )
-                    request.parse_request(topheader, headers, content=b'')
                     
-                    # Reuse CSP nonce from last session to avoid unmatching nonces on patching
-                    first_request = self.ws_view.request
-                    first_nonce = first_request.META.get("DUCK_CSP_NONCE")
-                    
-                    if first_nonce:
-                        # Set the nonce from the first request.
-                        # The below code will make function `csp_nonce` return the first_csp_nonce
-                        request.META["DUCK_CSP_NONCE"] = first_csp_nonce
+                if prev_component:
+                    if not next_component:
+                        # This is the last rendered component which was used to fill up the client whole page., usually the Page component.
+                        topheader = f"GET {fullpath} HTTP/1.1"
+                        request = HttpRequest(
+                            client_socket=self.ws_view.request.client_socket,
+                            client_address=self.ws_view.request.client_address
+                        )
+                        request.parse_request(topheader, headers, content=b'')
                         
-                    # Get the new response
-                    response = await ASGI.get_response(request)
+                        # Reuse CSP nonce from last session to avoid unmatching nonces on patching
+                        first_request = self.ws_view.request
+                        first_nonce = first_request.META.get("DUCK_CSP_NONCE")
+                        
+                        if first_nonce:
+                            # Set the nonce from the first request.
+                            # The below code will make function `csp_nonce` return the first_csp_nonce
+                            request.META["DUCK_CSP_NONCE"] = first_csp_nonce
+                            
+                        # Get the new response
+                        response = await ASGI.get_response(request)
                     
-                    if isinstance(response, ComponentResponse):
-                        # This is easy to diff
-                        next_component = response.component
+                        if isinstance(response, ComponentResponse):
+                            # This is easy to diff
+                            next_component = response.component
+                    
+                    # Check if next component has been set somehow e.g. from ComponentResponse
+                    if next_component:
+                        # Set dummy response and request
+                        request = HttpRequest(
+                            client_address=self.ws_view.request.client_address, 
+                            client_socket=self.ws_view.request.client_socket, 
+                        )
+                        request.fullpath = fullpath
+                        request.method = "GET"
+                        response = HttpResponse()
+                        
                         if hasattr(next_component, "fullpage_reload") and next_component.fullpage_reload:
                             # Server prefers fullpage_reload
                             await self.ws_view.send_data([

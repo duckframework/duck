@@ -3,7 +3,6 @@ Module containing commands for creating and managing Duck services using systemd
 """
 import os
 import re
-import pwd
 import click
 import time
 import subprocess
@@ -12,6 +11,14 @@ from datetime import datetime
 
 from duck.logging import console
 from duck.utils.path import joinpaths
+
+
+try:
+    import pwd
+    USER = pwd.getpwuid(os.getuid()).pw_name     
+except ImportError:
+    # Backward compatibility for windows.
+    USER = os.getenv("USERNAME") or os.getenv("USER")
 
 
 SERVICE_CONTENT = """
@@ -76,7 +83,6 @@ class ServiceCommand:
         environment = SETTINGS["SYSTEMD_ENVIRONMENT"]
         service_dir = SETTINGS["SYSTEMD_SERVICE_DIR"]
         service_name = SETTINGS["SYSTEMD_SERVICE_NAME"]
-        user = pwd.getpwuid(os.getuid()).pw_name
         
         def escape_value(val):
             return val.replace('"', '\\"')
@@ -88,7 +94,7 @@ class ServiceCommand:
         
         service_content = SERVICE_CONTENT.format(
             exec_start=exec_start,
-            user=user,
+            user=USER,
             base_dir=str(base_dir),
             restart=restart,
             environ_data = environ_data)

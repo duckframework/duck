@@ -1526,11 +1526,20 @@ class NavigationHandler {
   /**
    * Sends a navigation request to the WebSocket.
    * @param {string} url URL to navigate to
+   * @param {string} nextPageUid The next page Uid to navigate to (if available). Useful in previous navigations. 
    */
-  static navigateTo(url) {
+  static navigateTo(url, nextPageUid) {
     const serverTrustedURL = window.LIVELY_WS_URL;
-    const parsedUrl = URL(url);
+    const parsedUrl = URL(url || "");
     const websocket = window.LIVELY_APPLICATION.websocketClient.socket;
+    const progressBar = window.LIVELY_APPLICATION.PAGE_PROGRESS_BAR;
+    let progress = window.LIVELY_APPLICATION.PAGE_PROGRESS;
+    
+    function updateProgress() {
+      // Update progress bar with transform for perf
+      progress = window.LIVELY_APPLICATION.PAGE_PROGRESS = Math.min(progress + 10, 100);
+      updateProgressBar(progressBar, progress); 
+    }
     
     if (!this.navigationInProgress) {
       this.navigationInProgress = true;
@@ -1555,6 +1564,22 @@ class NavigationHandler {
       this.doFullPageReload(url, "Page UID not set");
       return;
     }
+    
+    // Check if nextPageUid is parsed
+    if (nextPageUid) {
+      // Update progress bar with transform for perf
+      updateProgress();
+      
+      // Send navigation request
+      window.LIVELY_APPLICATION.websocketClient.sendData([
+        EventOpCodes.NAVIGATE_TO,
+        window.LIVELY_APPLICATION.PAGE_UID,
+        nextPageUid,
+        parsedUrl.fullpath,
+        this.getNavigationHeaders(),
+      ]);
+      return;
+    }
 
     // Check if the server LIVELY_WS_URL is set
     if (!serverTrustedURL) {
@@ -1565,18 +1590,17 @@ class NavigationHandler {
     
     // Check if the URL is a path or an absolute URL
     const serverDomain = URL(serverTrustedURL).domain;
-    let progress = window.LIVELY_APPLICATION.PAGE_PROGRESS;
-    const progressBar = window.LIVELY_APPLICATION.PAGE_PROGRESS_BAR;
-      
+    
     if (!parsedUrl.domain) {
       // This is a URL path, send navigation request to WebSocket
       // Update progress bar with transform for perf
-      progress = window.LIVELY_APPLICATION.PAGE_PROGRESS = Math.min(progress + 10, 100);
-      updateProgressBar(progressBar, progress);
-        
+      updateProgress();
+      
+      // Send navigation request. 
       window.LIVELY_APPLICATION.websocketClient.sendData([
         EventOpCodes.NAVIGATE_TO,
         window.LIVELY_APPLICATION.PAGE_UID,
+        nextPageUid || null,
         parsedUrl.fullpath,
         this.getNavigationHeaders(),
       ]);
@@ -1586,12 +1610,13 @@ class NavigationHandler {
       if (serverDomain === parsedUrl.domain) {
         // This URL is directed to the right server, send navigation request
         // Update progress bar with transform for perf
-        progress = window.LIVELY_APPLICATION.PAGE_PROGRESS = Math.min(progress + 10, 100);
-        updateProgressBar(progressBar, progress);
+        updateProgress();
         
+        // Send navigation request.
         window.LIVELY_APPLICATION.websocketClient.sendData([
           EventOpCodes.NAVIGATE_TO,
           window.LIVELY_APPLICATION.PAGE_UID,
+          nextPageUid || null,
           parsedUrl.fullpath,
           this.getNavigationHeaders(),
         ]);
@@ -1733,17 +1758,12 @@ class NavigationHandler {
     window.addEventListener('popstate', (event) => {
       const fullpath = window.location.pathname + window.location.search + window.location.hash;
       
-      // Set noPushState and do navigation
+      // Set noPushState and do navigation - avoid duplicate pushstates (preventing navigating to same path 2 or more time on popstate) 
       this._noPushState = true;
       
-      // Set the page UID in history
-      if (event.state.pageUid) {  
-        window.PAGE_UID = event.state.pageUid;
-      }
-      
-      // Do the actual navigatiom
-      duckNavigate(fullpath);
-      
+      // Do the actual navigation
+      const nextPageUid = event.state?.pageUid || window?.LIVELY_APPLICATION?.INITIAL_PAGE_UID || null;
+      duckNavigate(fullpath, nextPageUid);
     });
   }
 }
@@ -2029,6 +2049,7 @@ class LivelyApp {
     
     // Keep track of components (components that may be represent full webpage).
     this.PAGE_UID = window.PAGE_UID || null;
+    this.INITIAL_PAGE_UID = this.PAGE_UID;
     this.PAGE_SNACKBAR = document.getElementById("page-snackbar");
     this.PAGE_SNACKBAR.LABEL = this.PAGE_SNACKBAR.querySelector("#snackbar-label");
     this.PAGE_PROGRESS_BAR = document.getElementById("page-progress-bar");
@@ -2169,9 +2190,12 @@ class LivelyApp {
 
 /**
   * Duck's navigation function which avoids fullpage reload whenever possible.
+  *
+  * @param {string} url The URL to navigate to.
+  * @param {string} nextPageUid The next page Uid to navigate to (if available). Useful in previous navigations.
   */
-function duckNavigate(url) {
-  NavigationHandler.navigateTo(url);
+function duckNavigate(url, nextPageUid) {
+  NavigationHandler.navigateTo(url, nextPageUid);
 }
 
 /**
@@ -2179,7 +2203,7 @@ function duckNavigate(url) {
   */
 function windowOpen(url, target) {
  if (target != "_blank") {
-  duckNavigate(url); 
+  duckNavigate(url);
  }
  else {
    if (window.overridenWindowOpen) {
@@ -2238,3 +2262,6 @@ if (!window.LIVELY_APPLICATION) {
     }
   }); 
 }
+
+// Set that full lively.js has been received.
+window.receivedFullLivelyJs = true;

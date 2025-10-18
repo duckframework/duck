@@ -12,3 +12,4 @@ colorama
 tzdata
 click
 setproctitle
+pwd

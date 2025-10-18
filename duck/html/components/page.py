@@ -437,6 +437,7 @@ class Page(InnerComponent):
             id="unsupported-browser-banner",
         )
         self.unsupported_browser_banner.style["align-items"] = "center"
+        self.unsupported_browser_banner.style["display"] = "none"
         
         # Minimalist dark modal content styling
         self.unsupported_browser_banner.modal_content.style.update({
@@ -474,7 +475,7 @@ class Page(InnerComponent):
                 inline=f"""
                 document.addEventListener("DOMContentLoaded", () => {{
                   setTimeout(() => {{
-                    if (!window.LIVELY_SCRIPT_COMPATIBLE) {{
+                    if (!window.LIVELY_SCRIPT_COMPATIBLE && window.receivedFullLivelyJs) {{
                       const banner = document.getElementById(`{self.unsupported_browser_banner.id}`);
                       openModal(banner);
                     }}
