@@ -17,6 +17,7 @@ from duck.shortcuts import not_found404
 from duck.urls import path, URLPattern
 from duck.utils.path import joinpaths
 from duck.settings import SETTINGS
+from duck.utils.storage import duck_storage
 from duck.utils.importer import x_import
 from duck.utils.caching import InMemoryCache
 from duck.html.components import Component
@@ -55,9 +56,7 @@ class LivelyComponentSystem:
             """
             Function to serve static files for the component system e.g. serving msgpack.js & lively.js.
             """
-            staticdir = Path(__file__).resolve().parent / "staticfiles"
-            staticfile = joinpaths(staticdir, staticfile)
-            
+            staticfile = joinpaths(duck_storage, "html/components/core/staticfiles", staticfile)
             if not os.path.isfile(staticfile):
                 return not_found404(request)
             return FileResponse(staticfile)

@@ -15,6 +15,7 @@ from duck.etc.normalizers import normalizers
 from duck.secrets import DUCK_SECRET, SECRET_DOMAIN
 from duck.storage import duck_storage, BaseDir
 from duck.csp import csp_nonce_flag
+from duck.utils.path import joinpaths
 
 
 # Base directory where the Duck application is running from
@@ -221,12 +222,12 @@ CUSTOM_TEMPLATES: dict = {
 # Security Headers (loaded from JSON files)
 # These headers are added to every response by default.
 # The headers are loaded from the JSON file specified in the path.
-with open(os.path.join(duck_storage, "etc/headers/default.json")) as fd:
+with open(joinpaths(duck_storage, "etc/headers/default.json")) as fd:
     SECURITY_HEADERS: dict = json.load(fd)
 
 
 # Security Headers for HTTPS (loaded from JSON file)
-with open(os.path.join(duck_storage, "etc/headers/default_ssl.json")) as fd:
+with open(joinpaths(duck_storage, "etc/headers/default_ssl.json")) as fd:
     SSL_SECURITY_HEADERS: dict = json.load(fd)
 
 

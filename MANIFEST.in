@@ -1,5 +1,3 @@
-include *.txt
-include *.md
 recursive-include duck *
 exclude duck/**/__pycache__
 exclude duck/**/__pycache__/*.pyc
@@ -7,9 +5,4 @@ exclude duck/**/.logs
 exclude duck/**/.logs/*.log
 exclude duck/**/.cache/
 exclude duck/**/.cache/*
-global-exclude *.log
-global-exclude .cache/
-global-exclude .logs/
-global-exclude staticfiles/
-global-exclude staticfiles/*
-graft duck/etc/staticfiles
+exclude duck/**/testing/assets

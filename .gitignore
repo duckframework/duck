@@ -1,11 +1,5 @@
 __pycache__/
-./staticfiles/
-.uploads/
-.venv/
-.logs/
-.cache/
 Duck.egg-info/
 build/
-.ducksight-state
-.duck-processes.json
+testing/assets/
 smart_async.py

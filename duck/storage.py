@@ -11,9 +11,10 @@ from duck.utils.importer import import_module_once
 from duck.exceptions.all import SettingsError
 
 
+@lru_cache(maxsize=1)
 def get_duck_storage() -> str:
     """
-    Returns the absolute path of the Duck storage directory.
+    Returns the absolute path of the **Duck** storage directory.
 
     This directory is intended for storing data, configuration files, or other resources
     required by the Duck application. The path is resolved based on the current location
