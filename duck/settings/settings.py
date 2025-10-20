@@ -10,7 +10,6 @@ from duck.utils.importer import import_module_once
 
 # Set default settings if not provided
 os.environ.setdefault("DUCK_SETTINGS_MODULE", "web.settings")
-
 SETTINGS_MODULE = os.environ.get("DUCK_SETTINGS_MODULE")
 
 
@@ -108,6 +107,16 @@ def get_combined_settings() -> Settings:
 SETTINGS: Settings = get_combined_settings()
 
 # Set Django specific configurations
+if not SETTINGS_MODULE.startswith("web") and SETTINGS['DJANGO_SETTINGS_MODULE'].startswith('web.backend.django.duckapp.duckapp.settings'):
+    # Duck settings module is external yet the Django settings module is default.
+    try:
+        # Try to resolve the settings
+        import_module_once(SETTINGS['DJANGO_SETTINGS_MODULE'])
+    except ImportError:
+        # We need to fix the Django settings module
+        SETTINGS['DJANGO_SETTINGS_MODULE'] = SETTINGS_MODULE.rsplit('.', 1)[0] + ".backend.django.duckapp.duckapp.settings"
+        
+# Set django settings module
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', SETTINGS['DJANGO_SETTINGS_MODULE'])
 
 if (os.getenv("DUCK_USE_DJANGO", None) == "true"

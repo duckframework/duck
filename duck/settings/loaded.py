@@ -35,14 +35,15 @@ from duck.html.components.core.system import LivelyComponentSystem
 from duck.settings import SETTINGS
 from duck.utils.importer import (import_module_once, x_import)
 from duck.utils.lazy import Lazy
-from duck.backend.django.setup import prepare_django
+from duck.backend.django.setup import prepare_django, DjangoSetupWarning
+from duck.logging import logger
 
 
 # Try preparing Django backend
 try:
     prepare_django(True)
 except Exception as e:
-    pass
+    logger.warn(f"Django setup failed: {e}", DjangoSetupWarning)
 
 
 def get_wsgi() -> Any:

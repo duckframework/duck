@@ -2,4 +2,6 @@ __pycache__/
 Duck.egg-info/
 build/
 testing/assets/
+.processes.json
+.ducksight-state
 smart_async.py

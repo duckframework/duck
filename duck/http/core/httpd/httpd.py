@@ -229,7 +229,9 @@ class BaseServer:
                     
                 # Log the exception if logging allowed.
                 if not self.no_logs and SETTINGS['DEBUG']:
-                    logger.log_exception(e)
+                    if self.running:
+                        # Explicitly log if server still in running state
+                        logger.log_exception(e)
                     
     def accept_and_handle(self):
         """

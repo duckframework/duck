@@ -22,3 +22,9 @@ def prepare_django(setup: bool = False):
     
     if setup and not apps.ready:
         django.setup()
+
+
+class DjangoSetupWarning(UserWarning):
+    """
+    Will be flagged if Django setup fails somehow.
+    """
