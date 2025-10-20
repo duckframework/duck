@@ -3,5 +3,5 @@ Duck.egg-info/
 build/
 testing/assets/
 .processes.json
-.ducksight-state
+.ducksight
 smart_async.py

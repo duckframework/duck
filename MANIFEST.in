@@ -6,5 +6,5 @@ exclude duck/**/.logs/*.log
 exclude duck/**/.cache/
 exclude duck/**/.cache/*
 exclude duck/**/testing/assets
-exclude duck/**/testing/.ducksight-state
+exclude duck/**/testing/.ducksight
 exclude duck/**/testing/.processes.json
