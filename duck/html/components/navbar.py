@@ -146,6 +146,8 @@ class NavbarContainer(FlexContainer):
         """
         super().on_create()
         self.klass = "container-fluid d-flex justify-content-between align-items-center"
+        self.style["justify-content"] = "space-between"
+        self.style["width"] = "100%"
         
         # Add Navbar Brand
         self.navbar_brand = NavbarBrand(**self.kwargs)
@@ -169,11 +171,11 @@ class NavbarContainer(FlexContainer):
         # Add Navbar Links Container
         self.navbar_links_container = Container()
         self.navbar_links_container.props["class"] = "navbar-links-container collapse navbar-collapse d-lg-flex align-items-center"
+        self.add_child(self.navbar_links_container)
         
         # Add Navbar Links to their container
         self.navbar_links_container.add_child(NavbarLinks(**self.kwargs))
-        self.add_child(self.navbar_links_container)
-
+        
         # Add script for toggling navbar visibility
         self.script = Script(
             inner_html="""

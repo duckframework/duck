@@ -448,7 +448,7 @@ class AsyncRequestProcessor(RequestProcessor):
         """
         for middleware in MIDDLEWARES:
             if issubclass(middleware, BaseMiddleware):
-                middleware_state = await convert_to_async_if_needed(middleware.process_request, thread_sensitive=False)(self.request)
+                middleware_state = await convert_to_async_if_needed(middleware.process_request)(self.request)
                 if middleware_state == BaseMiddleware.request_ok:
                     pass
                 else:
@@ -500,11 +500,11 @@ class AsyncRequestProcessor(RequestProcessor):
             
             if is_ws_view or (type(view_callable) == type and issubclass(view_callable, View)):
                 view = view_callable(self.request, **view_kwargs) # initialize view
-                run = convert_to_async_if_needed(view.run, thread_sensitive=False)
+                run = convert_to_async_if_needed(view.run)
                 response = await async_view_wrapper(run)()
                 
             else:
-                view_callable = convert_to_async_if_needed(view_callable, thread_sensitive=False)
+                view_callable = convert_to_async_if_needed(view_callable)
                 response = await async_view_wrapper(view_callable)(request=self.request, **view_kwargs)
         
         except Exception as e:
@@ -573,7 +573,7 @@ class AsyncRequestProcessor(RequestProcessor):
         """
         Returns middleware error response.
         """
-        return await convert_to_async_if_needed(middleware.get_error_response, thread_sensitive=False)(self.request)
+        return await convert_to_async_if_needed(middleware.get_error_response)(self.request)
 
     async def get_response(self, request: HttpRequest) -> HttpResponse:
         """

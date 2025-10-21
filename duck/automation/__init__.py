@@ -595,7 +595,7 @@ class Automation:
             self.__running = False
             self.__finished = True
             self.__finished_at = datetime.datetime.now()
-            await convert_to_async_if_needed(self.on_finish, thread_sensitive=False)()
+            await convert_to_async_if_needed(self.on_finish)()
 
         if self.schedules == -1:  # execute to infinite
             counter = 0
@@ -611,9 +611,9 @@ class Automation:
                     break
                     
                 # continue with execution
-                await convert_to_async_if_needed(self.on_pre_execute, thread_sensitive=False)()  # do some stuff before execution
-                await convert_to_async_if_needed(self.execute, thread_sensitive=False)()  # execute the automation
-                await convert_to_async_if_needed(self.on_post_execute, thread_sensitive=False)()  # do some stuff after execution
+                await convert_to_async_if_needed(self.on_pre_execute)()  # do some stuff before execution
+                await convert_to_async_if_needed(self.execute)()  # execute the automation
+                await convert_to_async_if_needed(self.on_post_execute)()  # do some stuff after execution
                 self.__executed = (True)  # set that the method has executed for the first time
                 self.__execution_times += 1
                 counter += 1  # counter is more accurate on number of times the loop was run compared to __execution_times.
@@ -630,9 +630,9 @@ class Automation:
                     break
                     
                 # continue with execution
-                await convert_to_async_if_needed(self.on_pre_execute, thread_sensitive=False)()  # do some stuff before execution
-                await convert_to_async_if_needed(self.execute, thread_sensitive=False)()  # execute the automation
-                await convert_to_async_if_needed(self.on_post_execute, thread_sensitive=False)()  # do some stuff after execution
+                await convert_to_async_if_needed(self.on_pre_execute)()  # do some stuff before execution
+                await convert_to_async_if_needed(self.execute)()  # execute the automation
+                await convert_to_async_if_needed(self.on_post_execute)()  # do some stuff after execution
                 self.__executed = (True)  # automation has executed for the first time
                 self.__execution_times += 1
                 await asyncio.sleep(self.interval)  # sleep before next execution cycle

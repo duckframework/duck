@@ -152,7 +152,7 @@ class ASGI:
             middlewares = middlewares[:index]
 
         for middleware in reversed(middlewares):
-            await convert_to_async_if_needed(middleware.process_response, thread_sensitive=False)(response, request)
+            await convert_to_async_if_needed(middleware.process_response)(response, request)
     
     async def django_apply_middlewares_to_response(self, response: HttpProxyResponse, request):
         """

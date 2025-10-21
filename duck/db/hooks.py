@@ -10,7 +10,11 @@ Supports both synchronous and asynchronous execution contexts.
 """
 
 from django.core.exceptions import ImproperlyConfigured
-from duck.contrib.sync import convert_to_async_if_needed
+from duck.contrib.sync import (
+    convert_to_async_if_needed,
+    transaction_context,
+    disable_transaction_context,
+)
 
 
 def close_old_connections():
@@ -72,12 +76,18 @@ def async_view_wrapper(handler):
     Returns:
         Awaitable: A wrapped coroutine with DB connection cleanup.
     """
-    close = convert_to_async_if_needed(close_old_connections, thread_sensitive=False)
+    close = convert_to_async_if_needed(close_old_connections)
 
     async def wrapped(*args, **kwargs):
-        await close()  # Before request
-        try:
-            return await handler(*args, **kwargs)
-        finally:
-            await close()  # After request
+        # This wrapper only close db connections for current thread but this
+        # doesn't mean the handler will use the current thread connection. As threads 
+        # are reused, the thread's connection may be used by another sync_to_async db function.
+        # This mean the reused threads' connections get a chance for cleanup at different intervals.
+        with transaction_context():
+            await close()  # Before request
+            try:
+                with disable_transaction_context():
+                    return await handler(*args, **kwargs)
+            finally:
+                await close()  # After request
     return wrapped

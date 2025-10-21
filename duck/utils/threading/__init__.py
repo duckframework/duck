@@ -1,9 +1,65 @@
 """
 Threading utilities and helpers.
 """
+import os
+import psutil
+import platform
 import threading
 
 from typing import Optional
+
+
+def get_max_workers() -> int:
+    """
+    Dynamically calculate a safe max_workers value for ThreadPoolExecutor,
+    based on CPU count, available memory, stack size, and current system usage.
+    Works cross-platform (Linux, Windows, macOS). No root required.
+
+    Returns:
+        int: Suggested max_workers value (min 8, max 2000)
+    """
+
+    # --- System info ---
+    cpu_count = os.cpu_count() or 1
+
+    try:
+        total_memory = psutil.virtual_memory().total
+        used_memory = psutil.virtual_memory().used
+        available_memory = psutil.virtual_memory().available
+    except Exception:
+        total_memory = 4 * 1024**3  # fallback to 4 GB
+        available_memory = total_memory * 0.5  # fallback to 50% available
+
+    try:
+        all_threads = sum(p.num_threads() for p in psutil.process_iter())
+    except Exception:
+        all_threads = 500  # fallback if counting fails
+
+    # --- Estimate stack size ---
+    try:
+        if platform.system() == "Windows":
+            stack_size = 1 * 1024 * 1024  # 1 MB
+        else:
+            import resource
+            stack_size = resource.getrlimit(resource.RLIMIT_STACK)[0]
+            if stack_size <= 0 or stack_size > 1024**3:
+                stack_size = 8 * 1024 * 1024  # fallback
+    except Exception:
+        stack_size = 8 * 1024 * 1024  # fallback
+
+    # --- Limits ---
+    # 1. CPU limit
+    cpu_limit = cpu_count * 4
+
+    # 2. Memory limit (use only portion of available RAM)
+    mem_limit = int(available_memory * 0.75 / stack_size)
+
+    # 3. Adjust for running threads (leave room)
+    thread_adjustment = max(0, 2000 - all_threads)
+
+    # --- Final decision ---
+    max_workers = min(cpu_limit, mem_limit, thread_adjustment, 2000)
+    return max(8, max_workers)
 
 
 class SyncFuture:

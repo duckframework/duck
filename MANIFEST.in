@@ -8,3 +8,5 @@ exclude duck/**/.cache/*
 exclude duck/**/testing/assets
 exclude duck/**/testing/.ducksight
 exclude duck/**/testing/.processes.json
+exclude duck/**/testing/.ipc
+exclude duck/**/testing/**/.ipc

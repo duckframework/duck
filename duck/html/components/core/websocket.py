@@ -335,7 +335,7 @@ class EventHandler:
         
         # Execute event handler
         # Convert handler to async (if handler is synchronous) in case it is doing long tasks to avoid blocking event loop
-        event_handler_coro = convert_to_async_if_needed(event_handler, thread_sensitive=False)(component, event_name, value, self.ws_view)
+        event_handler_coro = convert_to_async_if_needed(event_handler)(component, event_name, value, self.ws_view)
         event_handler_return_value = await event_handler_coro
         
         async def on_force_update_patch(patch):
