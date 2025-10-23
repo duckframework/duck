@@ -322,6 +322,12 @@ class EventHandler:
                 )
                 return
         
+        # Don't repeat calling DOMContentLoaded if called, must only be called once
+        # Useful on back navigation where a previous component can be revisited, so if DOMContentLoaded is already executed,
+        # then there is no need to call it again
+        if is_document_event and event_name == "DOMContentLoaded" and getattr(component, "_domcontentloaded_event_called", False):
+            return
+
         # Execute event and send patches/updates
         event_handler, update_targets, update_self = component.get_event_info(event_name) if not is_document_event else component.get_document_event_info(event_name)
         update_targets = set(update_targets or [])
@@ -409,7 +415,11 @@ class EventHandler:
             old_vdom = old_vdoms[comp]
             new_vdom = comp.to_vdom()
             await comp.vdom_diff_and_act(on_patch, old_vdom, new_vdom)
-            
+
+        # Flag that DOMContentLoaded was executed so as to avoid repeated loads if page is revisited esp in backward navigation
+        if is_document_event and event_name == "DOMContentLoaded":
+            component._domcontentloaded_event_called = True
+
         # If REPLACE_PROPS patch was sent for the current component, reset _event_bindings_changed
         if resolved_component_props_patch_sent:
             # Props patches are definately sent by this time if there were changes to event bindings.

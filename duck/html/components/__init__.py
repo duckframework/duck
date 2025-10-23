@@ -151,7 +151,6 @@ def home(request):
 """
 import re
 import secrets
-import warnings
 
 from collections import deque
 from typing import (
@@ -165,7 +164,7 @@ from typing import (
 )
 
 from duck.utils.lazy import Lazy, LiveResult
-from duck.html.components.extensions import BasicExtension
+from duck.html.components.extensions import BasicExtension, StyleCompatibilityExtension
 from duck.html.components.core.vdom import VDomNode
 from duck.html.components.core.warnings import DeeplyNestedEventBindingWarning
 from duck.html.components.core.force_update import ForceUpdate as ForceUpdate # Avoids this being removed as unused on when formatters touch this.
@@ -183,7 +182,7 @@ from duck.html.components.core.exceptions import (
 ELEMENT_PATTERN = re.compile(r"\b[a-zA-Z0-9]+\b")
 
 
-def quote(html: str = None, element: str = 'span', no_closing_tag: bool = False, **kwargs):
+def quote(html: Optional[str] = None, element: str = 'span', no_closing_tag: bool = False, **kwargs) -> Union["InnerComponent", "NoInnerComponent"]:
     """
     Returns an html component quoting the provided html as its body.
     
@@ -204,7 +203,7 @@ def quote(html: str = None, element: str = 'span', no_closing_tag: bool = False,
     return InnerComponent(inner_html=html or "", element=element, **kwargs)
 
 
-def to_component(html: str = None, tag: str = 'span', no_closing_tag: bool = False, **kwargs):
+def to_component(html: Optional[str] = None, tag: str = 'span', no_closing_tag: bool = False, **kwargs):
     """
     Returns an html component quoting the provided html as its body. (Same as `quote` function).
     
@@ -227,22 +226,42 @@ class PropertyStore(dict):
     """
     __slots__ = []
     
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: str, call_on_set_item_handler: bool = True):
         """
         Sets the value for the given key if the key is allowed.
 
         Args:
             key (str): The key to set the value for. Must be a string.
             value (str): The value to set. Must be a string.
+            call_on_set_item_handler (bool): Whether to call `on_set_item` method after the actual `__setitem__`.
 
         Raises:
             KeyError: If the key is 'style', as it is not allowed to be set.
             AssertionError: If the key or value is not a string.
         """
-        assert isinstance(key, str), f"Keys for `PropertyStore` should be strings not {type(key)}"
-        assert isinstance(value, str), f"Values for `PropertyStore` should be strings not {type(value)}"
-        super().__setitem__(key.strip().lower(), value)
+        assert isinstance(key, str), f"Keys for `PropertyStore` must be strings not {type(key)}"
+        assert isinstance(value, str), f"Values for `PropertyStore` must be strings not {type(value)}"
+        
+        key = key.strip().lower()
+        super().__setitem__(key, value)
+        
+        if call_on_set_item_handler:
+            self.on_set_item(key, value)
 
+    def __delitem__(self, key: str, call_on_delete_item_handler: bool = True) -> None:
+        """
+        Delete a key from the property store.
+
+        Args:
+            key (str): The key to set the value for. Must be a string.
+            call_on_delete_item_handler (bool): Whether to call `on_delete_item` method after the actual `__delitem__`.
+
+        """
+        super().__delitem__(key)
+        
+        if call_on_delete_item_handler:
+            self.on_delete_item(key)
+    
     def __repr__(self):
         """
         Returns a string representation of PropertyStore.
@@ -258,6 +277,18 @@ class PropertyStore(dict):
         """
         for key, value in data.items():
             self.setdefault(key, value)
+    
+    def on_set_item(self, key: str, value: Any):
+        """
+        Called on `__setitem__`.
+        """
+        pass
+
+    def on_delete_item(self, key: str):
+        """
+        Called on `__delitem__`.
+        """
+        pass
 
 
 class StyleStore(PropertyStore):
@@ -788,7 +819,7 @@ class HtmlComponent:
         event: str,
         event_handler: Callable,
         force_bind: bool = False,
-        update_targets: List["HtmlComponent"] = None,
+        update_targets: Optional[List["HtmlComponent"]] = None,
         update_self: bool = True,
     ) -> None:
         """
@@ -1321,7 +1352,7 @@ class HtmlComponent:
         )
         
 
-class NoInnerHtmlComponent(BasicExtension, HtmlComponent):
+class NoInnerHtmlComponent(BasicExtension, StyleCompatibilityExtension, HtmlComponent):
     """
     This is the HTML component with no Inner Body.
 
@@ -1354,7 +1385,7 @@ class NoInnerHtmlComponent(BasicExtension, HtmlComponent):
         )
 
 
-class InnerHtmlComponent(BasicExtension, HtmlComponent):
+class InnerHtmlComponent(BasicExtension, StyleCompatibilityExtension, HtmlComponent):
     """
     This is the HTML component with Inner Body presence.
 

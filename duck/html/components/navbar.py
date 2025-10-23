@@ -74,7 +74,8 @@ class NavbarBrand(Link):
             self.brand_image.props["class"] = "nav-brand-image"
             self.brand_image.style["height"] = "40px"
             self.brand_image.style["width"] = "auto"
-
+            self.brand_image.style["margin-right"] = "8px"
+            
             if alt:
                 self.brand_image.props["alt"] = alt
             
@@ -214,6 +215,12 @@ class NavbarContainer(FlexContainer):
                     }
                     .nav-brand-image {
                         height: 30px !important;
+                    }
+                }
+
+                @media (min-width: 992px){
+                    .navbar-links-container {
+                        justify-content: flex-end !important;
                     }
                 }
             """

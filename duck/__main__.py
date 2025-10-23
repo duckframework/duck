@@ -84,11 +84,12 @@ def collectstatic(skip_confirmation):
 @click.option("-O", "--overwrite", is_flag=True, help="Overwrite an existing project.")
 @click.option('--mini', 'project_type', flag_value="mini", help="Create project with minimum files and configuration")
 @click.option('--full', 'project_type', flag_value="full", help="Create project with complete files and configuration.")
-@click.option('--project_type', default='normal', type=click.Choice(["normal", "full", "mini"]), help="Specify project type")
+@click.option('--project-type', default='normal', type=click.Choice(["normal", "full", "mini"]), help="Specify project type")
 def makeproject(name, dest, overwrite, project_type):
     """
     Create a new project whether it's a normal, full or a mini project.
     """
+    project_type = project_type or "normal"
     MakeProjectCommand.main(name, dest_dir=dest, overwrite_existing=overwrite, project_type=project_type)
 
 

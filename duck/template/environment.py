@@ -76,7 +76,7 @@ class Template:
         self.origin = origin
         self.name = name or pathlib.Path(origin).basename() if origin else name
         self.engine = engine or Engine.get_default()
-           
+        
     def render_template(self) -> str:
         return self.engine.render_template(self)
 
@@ -93,9 +93,9 @@ class Engine:
     @lru_cache(maxsize=1)
     def get_default(cls):
         """
-        Returns the default template engine, ie. Jinja2Engine.
+        Returns the default template engine, i.e. DjangoEngine.
         """
-        return Jinja2Engine()
+        return DjangoEngine()
         
     def get_template(self, template_name: str) -> str:
         """
@@ -235,7 +235,7 @@ class DjangoEngine(Engine):
         self,
         autoescape: bool = True,
         libraries: Optional[List[str]] = None,
-        _django_engine: Optional = None,
+        _django_engine: Optional[Any] = None,
         loaders: List[str] = None,
     ):
         self._duck_templatetags: List[str] = ["duck.backend.django.templatetags.ducktags"]  # all internal and custom template tags and filters
@@ -325,7 +325,7 @@ class DjangoEngine(Engine):
             return django_template.render(Context(template.context))
         
         except TemplateDoesNotExist as e:
-            raise TemplateNotFound(f"If using a blueprints, ensure that `blueprint.enable_template_dir=True`: {e}")
+            raise TemplateNotFound(f"Template not found. If using a blueprints, ensure that `blueprint.enable_template_dir=True`: {e}")
             
         except Exception as e:
             raise TemplateError(f"Error rendering template `{template.origin or template.name or template}`: {e}")

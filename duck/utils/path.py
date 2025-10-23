@@ -36,8 +36,8 @@ def joinpaths(path1: Union[str, pathlib.Path], path2: Union[str, pathlib.Path], 
     path2 = str(path2) if isinstance(path2, pathlib.Path) else path2
     
     # Clean paths and join
-    path1 = path1.rstrip("/")
-    path2 = path2.lstrip("/")  # clean paths
+    path1 = path1.replace("\\","/").rstrip("/")
+    path2 = path2.replace("\\","/").lstrip("/")
     finalpath = os.path.join(path1, path2)
 
     for p in more:

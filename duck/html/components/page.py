@@ -1,4 +1,4 @@
-'''
+"""
 # Page Component Module
 
 This module defines the `Page` component class, a robust foundation for building
@@ -79,7 +79,7 @@ def home(request):
 
 This module is designed to be flexible and integrates well within Duck projects
 or other Python web frameworks employing component-based rendering.
-'''
+"""
 import json
 
 from typing import (
@@ -133,6 +133,7 @@ class Page(InnerComponent):
         self._request = request
         self._document_event_bindings = {}
         self._add_doctype_declaration = True
+        self._domcontentloaded_event_called = False # Will be set on successful DOMContentLoaded event.
         self.disable_lively = disable_lively
         self.fullpage_reload = False # Set this to enable full page reload.
         self.fullpage_reload_headers = ["set-cookie"] # Headers that requires fullpage reload.
@@ -420,7 +421,7 @@ class Page(InnerComponent):
         self.snackbar.style["font-size"] = ".5rem"
         
         # Add snackbar label
-        self.snackbar_label = Label(id="snackbar-label") 
+        self.snackbar_label = Label(id="snackbar-label", color="white") 
         self.snackbar_label.style["text-align"] = "center"
         self.snackbar_label.style["margin"] = "auto"
         self.snackbar.add_child(self.snackbar_label)

@@ -25,6 +25,7 @@ from duck.http.response_payload import (
     SimpleHttpResponsePayload,
 )
 from duck.meta import Meta
+from duck.utils.net import is_domain
 from duck.utils.importer import x_import
 from duck.utils.headers import parse_headers_from_bytes
 from duck.utils.importer import import_module_once
@@ -222,13 +223,14 @@ class HttpProxyHandler:
         )
         
         self.uses_ipv6 = uses_ipv6
-        self.target_host = target_host
+        self.target_host = socket.gethostbyname(target_host) if is_domain(target_host) else target_host
+        self.target_host = "127.0.0.1" if self.target_host.startswith("0.") else self.target_host # Windows compatibility
         self.target_port = target_port
         self.uses_ssl = uses_ssl
         
         if self.uses_ssl:
             raise ReverseProxyError("Reverse proxying to SSL servers not supported yet.")
-
+        
     def get_response(
         self,
         request: HttpRequest,
@@ -408,14 +410,14 @@ class AsyncHttpProxyResponse(HttpProxyResponse):
     Example Usage:
     
     ```py
-    response = HttpProxyResponse(
+    response = AsyncHttpProxyResponse(
         target_socket,
         payload_obj,
         content_obj,
         chunk_size,
     )
         
-    for content in await response.iter_content():
+    async for content in response.async_iter_content():
         # Content logic here
         pass
     ```

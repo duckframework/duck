@@ -262,3 +262,164 @@ class BasicExtension(Extension):
             
         # Finally, return request.
         return request
+
+
+class StyleCompatibilityExtension(Extension):
+    """
+    Extension for improving CSS style compatibility between browsers.
+    Automatically adds and (optionally) deletes vendor-prefixed versions
+    of certain CSS properties when setting or deleting styles.
+    """
+    def __init__(self, *args, **kw) -> None:
+        # Controls whether prefixed properties are deleted along with the main key
+        self.delete_compatibility_keys_on_delete = True
+
+        # Mapping of base CSS properties to their vendor-prefixed equivalents
+        self.compatibility_keys = {
+            # Layout and visual effects
+            "backdrop-filter": [
+                "-webkit-backdrop-filter",
+                "-ms-backdrop-filter",
+            ],
+            "box-shadow": [
+                "-webkit-box-shadow",
+                "-moz-box-shadow",
+            ],
+            "box-sizing": [
+                "-webkit-box-sizing",
+                "-moz-box-sizing",
+            ],
+            "appearance": [
+                "-webkit-appearance",
+                "-moz-appearance",
+            ],
+            "filter": [
+                "-webkit-filter",
+            ],
+            "opacity": [
+                "-webkit-opacity",
+                "-moz-opacity",
+            ],
+
+            # Transformations and animations
+            "transform": [
+                "-webkit-transform",
+                "-moz-transform",
+                "-ms-transform",
+                "-o-transform",
+            ],
+            "transform-origin": [
+                "-webkit-transform-origin",
+                "-moz-transform-origin",
+                "-ms-transform-origin",
+                "-o-transform-origin",
+            ],
+            "transition": [
+                "-webkit-transition",
+                "-moz-transition",
+                "-o-transition",
+            ],
+            "animation": [
+                "-webkit-animation",
+                "-moz-animation",
+                "-o-animation",
+            ],
+            "animation-delay": [
+                "-webkit-animation-delay",
+                "-moz-animation-delay",
+                "-o-animation-delay",
+            ],
+            "animation-duration": [
+                "-webkit-animation-duration",
+                "-moz-animation-duration",
+                "-o-animation-duration",
+            ],
+
+            # User interaction
+            "user-select": [
+                "-webkit-user-select",
+                "-moz-user-select",
+                "-ms-user-select",
+            ],
+            "touch-action": [
+                "-ms-touch-action",
+            ],
+            "cursor": [
+                "-webkit-cursor",
+            ],
+
+            # Gradients and backgrounds
+            "background-clip": [
+                "-webkit-background-clip",
+                "-moz-background-clip",
+            ],
+            "background-origin": [
+                "-webkit-background-origin",
+                "-moz-background-origin",
+            ],
+            "background-size": [
+                "-webkit-background-size",
+                "-moz-background-size",
+                "-o-background-size",
+            ],
+
+            # Flexbox
+            "display": [
+                "-webkit-box",       # old flexbox syntax
+                "-moz-box",
+                "-ms-flexbox",
+                "-webkit-flex",
+            ],
+            "align-items": [
+                "-webkit-align-items",
+                "-ms-flex-align",
+            ],
+            "justify-content": [
+                "-webkit-justify-content",
+                "-ms-flex-pack",
+            ],
+            "flex": [
+                "-webkit-flex",
+                "-ms-flex",
+            ],
+            "flex-direction": [
+                "-webkit-flex-direction",
+                "-ms-flex-direction",
+            ],
+
+            # Sticky and clipping
+            "clip-path": [
+                "-webkit-clip-path",
+            ],
+            "position": [
+                "-webkit-sticky",  # sticky support
+            ],
+        }
+
+        # Super init
+        super().__init__(*args, **kw)
+        
+    def on_create(self):
+        super().on_create()
+
+        def on_style_setitem(key, val):
+            """
+            Called on setting of style key to apply compatibility keys.
+            """
+            # Add vendor-prefixed versions if applicable
+            for compat_key in self.compatibility_keys.get(key, []):
+                self.style.__setitem__(compat_key, val, call_on_set_item_handler=False)
+
+        def on_style_delitem(key):
+            """
+            Called on deletion of a style key.
+            """
+            # Optionally delete vendor-prefixed versions
+            if self.delete_compatibility_keys_on_delete:
+                for compat_key in self.compatibility_keys.get(key, []):
+                    if compat_key in self.style:
+                        self.style.__delitem__(compat_key, call_on_delete_item_handler=False)
+
+        # Replace the style’s magic methods with our enhanced versions
+        self.style.on_set_item = on_style_setitem
+        self.style.on_delete_item = on_style_delitem

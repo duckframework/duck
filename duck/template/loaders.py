@@ -30,7 +30,7 @@ class BaseLoader:
     Base Loader class.
     """
     
-    def blueprint_template_dirs(self) -> Generator[None, None, Tuple[Blueprint, str]]:
+    def blueprint_template_dirs(self) -> Generator[Tuple[Blueprint, str], None, None]:
         """
         Returns a generator for the template directories for all blueprints.
         """
@@ -87,7 +87,6 @@ class Jinja2FileSystemLoader(BaseLoader, Jinja2BaseLoader):
         original_template_name = template
         
         for blueprint, template_dir in self.blueprint_template_dirs():
-            #print(template, template_dir)
             try:
                 template_path = blueprint_joinpath(template_dir, original_template_name, blueprint)
             except (BlueprintJoinPathError, BlueprintJoinPathNameNoMatch, ValueError):
@@ -114,13 +113,13 @@ class DjangoFileSystemLoader(BaseLoader, DjangoBaseLoader):
                     contents = fd.read()
                 return contents
             except FileNotFoundError:
-                # File not found anymore, maybe deleted.
+                # File not found anymore, may be deleted.
                 raise TemplateDoesNotExist(f"Template `{origin.name}` doesn't exist anymore.")
                 
         # Source not found
         raise TemplateDoesNotExist(f"Source template `{origin.name}` does not exist.")
          
-    def get_template_sources(self, template_name: str) -> Generator[None, None, "Origin"]:
+    def get_template_sources(self, template_name: str) -> Generator["Origin", None, None]:
         # Must be implemented for django
         # Provide all possible sources.
         from django.template import Origin
@@ -130,7 +129,6 @@ class DjangoFileSystemLoader(BaseLoader, DjangoBaseLoader):
         
         for template_dir in global_template_dirs:
             template_path = joinpaths(template_dir, template_name)
-            
             # Yield source
             yield Origin(
                 name=template_path,

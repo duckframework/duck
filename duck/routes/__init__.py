@@ -1,6 +1,7 @@
 """
 Module for route-specific actions.
 """
+import os
 import pathlib
 
 from typing import List
@@ -114,7 +115,7 @@ def blueprint_joinpath(blueprint_subdir: str, path: str, blueprint: Blueprint) -
     
     # Now continue.
     path = pathlib.Path(path)
-    blueprint_subdir = pathlib.Path(blueprint_subdir)
+    blueprint_subdir = pathlib.Path(blueprint_subdir.replace("\\", "/"))
     path_root_name = path.parts[0].strip('/')
     
     if path.is_absolute():
@@ -122,7 +123,7 @@ def blueprint_joinpath(blueprint_subdir: str, path: str, blueprint: Blueprint) -
     
     try:
         # Find if the blueprint_subdir belongs to the blueprint root directory.
-        _ = blueprint_subdir.relative_to(blueprint.root_directory)
+        _ = blueprint_subdir.relative_to(str(blueprint.root_directory).replace("\\", "/"))
     except ValueError as e:
         raise BlueprintJoinPathError(str(e))
     
@@ -132,6 +133,6 @@ def blueprint_joinpath(blueprint_subdir: str, path: str, blueprint: Blueprint) -
             "this may mean this path is not meant to be resolved at this blueprint subpath."
         )
     
-    # Remove the path's name and join with blueprint subpath.
-    path = str(path).lstrip('/').lstrip(path_root_name)        
+    # Remove the path's root name and join with blueprint subpath.
+    path = str(path).lstrip('/').lstrip(path_root_name)
     return joinpaths(blueprint_subdir, path)
