@@ -11,7 +11,6 @@ from typing import (
     Type,
     Coroutine,
 )
-
 from duck.etc.templatetags import (
     BUILTIN_TEMPLATETAGS,
 )
@@ -385,49 +384,32 @@ def get_preferred_log_style() -> str:
 
 # Initialize components based on settings
 WSGI = get_wsgi() if not SETTINGS['ASYNC_HANDLING'] else Lazy(get_wsgi)
-
-ASGI = get_asgi()
-
+ASGI = get_asgi() if SETTINGS['ASYNC_HANDLING'] else Lazy(get_asgi)
 FILE_UPLOAD_HANDLER = Lazy(get_file_upload_handler)
-
 USER_TEMPLATETAGS = get_user_templatetags()
-
 TEMPLATE_HTML_COMPONENT_TAGS = (
     LivelyComponentSystem.get_html_tags()
     if  SETTINGS.get("ENABLE_COMPONENT_SYSTEM")
     else []
 )
-
 ALL_TEMPLATETAGS = (
     USER_TEMPLATETAGS
     + BUILTIN_TEMPLATETAGS
     + TEMPLATE_HTML_COMPONENT_TAGS
 )
-
 REQUEST_CLASS = get_request_class()
-
 CONTENT_COMPRESSION = get_content_compression_settings()
-
 PROXY_HANDLER, ASYNC_PROXY_HANDLER = get_proxy_handlers() if SETTINGS["USE_DJANGO"] else (None, None)
-
 AUTOMATION_DISPATCHER, AUTOMATIONS = (
     Lazy(get_automation_dispatcher), Lazy(get_triggers_and_automations)
     if SETTINGS.get("RUN_AUTOMATIONS")
     else (None, []), 
 )
-
 URLPATTERNS = get_user_urlpatterns()
-
 BLUEPRINTS = get_blueprints()
-
 MIDDLEWARES = get_user_middlewares()
-
 NORMALIZERS = get_normalizers()
-
 SESSION_STORAGE = get_session_storage()
-
 SESSION_STORE = get_session_store()
-
 REQUEST_HANDLING_TASK_EXECUTOR = Lazy(get_request_handling_task_executor)
-
 PREFERRED_LOG_STYLE = Lazy(get_preferred_log_style)

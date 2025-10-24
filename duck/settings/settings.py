@@ -4,6 +4,8 @@ Provides access to application settings.
 import os
 import sys
 
+from functools import lru_cache
+
 from duck.exceptions.all import SettingsError
 from duck.utils.importer import import_module_once
 
@@ -15,21 +17,21 @@ SETTINGS_MODULE = os.environ.get("DUCK_SETTINGS_MODULE")
 
 class Settings(dict):
     """
-    A class for managing Duck settings.
+    A class for managing **Duck** settings.
     
     This class extends the built-in `dict` to store settings in a dictionary-like format.
-    It also provides a custom representation of the settings for debugging and logging.
+    It also provides a custom representation of the settings for debugging and logging.  
     
-    Notes:
+    **Notes:**
     - These settings can be altered at runtime once imported but the `SETTINGS` should be imported and
-      edited at top level before importing anything related to `Duck`.
+      edited at top level before importing anything related to **Duck**.  
        
-       Example:
+       **Example:**
        ```py
        from duck.settings import SETTINGS
        
-       # Edit settings here .e.g.,
-       # SETTINGS['ENABLE_HTTPS'] = True
+       # Edit settings inplace .e.g.,
+       SETTINGS['ENABLE_HTTPS'] = True
        
        from duck.app import App
        
@@ -39,7 +41,11 @@ class Settings(dict):
            app.run()
        ``` 
     """
+    
     source = None
+    """
+    The source of settings e.g., `web.settings`.
+    """
     
     def __repr__(self):
         # Provide a more detailed and readable string representation of the Settings object
@@ -49,18 +55,19 @@ class Settings(dict):
         )
 
 
+@lru_cache
 def settings_to_dict(settings_module: str) -> Settings:
     """
     Converts a settings module to a dictionary.
 
     Args:
-            settings_module (str): The path to the settings module.
+        settings_module (str): The path to the settings module.
 
     Returns:
-            Settings: Settings object derived from a dictionary containing the settings.
+        Settings: Settings object derived from a dictionary containing the settings.
 
     Raises:
-            ImportError: If the settings module cannot be imported.
+        ImportError: If the settings module cannot be imported.
     """
     settings_mod = import_module_once(settings_module)
     settings = Settings({})
@@ -70,7 +77,6 @@ def settings_to_dict(settings_module: str) -> Settings:
         if var.isupper():
             # is a valid setting variable
             settings[var] = getattr(settings_mod, var)
-    
     return settings
 
 
@@ -82,10 +88,10 @@ def get_combined_settings() -> Settings:
     read user settings from a `settings` module in the current directory.
 
     Returns:
-            Settings: Settings object derived from a dictionary containing the settings.
+        Settings: Settings object derived from a dictionary containing the settings.
 
     Raises:
-            SettingsError: If there's an error loading user settings.
+        SettingsError: If there's an error loading user settings.
     """
     default_settings = settings_to_dict("duck.etc.settings")
     
@@ -106,6 +112,7 @@ def get_combined_settings() -> Settings:
 # Set and load important settings, objects, etc.
 SETTINGS: Settings = get_combined_settings()
 
+
 # Set Django specific configurations
 if not SETTINGS_MODULE.startswith("web") and SETTINGS['DJANGO_SETTINGS_MODULE'].startswith('web.backend.django.duckapp.duckapp.settings'):
     # Duck settings module is external yet the Django settings module is default.
@@ -116,8 +123,10 @@ if not SETTINGS_MODULE.startswith("web") and SETTINGS['DJANGO_SETTINGS_MODULE'].
         # We need to fix the Django settings module
         SETTINGS['DJANGO_SETTINGS_MODULE'] = SETTINGS_MODULE.rsplit('.', 1)[0] + ".backend.django.duckapp.duckapp.settings"
         
+
 # Set django settings module
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', SETTINGS['DJANGO_SETTINGS_MODULE'])
+
 
 if (os.getenv("DUCK_USE_DJANGO", None) == "true"
     or "-dj" in sys.argv or "--use-django" in sys.argv):

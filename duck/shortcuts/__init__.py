@@ -19,11 +19,11 @@ from typing import (
     Callable,
     Dict,
 )
+from urllib.parse import urljoin
 from collections.abc import Iterable
 from functools import lru_cache
 
 from duck import template as _template
-from duck.settings import SETTINGS
 from duck.http.request import HttpRequest
 from duck.http.response import (
     BaseResponse,
@@ -50,6 +50,7 @@ from duck.contrib.sync import (
   convert_to_sync_if_needed,
 )
 from duck.contrib.websockets import WebSocketView
+from duck.settings import SETTINGS
 from duck.exceptions.all import (
     RouteNotFoundError,
     TemplateError,
@@ -102,22 +103,46 @@ def csrf_token(request) -> str:
     return token
 
 
-@lru_cache(maxsize=128)
 def static(resource_path: str) -> str:
     """
     Returns the absolute static url path for provided resource.
     """
-    from duck.etc.templatetags import static
-    return static(resource_path)
+    if not is_good_url_path(resource_path):
+        raise TypeError(f"Please provide valid URL path in form '/some/path' not {resource_path}")
+        
+    try:
+        root_url = Meta.get_absolute_server_url() # get absolute server url
+    except Exception:
+        root_url = "/"
+    
+    # Join and return final URL
+    static_url = SETTINGS["STATIC_URL"]
+    static_url = sanitize_path_segment(static_url)
+    resource_path = sanitize_path_segment(resource_path).lstrip("/")
+    static_url = urljoin(root_url, static_url) + "/"
+    return urljoin(static_url, resource_path)
 
 
-@lru_cache(maxsize=128)
 def media(resource_path: str) -> str:
     """
-    Returns the absolute media url path for provided resource.
+    Returns the absolute media URL path for provided resource.
     """
-    from duck.etc.templatetags import media
-    return media(resource_path)
+    if not is_good_url_path(resource_path):
+        raise TypeError(
+            f"Please provide valid url path in form '/some/path' not {resource_path}"
+        )
+    
+    try:
+        root_url = Meta.get_absolute_server_url() # get absolute server url
+    except Exception:
+        root_url = "/"
+    
+    # Join and return final URL
+    media_url = SETTINGS["MEDIA_URL"]
+    media_url = sanitize_path_segment(media_url)
+    resource_path = sanitize_path_segment(resource_path).lstrip("/")
+    media_url = urljoin(root_url, media_url) + "/"
+    return urljoin(media_url, resource_path)
 
 
 def jinja2_render(

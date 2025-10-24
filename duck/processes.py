@@ -21,13 +21,13 @@ Process JSON Format:
 }
 ```
 """
-
-import json
 import os
+import json
 
 from duck.settings import SETTINGS
 from duck.utils.filelock import open_and_lock
 from duck.utils.path import joinpaths
+
 
 BASE_DIR = str(SETTINGS["BASE_DIR"]).rstrip("/")
 FILENAME = ".processes.json"

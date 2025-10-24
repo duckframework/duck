@@ -63,9 +63,9 @@ dispatcher.start()  # Listen for triggers and execute automations infinitely
 """
 
 import time
+import asyncio
 import datetime
 import threading
-import asyncio
 
 from duck.contrib.sync import convert_to_async_if_needed
 from duck.contrib.asyncio import get_available_event_loop
@@ -643,8 +643,8 @@ class Automation:
     def execute(self):
         """
         This executes an automation.
-        Do whatever task you want here e.g. running bash scripts or something else.
-
+        Do whatever task you want here e.g. running bash scripts or something else.  
+        
         Example:
         ```py
         import os

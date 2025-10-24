@@ -3,7 +3,6 @@ Module containing proxy handler class.
 """
 import ssl
 import socket
-import importlib
 
 from http.cookies import SimpleCookie
 from collections import defaultdict

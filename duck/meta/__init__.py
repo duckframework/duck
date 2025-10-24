@@ -36,7 +36,9 @@ Classes:
 
 import os
 import ast
+
 from typing import Any
+
 
 class MetaError(Exception):
     """
@@ -62,8 +64,7 @@ class Meta:
         "DUCK_DJANGO_ADDR",
     ]
     """
-    List of keys that are allowed to include `:` or `;` in their values thereby bypassing MetaError when 
-    using `set_metadata`.
+    List of keys that are allowed to include `:` or `;` in their values thereby bypassing `MetaError` when using `set_metadata`.
     """
     
     @classmethod

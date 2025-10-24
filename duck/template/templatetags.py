@@ -30,10 +30,10 @@ class TemplateTag:
     Base class for defining and registering template tags.
 
     This class provides a unified way to register template tags in templating 
-    engines like Django or Jinja2. It supports callable tags, allowing flexible 
-    logic to be associated with the tag.
+    engines like **Django** or **Jinja2**. It supports callable tags, allowing flexible 
+    logic to be associated with the tag.  
 
-    Usage:
+    **Usage:**
         1. Define a callable function to handle the tag logic:
         
         ```py
@@ -48,37 +48,30 @@ class TemplateTag:
         tag = TemplateTag("my_tag", tagcallable=do_something)
         ```
         
-    Supported Syntax:
-        - Django: `{% my_tag arg1 arg2 %}`
-        - Jinja2: `{{ my_tag(arg1, arg2) }}`
+    **Supported Syntax:**
+    - Django: `{% my_tag arg1 arg2 %}`
+    - Jinja2: `{{ my_tag(arg1, arg2) }}`
     """
-
-    __all_tags = defaultdict(str)
-    # Dictionary for all created tags
+    
+    __all_tags = defaultdict(str) # Dictionary for all created tags
 
     def __init__(self,
-                 tagname: str,
-                 tagcallable: Callable,
-                 takes_context: bool = False):
+        tagname: str,
+        tagcallable: Callable,
+        takes_context: bool = False
+    ):
         self.tagname = tagname
         self.tagcallable = tagcallable
         self.takes_context = takes_context
 
-        assert isinstance(
-            tagname, str
-        ), f"Argument 'tagname' should be an instance of string not {type(tagname)}"
-        assert callable(
-            tagcallable
-        ), f"Argument 'tagcallable' should be a callable not {type(tagcallable)}"
-        assert isinstance(
-            takes_context, bool
-        ), f"Argument 'takes_context' should be a boolean not {type(takes_context)}"
+        assert isinstance(tagname, str), f"Argument 'tagname' should be an instance of string not {type(tagname)}"
+        assert callable(tagcallable), f"Argument 'tagcallable' should be a callable not {type(tagcallable)}"
+        assert isinstance(takes_context, bool), f"Argument 'takes_context' should be a boolean not {type(takes_context)}"
 
         if not self.__all_tags[tagname]:
             type(self).__all_tags[tagname] = self
         else:
-            raise TemplateTagError(
-                f"Repeated template tag '{tagname}', already exists")
+            raise TemplateTagError(f"Repeated template tag '{tagname}', already exists")
     
     @classmethod
     def get_tag(cls, tagname: str):
@@ -90,8 +83,7 @@ class TemplateTag:
         """
         tag = cls.__all_tags.get(tagname)
         if not tag:
-            raise TemplateTagError(
-                f"Template Tag with name '{tagname}' was never created.")
+            raise TemplateTagError(f"Template tag with name '{tagname}' was never created.")
         return tag
  
     def register_in_django(self, library):
@@ -143,12 +135,12 @@ class BlockTemplateTag(TemplateTag):
     
     To use this, name and tagcallable arguments should be provided.
     
-    Notes:
+    **Notes:**
     - The tagcallable should be a callable object accepting context as first argument if takes_context=True,
        and the second argument as the content wrapped between the tags.
     - The tagcallable should always return the new modified content after processing.
         
-    Example:
+    **Example:**
     
     ```py
     def do_something(content):
@@ -191,9 +183,9 @@ class BlockTemplateTag(TemplateTag):
                 # Parse the tag's arguments and keyword arguments
                 tokens = token.split_contents()
                 tag_name = tokens.pop(0)  # Remove the tag name
-        
                 args = []
                 kwargs = {}
+                
                 for token in tokens:
                     if "=" in token:
                         key, value = token.split("=", 1)
@@ -234,6 +226,7 @@ class BlockTemplateTag(TemplateTag):
             def _render_customblock(self, context, caller):
                 # Access context data here
                 content = caller()
+                
                 # Process the content as needed
                 if root_tag.takes_context:
                     return root_tag.tagcallable(context, content)
@@ -250,43 +243,35 @@ class TemplateFilter:
 
     This will be used to register this filter to a template.
 
-    Notes:
+    **Notes:**
         - TemplateFilter does not support takes_context. You need to parse the context directly if you need it.
-
+        
         Example:
         ```django
         {{ variable | myfilter:context }}
         ```
 
-    Form:
+    **Form:**
     ```django
     {{ variable | myfilter }}
     ```
     """
 
-    __all_filters = defaultdict(str)
-
-    # Dictionary for all created filters
+    __all_filters = defaultdict(str) # Dictionary for all created filters
 
     def __init__(self, filtername: str, filtercallable: Callable):
         self.filtername = filtername
         self.filtercallable = filtercallable
 
         # Improved assertions with clearer error messages and more explicit checks
-        
-        assert isinstance(filtername, str), \
-            f"Argument 'filtername' should be a string, but got {type(filtername).__name__} instead."
-        
+        assert isinstance(filtername, str), f"Argument 'filtername' should be a string, but got {type(filtername).__name__} instead."
         assert filtername, "Argument 'filtername' cannot be an empty string."
-        
-        assert callable(filtercallable), \
-            f"Argument 'filtercallable' should be callable, but got {type(filtercallable).__name__} instead."
+        assert callable(filtercallable), f"Argument 'filtercallable' should be callable, but got {type(filtercallable).__name__} instead."
         
         if not self.__all_filters[filtername]:
             type(self).__all_filters[filtername] = self
         else:
-            raise TemplateFilterError(
-                f"Repeated template filter '{filtername}', already exists")
+            raise TemplateFilterError(f"Repeated template filter '{filtername}', already exists")
 
     @classmethod
     def get_filter(cls, filtername: str):

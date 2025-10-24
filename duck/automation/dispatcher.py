@@ -54,16 +54,20 @@ class AutomationDispatcher:
     """
 
     __queue: dict[AutomationTrigger, list[Automation]] = {}
-    """Dictionary of automation triggers mapping to their Automations"""
+    """
+    Dictionary of automation triggers mapping to their Automations.
+    """
 
     __executed_automations: list[Automation] = []
-    """List of automations that has been started, these may be in finished or running state"""
+    """
+    List of automations that has been started, these may be in finished or running state.
+    """
 
     poll: int | float = 1
     """
-	  Poll interval to listen for triggers
-	  """
-
+    Poll interval to listen for triggers
+	"""
+	
     def __init__(self, application=None):
         self.__force_stop = False
         self.application = application
@@ -184,7 +188,6 @@ class AutomationDispatcher:
 
 
 class DispatcherV1(AutomationDispatcher):
-
     def listen(self):
         for trigger in set(self.queue.keys()):
             trigger_satisfied = trigger.check_trigger() # whether trigger is satisfied or fulfilled

@@ -71,12 +71,13 @@ import setproctitle
 from typing import Optional
 
 import duck.processes as processes
+import duck.contrib.reloader.ducksight as reloader
+
 from duck.settings import SETTINGS
 from duck.settings.loaded import (
     AUTOMATION_DISPATCHER,
     AUTOMATIONS,
 )
-import duck.contrib.reloader.ducksight as reloader
 from duck.app.microapp import HttpsRedirectMicroApp
 from duck.exceptions.all import (
     ApplicationError,
@@ -104,6 +105,7 @@ from duck.utils.asyncio.eventloop import AsyncioLoopManager
 
 # Import Django bridge function only if USE_DJANGO=True
 bridge = None # will be set if USE_DJANGO=True
+
 
 if SETTINGS['USE_DJANGO']:
     from duck.backend.django import bridge
@@ -198,7 +200,7 @@ class App:
         - Only a single instance of the main `App` should be created. For additional services or sub-applications, use `MicroApp`.
             
         - Set `disable_ipc_handler=False` **only** in a test environment.
-              The IPC handler introduces a blocking mechanism that keeps the main interpreter running.
+              The `IPC` handler introduces a blocking mechanism that keeps the main interpreter running.
               Disabling it in production may lead to unhandled or improperly managed requests, as the blocking behavior is essential for proper execution.
               The app will be run in background and `app.run` won't be blocking anymore.
         """

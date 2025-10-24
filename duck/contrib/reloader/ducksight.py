@@ -1,7 +1,5 @@
 """
-# Ducksight Reloader
-
-Watches for file changes and enables dynamic reloading in **DEBUG mode**.
+**Ducksight Reloader** watches for file changes and enables dynamic reloading in **DEBUG mode**.
 """
 import os
 import sys
@@ -11,8 +9,8 @@ import fnmatch
 import platform
 import traceback
 import subprocess
-import multiprocessing
 import setproctitle
+import multiprocessing
 
 import duck.processes as processes
 
@@ -33,7 +31,7 @@ BASE_DIR = str(SETTINGS["BASE_DIR"]).rstrip("/")
 
 def set_state(state: str) -> str:
     """
-    Set the state of the DuckSightReloader in a file.
+    Set the state of the `DuckSightReloader` in a file.
 
     Args:
         state (str): The new state, either 'alive' or 'dead'.
@@ -48,9 +46,9 @@ def set_state(state: str) -> str:
 
     if state not in {"alive", "dead"}:
         raise TypeError("State should be one of ['alive', 'dead']")
-
+        
     mode = "w" if os.path.isfile(state_file) else "x"
-
+    
     with open_and_lock(state_file, mode) as fd:
         fd.write(state)
 
