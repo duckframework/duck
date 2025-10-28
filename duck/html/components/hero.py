@@ -13,7 +13,7 @@ class Hero(FlexContainer):
         super().on_create()
         self.style["flex-direction"] = "column"
         self.style["width"] = "100%"
-        self.style["height"] = "100vh"
+        self.style["min-height"] = "100vh"
         self.style["justify-content"] = "center"
         self.style["overflow"] = "hidden"
-        self.properties["class"] = "hero"
+        self.props["class"] = "hero"

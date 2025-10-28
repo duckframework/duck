@@ -5,6 +5,8 @@ import os
 import sys
 import importlib
 
+from functools import lru_cache
+
 
 def import_module_once(module_name, package: str = None):
     """
@@ -17,6 +19,7 @@ def import_module_once(module_name, package: str = None):
     return mod
 
 
+@lru_cache
 def x_import(object_path, package: str = None):
     """
     Function to import an object or class from a path e.g. `os.path.Path`

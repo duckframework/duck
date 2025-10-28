@@ -309,7 +309,13 @@ class EventHandler:
                 msg += (
                     " This may indicate an unbound or missing component."
                 )
+            
+            # Log some blank line.
             logger.log(msg + "\n", level=logger.WARNING)
+            
+            # Send a response that this component is not found
+            must_reload = bool(SETTINGS['RELOAD_ON_UNKNOWN_COMPONENTS'])
+            await self.ws_view.send_data([EventOpCode.COMPONENT_UNKNOWN, [uid, must_reload]])
             return
         
         if is_document_event and not isinstance(component, Page):

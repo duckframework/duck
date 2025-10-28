@@ -152,7 +152,7 @@ def home(request):
 import re
 import secrets
 
-from collections import deque
+from collections import deque, UserDict
 from typing import (
     Dict,
     List,
@@ -177,6 +177,7 @@ from duck.html.components.core.exceptions import (
     EventAlreadyBound,
     ComponentAttributeProtection,
 )
+
 
 # Patten for matching an html tag/element.
 ELEMENT_PATTERN = re.compile(r"\b[a-zA-Z0-9]+\b")
@@ -223,70 +224,164 @@ def to_component(html: Optional[str] = None, tag: str = 'span', no_closing_tag: 
 class PropertyStore(dict):
     """
     A dictionary subclass to store properties for HTML components, with certain restrictions.
-    """
-    __slots__ = []
+
+    Keys and values must both be strings. Certain methods (pop, popitem, update, setdefault, etc.)
+    are overridden to ensure they utilize the custom __setitem__ and __delitem__ logic,
+    including event hooks for set and delete operations.  
     
-    def __setitem__(self, key: str, value: str, call_on_set_item_handler: bool = True):
+    **Args:**
+    - `*args`: Arguments to initialize the dictionary.
+    - `**kwargs`: Keyword arguments to initialize the dictionary.
+    """
+    __slots__ = ()
+
+    def __setitem__(self, key: str, value: str, call_on_set_item_handler: bool = True) -> None:
         """
         Sets the value for the given key if the key is allowed.
 
         Args:
             key (str): The key to set the value for. Must be a string.
             value (str): The value to set. Must be a string.
-            call_on_set_item_handler (bool): Whether to call `on_set_item` method after the actual `__setitem__`.
+            call_on_set_item_handler (bool): Whether to call `on_set_item` after the actual `__setitem__`.
 
         Raises:
-            KeyError: If the key is 'style', as it is not allowed to be set.
             AssertionError: If the key or value is not a string.
         """
         assert isinstance(key, str), f"Keys for `PropertyStore` must be strings not {type(key)}"
         assert isinstance(value, str), f"Values for `PropertyStore` must be strings not {type(value)}"
-        
-        key = key.strip().lower()
-        super().__setitem__(key, value)
-        
+        k = key.strip().lower()
+        super().__setitem__(k, value)
         if call_on_set_item_handler:
-            self.on_set_item(key, value)
+            self.on_set_item(k, value)
 
     def __delitem__(self, key: str, call_on_delete_item_handler: bool = True) -> None:
         """
-        Delete a key from the property store.
+        Deletes a key from the property store.
 
         Args:
-            key (str): The key to set the value for. Must be a string.
-            call_on_delete_item_handler (bool): Whether to call `on_delete_item` method after the actual `__delitem__`.
-
+            key (str): The key to delete. Must be a string.
+            call_on_delete_item_handler (bool): Whether to call `on_delete_item` after the actual `__delitem__`.
         """
-        super().__delitem__(key)
-        
+        k = key.strip().lower()
+        super().__delitem__(k)
         if call_on_delete_item_handler:
-            self.on_delete_item(key)
-    
-    def __repr__(self):
+            self.on_delete_item(k)
+
+    def __repr__(self) -> str:
         """
         Returns a string representation of PropertyStore.
 
         Returns:
             str: String representation of the PropertyStore.
         """
-        return f"<{self.__class__.__name__} {super().__repr__()}>"
-        
-    def setdefaults(self, data: Dict):
+        return f"<{self.__class__.__name__} {dict(self).__repr__()}>"
+
+    def update(self, data: Any = None, call_on_set_item_handler: bool = True, *args, **kwargs) -> None:
         """
-        Method setdefault on multiple items
+        Updates the PropertyStore with the key/value pairs from data, ensuring setitem logic.
+
+        Args:
+            data (Any): Mapping or iterable to update from.
+            call_on_set_item_handler (bool): Whether to call `on_set_item` for each item.
+            *args, **kwargs: Additional data.
+        """
+        if data is not None:
+            if hasattr(data, 'items'):
+                items = data.items()
+            else:
+                items = data
+            for key, value in items:
+                self.__setitem__(key, value, call_on_set_item_handler)
+        for key, value in dict(*args, **kwargs).items():
+            self.__setitem__(key, value, call_on_set_item_handler)
+
+    def setdefault(self, key: str, default: Optional[str] = None, call_on_set_item_handler: bool = True) -> str:
+        """
+        Inserts key with a value of default if key is not in the dictionary.
+
+        Args:
+            key (str): The key to check.
+            default (str, optional): The default value to set if key is missing.
+            call_on_set_item_handler (bool): Whether to call `on_set_item` if setting.
+
+        Returns:
+            str: The value for the key.
+        """
+        k = key.strip().lower()
+        if k not in self:
+            self.__setitem__(k, default if default is not None else '', call_on_set_item_handler)
+            return default if default is not None else ''
+        return self[k]
+
+    def pop(self, key: str, default: Any = None) -> Any:
+        """
+        Removes the specified key and returns its value.
+        If key is not found, default is returned if provided, otherwise KeyError is raised.
+
+        Args:
+            key (str): The key to remove.
+            default (Any, optional): The value to return if key is not found.
+
+        Returns:
+            Any: The value associated with the key, or default.
+
+        Raises:
+            KeyError: If key is not found and default is not provided.
+        """
+        k = key.strip().lower()
+        if k in self:
+            value = self[k]
+            self.__delitem__(k)
+            return value
+        elif default is not None:
+            return default
+        else:
+            raise KeyError(k)
+
+    def popitem(self) -> Tuple[str, str]:
+        """
+        Removes and returns a (key, value) pair from the dictionary.
+        Pairs are returned in LIFO order.
+
+        Returns:
+            Tuple[str, str]: The removed (key, value) pair.
+
+        Raises:
+            KeyError: If the dictionary is empty.
+        """
+        try:
+            k, v = next(reversed(self.items()))
+        except StopIteration:
+            raise KeyError(f"{self.__class__.__name__} is empty")
+        self.__delitem__(k)
+        return k, v
+
+    def setdefaults(self, data: Dict[str, str]) -> None:
+        """
+        Calls setdefault on multiple items.
+
+        Args:
+            data (Dict[str, str]): The key-value pairs to set as defaults.
         """
         for key, value in data.items():
             self.setdefault(key, value)
-    
-    def on_set_item(self, key: str, value: Any):
+
+    def on_set_item(self, key: str, value: Any) -> None:
         """
-        Called on `__setitem__`.
+        Called after `__setitem__`.
+
+        Args:
+            key (str): The key set.
+            value (Any): The value set.
         """
         pass
 
-    def on_delete_item(self, key: str):
+    def on_delete_item(self, key: str) -> None:
         """
-        Called on `__delitem__`.
+        Called after `__delitem__`.
+
+        Args:
+            key (str): The key deleted.
         """
         pass
 

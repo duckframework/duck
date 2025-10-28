@@ -1,14 +1,15 @@
 """
 Timer Utility module for scheduling callables.
 """
-
-import threading
 import time
+import threading
 
 
 class TimerThreadPool:
     all: list = []
-    """List of all threads added through the use of any Timer class"""
+    """
+    List of all threads added through the use of any `Timerˋ class.
+    """
 
 
 class Timer:
@@ -17,7 +18,9 @@ class Timer:
     """
 
     all_threads: list[threading.Thread] = []
-    """List of all alive or dead threads scheduled"""
+    """
+    List of all alive or dead threads scheduled.
+    """
 
     @classmethod
     def _schedule_interval(cls, function: callable, seconds: int):
@@ -39,8 +42,7 @@ class Timer:
 
     @classmethod
     def schedule_interval(cls, function: callable, seconds: int):
-        th = threading.Thread(target=cls._schedule_interval,
-                              args=[function, seconds])
+        th = threading.Thread(target=cls._schedule_interval, args=[function, seconds])
         th.start()
         cls.all_threads.append(th)
         TimerThreadPool.all.append(th)
@@ -48,20 +50,19 @@ class Timer:
 
 class OverlappingTimer:
     """
-    This Timer Utility stops all running threads scheduled with the use of this class and then runs the new schedule in a new thread.
-
-    NOTE: This only share threads from an initialized object.
+    This Timer Utility stops all running threads scheduled with the use of this class and then runs the new schedule in a new thread.  
+    
+    **NOTE:** This only share threads from an initialized object.
     """
 
     def __init__(self):
-        self.all_threads: list[threading.Thread] = (
-            [])  # List of all threads scheduled
+        self.all_threads: list[threading.Thread] = ([])  # List of all threads scheduled
 
     def get_running_thread(self):
         """
-        Get the latest thread that was created when using any of the methods (schedule or schedule_interval)
-
-        WARNING: If the latest thread is done running, None will be returned
+        Get the latest thread that was created when using any of the methods (schedule or schedule_interval).  
+        
+        **WARNING:**# If the latest thread is done running, None will be returned
         """
         if not self.all_threads:
             return None
@@ -81,8 +82,8 @@ class OverlappingTimer:
 
     def schedule(self, function: callable, seconds: int):
         th = threading.Thread(target=self._schedule, args=[function, seconds])
-
-        # stop all threads that were created by using schedule method
+        
+        # Stop all threads that were created by using schedule method
         for thread in self.all_threads:
             if thread.is_alive():
                 try:
@@ -97,9 +98,9 @@ class OverlappingTimer:
         TimerThreadPool.all.append(th)
 
     def schedule_interval(self, function: callable, seconds: int):
-        th = threading.Thread(target=self._schedule_interval,
-                              args=[function, seconds])
-        # stop all threads that were created by using schedule_interval method
+        th = threading.Thread(target=self._schedule_interval, args=[function, seconds])
+        
+        # Stop all threads that were created by using schedule_interval method
         for thread in self.all_threads:
             if thread.is_alive():
                 try:
@@ -116,19 +117,21 @@ class OverlappingTimer:
 
 class SharedOverlappingTimer:
     """
-    This Timer Utility stop all running threads scheduled with the use of this class and then runs the new schedule in a new thread
-
-    NOTE: This shares all threads from this class
+    This Timer Utility stop all running threads scheduled with the use of this class and then runs the new schedule in a new thread.  
+    
+    **NOTE:** This shares all threads from this class
     """
 
     all_threads: list[threading.Thread] = []
-    """List of all threads scheduled"""
+    """
+    List of all threads scheduled.
+    """
 
     def get_running_thread(self):
         """
-        Get the latest thread that was created when using any of the methods (schedule or schedule_interval)
-
-        WARNING: If the latest thread is done running, None will be returned
+        Get the latest thread that was created when using any of the methods (schedule or schedule_interval).  
+        
+        **WARNING:** If the latest thread is done running, None will be returned
         """
         if not self.all_threads:
             return None
@@ -149,7 +152,7 @@ class SharedOverlappingTimer:
     def schedule(self, function: callable, seconds: int):
         th = threading.Thread(target=self._schedule, args=[function, seconds])
 
-        # stop all threads that were created by using schedule method
+        # Stop all threads that were created by using schedule method
         for thread in self.all_threads:
             if thread.is_alive():
                 try:
@@ -164,9 +167,9 @@ class SharedOverlappingTimer:
         TimerThreadPool.all.append(th)
 
     def schedule_interval(self, function: callable, seconds: int):
-        th = threading.Thread(target=self._schedule_interval,
-                              args=[function, seconds])
-        # stop all threads that were created by using schedule_interval method
+        th = threading.Thread(target=self._schedule_interval, args=[function, seconds])
+        
+        # Stop all threads that were created by using schedule_interval method
         for thread in self.all_threads:
             if thread.is_alive():
                 try:

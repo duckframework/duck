@@ -72,12 +72,14 @@ const EventOpCodes = {
   JS_EXECUTION_RESULT: 111,
   NAVIGATE_TO: 120,
   NAVIGATION_RESULT: 121,
+  COMPONENT_UNKNOWN: 150,
 };
 
 EventOpCodes.CLIENT_EVENT_OPCODES = new Set([
   EventOpCodes.APPLY_PATCH,
   EventOpCodes.EXECUTE_JS,
   EventOpCodes.NAVIGATION_RESULT,
+  EventOpCodes.COMPONENT_UNKNOWN,
 ]);
 
 /**
@@ -660,11 +662,11 @@ class DOMPatcher {
    * Animates an element entering, returns a Promise resolved after animation.
    * Uses robust cleanup and supports duration override.
    * @param {HTMLElement} el - Element to animate in.
-   * @param {number} duration - Duration of animation (ms). Defaults to null for default duration.
+   * @param {number} duration - Duration of animation (ms). Defaults to 10 ms.
    * @param {string} animClass - Animation class to apply (default "patch-fade-in").
    * @returns {Promise<void>}
    */
-  async animateIn(el, duration = null, animClass = "patch-fade-in") {
+  async animateIn(el, duration = 10, animClass = "patch-fade-in") {
     return new Promise(resolve => {
       function handleAnimationEnd() {
         el.classList.remove(animClass);
@@ -683,11 +685,11 @@ class DOMPatcher {
    * Animates an element exiting, returns a Promise resolved after animation.
    * Uses robust cleanup and supports duration override.
    * @param {HTMLElement} el - Element to animate out.
-   * @param {number} duration - Duration of animation (ms). Defaults to null for default duration.
+   * @param {number} duration - Duration of animation (ms). Defaults to 10 for default duration.
    * @param {string} animClass - Animation class to apply (default "patch-fade-out").
    * @returns {Promise<void>}
    */
-  async animateOut(el, duration = null, animClass = "patch-fade-out") {
+  async animateOut(el, duration = 10, animClass = "patch-fade-out") {
     return new Promise(resolve => {
       function handleAnimationEnd() {
         el.classList.remove(animClass);
@@ -1645,7 +1647,7 @@ class NavigationHandler {
     else if (this.navigationInProgress) {
       // The server has got patches for us.
       let progress = window.LIVELY_APPLICATION.PAGE_PROGRESS;
-      const progressBar = window.LIVELY_APPLICATION.PAGE_PROGRESS_BAR;
+      let progressBar = window.LIVELY_APPLICATION.PAGE_PROGRESS_BAR;
       
       // Update progress bar with transform.
       progress = window.LIVELY_APPLICATION.PAGE_PROGRESS = Math.min(progress + 10, 95);
@@ -1673,6 +1675,9 @@ class NavigationHandler {
       // Apply new patches
       await window.LIVELY_APPLICATION.patcher.applyPatches(patches, true);
       
+      // Reinitialize progress bar if it has changed (this will get a live result for progress bar)
+      progressBar = window.LIVELY_APPLICATION.PAGE_PROGRESS_BAR;
+      
       // We have received all patches but we might not be done patching the DOM.
       if (isFinal) {
         const progressBarInner = progressBar.querySelector('#progress-bar-inner');
@@ -1689,6 +1694,12 @@ class NavigationHandler {
           
           // Reinitialize the new page.
           reinitializePage(true);
+          
+          if (this.scrollCoordinates) {
+              window.scrollTo(this.scrollCoordinates);
+              // Reset scroll coordinates
+              this.scrollCoordinates = null;
+            }
           return;
         }
         
@@ -1700,6 +1711,13 @@ class NavigationHandler {
             
             // Reinitialize the new page.
             reinitializePage(true);
+            
+            if (this.scrollCoordinates) {
+              window.scrollTo(this.scrollCoordinates);
+              
+              // Reset scroll coordinates
+              this.scrollCoordinates = null;
+            }
           }
         }
         
@@ -1927,6 +1945,23 @@ class LivelyWebSocketClient {
             await NavigationHandler.handleResponse(fullpath, fullreload, nextPageUid, patches, isFinal);
             break;
           }
+          
+          case EventOpCodes.COMPONENT_UNKNOWN: {
+            // Handle the response from server
+            const [_, must_reload] = data;
+            const snackbar = window.LIVELY_APPLICATION.PAGE_SNACKBAR;
+            
+            if (must_reload) {
+              // Show an info snackbar and autohide.
+              snackbar.LABEL.textContent = "Session expired, reloading...";
+              showSnackbar(snackbar, "warning", 2000);
+              
+              // Server can't provide patches if it has no reference to current component so,
+              // do a fullpage reload.
+              window.location.reload();
+            }
+            break;
+          }
         }
       }
     };
@@ -2044,15 +2079,27 @@ class LivelyApp {
     * Initialize the Lively entry point.
     */
   constructor () {
+    /**
+     * @private
+     * @type {LRUCache<string, HTMLElement>}
+     * Cache to store recently fetched DOM elements by ID.
+     */
+    this.__cachedLiveDOMElements = new LRUCache(128);
+    
+    // Some metadata
     this.DEBUG = window.LIVELY_DEBUG;
     this.WS_URL = window.LIVELY_WS_URL;
     
     // Keep track of components (components that may be represent full webpage).
     this.PAGE_UID = window.PAGE_UID || null;
     this.INITIAL_PAGE_UID = this.PAGE_UID;
-    this.PAGE_SNACKBAR = document.getElementById("page-snackbar");
+    
+    // Define Live DOM elements (they always refetch from DOM if the cached elem ID doesn't match the initial ID)
+    this.defineLiveElementProperty("PAGE_SNACKBAR", "page-snackbar");
+    this.defineLiveElementProperty("PAGE_PROGRESS_BAR", "page-progress-bar");
+    
+    // Assign important elem specific attributes
     this.PAGE_SNACKBAR.LABEL = this.PAGE_SNACKBAR.querySelector("#snackbar-label");
-    this.PAGE_PROGRESS_BAR = document.getElementById("page-progress-bar");
     this.PAGE_PROGRESS = 0;
     
     // Do some magic
@@ -2068,6 +2115,71 @@ class LivelyApp {
     this.initialized = true;
   }
   
+  /**
+   * Defines a *live* property on the current instance that automatically
+   * resolves to a DOM element with a given ID. The property uses an internal
+   * LRU cache to store and reuse recently fetched elements, and it will
+   * transparently re-fetch from the DOM whenever the cached element is
+   * missing, detached, or replaced.
+   *
+   * Example:
+   * ```js
+   * this.defineLiveElementProperty("PAGE_SNACKBAR", "page-snackbar");
+   * console.log(this.PAGE_SNACKBAR); // → <div id="page-snackbar">...</div>
+   * ```
+   *
+   * Once defined, accessing `this.PAGE_SNACKBAR` will always return the most
+   * recent `<div id="page-snackbar">` element in the document, even if the
+   * DOM changes dynamically.
+   *
+   * Setting the property manually (e.g. `this.PAGE_SNACKBAR = someElem`) will
+   * override the cached reference and update the LRU cache entry.
+   *
+   * @param {string} propertyName - The name of the property to define on this instance.
+   * @param {string} elemID - The `id` attribute of the DOM element to bind to.
+   *
+   * @private
+   */
+  defineLiveElementProperty(propertyName, elemID) {
+    const self = this;
+  
+    Object.defineProperty(this, propertyName, {
+      configurable: true,
+      enumerable: true,
+  
+      get() {
+        // Try cache first
+        let cached = self.__cachedLiveDOMElements.get(elemID);
+  
+        // Verify the element still exists in the DOM
+        if (!cached || cached.id !== elemID || !document.body.contains(cached)) {
+          // Refetch from DOM
+          const elem = document.getElementById(elemID);
+          
+          if (elem) {
+            // Store in cache
+            self.__cachedLiveDOMElements.set(elemID, elem);
+            cached = elem;
+          }
+          else if (self.DEBUG) {
+            console.warn(`[Lively] Element with ID '${elemID}' not found.`);
+          }
+        }
+        return cached || null;
+      },
+  
+      set(value) {
+        // Allow manual override, but also update the cache
+        if (value instanceof HTMLElement) {
+          self.__cachedLiveDOMElements.set(elemID, value);
+        }
+        else if (self.DEBUG) {
+          console.warn(`[Lively] Attempted to set ${propertyName} to a non-HTMLElement.`);
+        }
+      }
+    });
+  }
+
   /**
    * Prepares custom Duck-specific DOM events.
    * This utility supports future extension to multiple event types.

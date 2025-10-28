@@ -49,7 +49,6 @@ class BaseResponsePayload:
         Args:
             cookies_obj (SimpleCookie): The SimpleCookie object to set.
         """
-        
         if not isinstance(cookies_obj, SimpleCookie):
             raise ValueError("Expected a SimpleCookie object.")
         self._cookies = cookies_obj

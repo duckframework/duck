@@ -50,6 +50,7 @@ class Modal(FlexContainer):
             "background": "rgba(0, 0, 0, 0.68)", # Slightly stronger dark overlay for dark modals
             "justify-content": "center",
             "z-index": "1000",
+            "flex-direction": "column",
             "display": "none", # Hide by default.
             "overflow": "hidden", # Ensures overlay itself doesn't scroll
         }
@@ -157,13 +158,10 @@ class Modal(FlexContainer):
                     setModalHeight(modal);
                     
                     // Try to find first child with overflow:auto (the modal content)
-                    const modalContent = modal.querySelector('[style*="overflow: auto"],[style*=\"overflow:auto\"]');
+                    const modalContent = modal.querySelector('#modal-content');
                     if (modalContent) {{
-                      if ('scrollTo' in modalContent) {{
-                        modalContent.scrollTo({{top:0, behavior:'smooth'}});
-                      }} else {{
-                        modalContent.scrollTop = 0;
-                      }}
+                      const modalContentTop = getOffsetTop(modalContent);
+                      window.scrollTo({{top: modalContentTop, behavior: "smooth"}});
                     }}
                   }}
                 }}
@@ -176,13 +174,13 @@ class Modal(FlexContainer):
             }}
             
             if (document.readyState !== "complete") {{
-              const modal = document.getElementById(`{self.id}`);
+              const modal = document.getElementById('{self.id}');
               document.addEventListener('DOMContentLoaded', () => {{
                    if ({str(open_on_ready).lower()})  openModal(document.getElementById('{self.id}'), true);
               }});
             }}
             else {{
-              const modal = document.getElementById(`{self.id}`);
+              const modal = document.getElementById('{self.id}');
               if ({str(open_on_ready).lower()})  openModal(document.getElementById('{self.id}'), true);
             }}
             """

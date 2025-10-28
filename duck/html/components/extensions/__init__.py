@@ -1,7 +1,7 @@
 """
-Extensions module for components.
+Extensions module for components.  
 
-Usage example:
+**Usage example:**
 
 ```py
 from duck.html.components.button import Button

@@ -85,6 +85,7 @@ class HomePage(Page):
 class HomePage(Page):
     def on_create(self):
         super().on_create()
+        self.id = "counterapp-page"
         self.style["font-family"] = "system-ui"
         self.set_title("Simple Counter App")
         

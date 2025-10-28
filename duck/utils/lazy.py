@@ -10,7 +10,9 @@ from typing import Callable, Tuple, Any
 
 
 class LazyError(Exception):
-    """Custom exception for Lazy evaluation errors."""
+    """
+    Custom exception for Lazy evaluation errors.
+    """
     pass
 
 

@@ -2,7 +2,9 @@
 Module containing function for including bulk HTML components in a module.
 """
 import inspect
+
 from typing import List, Dict
+from functools import lru_cache
 
 from duck.html.components import HtmlComponent
 from duck.utils.string import is_pascal_case
@@ -10,7 +12,6 @@ from duck.utils.importer import import_module_once
 
 
 BASE_MODULE = "duck.html.components"
-
 BUILTIN_COMPONENTS = [
     f"{BASE_MODULE}.{module}" for module in [
         "page",
@@ -46,6 +47,7 @@ BUILTIN_COMPONENTS = [
 ]
 
 
+@lru_cache
 def components_include(modules: List[str]) -> Dict[str, str]:
     """
     This looks up HTML components in the provided modules and returns a dictionary containing the components found.

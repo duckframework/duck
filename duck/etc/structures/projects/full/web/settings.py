@@ -187,6 +187,11 @@ ASYNC_LOOP: str = "asyncio"
 ENABLE_COMPONENT_SYSTEM: bool = True
 
 
+# Reload On Unknown Components
+# Whether to reload pages when a requested Lively component is not found or expired.
+RELOAD_ON_UNKNOWN_COMPONENTS: bool = True
+
+
 # Template Lively HTML Components
 # Components to include in templates.
 # Uncomment to enable default builtin components or add yours!

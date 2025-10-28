@@ -126,6 +126,8 @@ def setup(make_app_dirs: bool = True):
     Notes:
         - This configures and registers all routes either simple or ones created
     """
+    from duck.backend.django.setup import prepare_django, DjangoSetupWarning
+    
     base_dir = str(SETTINGS['BASE_DIR'])
     
     # Set asyncio event loop for ASYNC_HANDLING or HTTP/2
@@ -136,7 +138,13 @@ def setup(make_app_dirs: bool = True):
         # Only make app dirs if not in testing environment
         if not is_testing_environment():
             makedirs()  # app dirs creation
-           
+            
+    # Try preparing Django backend
+    try:
+        prepare_django(True)
+    except Exception as e:
+        logger.warn(f"Django setup failed: {e}", DjangoSetupWarning)
+    
     # Register some urlpatterns
     register_urlpatterns(URLPATTERNS)
     register_blueprints(BLUEPRINTS)

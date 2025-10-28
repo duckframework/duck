@@ -2,7 +2,6 @@
 Threading utilities and helpers.
 """
 import os
-import psutil
 import platform
 import threading
 
@@ -18,7 +17,8 @@ def get_max_workers() -> int:
     Returns:
         int: Suggested max_workers value (min 8, max 2000)
     """
-
+    import psutil
+    
     # --- System info ---
     cpu_count = os.cpu_count() or 1
 

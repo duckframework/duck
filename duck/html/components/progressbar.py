@@ -22,7 +22,7 @@ class ProgressBar(Container):
         super().on_create()
         
         # Set up the styles for the loading bar
-        self.bg_color = "#f0f0f0"
+        self.bg_color = "rgba(0, 255, 0, 0.1)"
         self.style["width"] = "100%"
         self.style["height"] = "3px"
         self.style["border-radius"] = "3px"

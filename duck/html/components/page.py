@@ -101,6 +101,7 @@ from duck.html.components.core.exceptions import UnknownEventError, EventAlready
 from duck.html.components.extensions import RequestNotFoundError
 from duck.html.components.lively import LivelyScripts
 from duck.html.components.script import Script
+from duck.html.components.container import Container
 from duck.html.components.progressbar import ProgressBar
 from duck.html.components.snackbar import Snackbar
 from duck.html.components.label import Label
@@ -113,6 +114,12 @@ from duck.utils.lazy import Lazy
 class PageError(Exception):
     """
     Raised when required request context is missing.
+    """
+
+
+class UnrecommendedAddChildWarning(Warning):
+    """
+    Warning that gets flagged when a user try to use `add_child` on a **Page** component instead of using `add_to_body` or `add_to_head`.
     """
 
 
@@ -380,7 +387,7 @@ class Page(InnerComponent):
         
         # Add base css style to be used by lively system
         self.base_css = Style(
-            text="""
+            inner_html="""
             /* Fade-in on add/replace */
             .patch-fade-in {
               opacity: 0;
@@ -437,14 +444,14 @@ class Page(InnerComponent):
             title="🌐 Unsupported Browser Detected",
             id="unsupported-browser-banner",
         )
-        self.unsupported_browser_banner.style["align-items"] = "center"
-        self.unsupported_browser_banner.style["display"] = "none"
+        self.unsupported_browser_banner.add_to_registry = False
+        self.unsupported_browser_banner.style["align-items"] = "flex-start"
+        self.unsupported_browser_banner.style["padding"] = "20px"
         
         # Minimalist dark modal content styling
         self.unsupported_browser_banner.modal_content.style.update({
             "padding": "24px 20px",               # Classic padding
             "text-align": "center",
-            "border": "1px solid #ccc"
         })
         
         self.unsupported_browser_info = Paragraph(
@@ -466,7 +473,9 @@ class Page(InnerComponent):
         # Set banner content.
         self.unsupported_browser_banner.set_content(self.unsupported_browser_info)
         
-        # Add banner.
+        # Add container to store unsupported browser banner html
+        self.unsupported_browser_banner_container = Container(id="unsupported-browser-banner-container")
+        #self.unsupported_browser_banner_container.add_child(self.unsupported_browser_banner)
         self.add_to_body(self.unsupported_browser_banner)
         
         if LivelyComponentSystem.is_active():
@@ -475,16 +484,25 @@ class Page(InnerComponent):
             self.add_script(
                 inline=f"""
                 document.addEventListener("DOMContentLoaded", () => {{
+                  const unsupportedBrowserBanner = document.getElementById(`{self.unsupported_browser_banner.id}`);
                   setTimeout(() => {{
                     if (!window.LIVELY_SCRIPT_COMPATIBLE && window.receivedFullLivelyJs) {{
-                      const banner = document.getElementById(`{self.unsupported_browser_banner.id}`);
-                      openModal(banner);
+                      console.log("Not supported");
+                      openModal(unsupportedBrowserBanner);
                     }}
                   }}, 10); // Delay a little bit
                 }});
                 """
             )
             
+    def add_child(self, child):
+        head = getattr(self, 'head', None)
+        body = getattr(self, "body", None)
+        
+        if child not in [head, body]:
+            logger.warn("Adding a child directly to page component is not recommended. Consider using `add_to_body` or `add_to_head` instead.", UnrecommendedAddChildWarning)
+        return super().add_child(child)
+        
     def set_title(self, title: str):
         """
         Set page title.

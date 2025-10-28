@@ -2,7 +2,6 @@
 Module for loading objects defined in `settings.py` or in the Duck application configuration.
 Provides functions to retrieve various components and configurations dynamically.
 """
-
 from typing import (
     Any,
     List,
@@ -34,15 +33,7 @@ from duck.html.components.core.system import LivelyComponentSystem
 from duck.settings import SETTINGS
 from duck.utils.importer import (import_module_once, x_import)
 from duck.utils.lazy import Lazy
-from duck.backend.django.setup import prepare_django, DjangoSetupWarning
 from duck.logging import logger
-
-
-# Try preparing Django backend
-try:
-    prepare_django(True)
-except Exception as e:
-    logger.warn(f"Django setup failed: {e}", DjangoSetupWarning)
 
 
 def get_wsgi() -> Any:
@@ -52,7 +43,6 @@ def get_wsgi() -> Any:
     Raises:
         SettingsError: If `WSGI` is not defined or cannot be imported.
     """
-
     wsgi_path = SETTINGS.get("WSGI")
     
     if not wsgi_path:
@@ -71,7 +61,6 @@ def get_asgi() -> Any:
     Raises:
         SettingsError: If `ASGI` is not defined or cannot be imported.
     """
-
     asgi_path = SETTINGS.get("ASGI")
     
     if not asgi_path:
@@ -142,17 +131,20 @@ def get_content_compression_settings():
         SettingsError: If `CONTENT_COMPRESSION` is not defined or cannot be imported.
     """
     content_compression = SETTINGS.get("CONTENT_COMPRESSION")
+    
     if not content_compression:
-        raise SettingsError(
-            "Please define CONTENT_COMPRESSION in `settings.py`.")
+        raise SettingsError("Please define CONTENT_COMPRESSION in `settings.py`.")
+    
     try:
         if not isinstance(content_compression, dict):
             raise SettingsError("CONTENT_COMPRESSION should be a dictionary.")
+        
         encoding = content_compression.get("encoding")
         if encoding not in ("gzip", "deflate", "br", "identity"):
             raise SettingsError(
                 f"Invalid encoding: {encoding}. Must be one of 'gzip', 'deflate', 'identity' or 'br'."
             )
+        
         if encoding == "br":
             try:
                 pass
@@ -161,9 +153,9 @@ def get_content_compression_settings():
                     "Brotli decompression requires brotli library, please install it first using `pip install brotli`"
                 ) from e
         return content_compression
+    
     except Exception as e:
-        raise SettingsError(
-            f"Failed to load content compression settings: {e}") from e
+        raise SettingsError(f"Failed to load content compression settings: {e}") from e
 
 
 def get_proxy_handlers() -> List[Type[Any]]:
@@ -272,9 +264,9 @@ def get_blueprints() -> List[Blueprint]:
     Returns necessary loaded blueprints.
 
     Notes:
-        - In condition that the user hasn't defined urlpatterns and blueprints,
-         or all of the defined blueprints are builtins,
-        Duck's default site blueprint will be added blueprints list.
+     - In condition that the user hasn't defined urlpatterns and blueprints,
+       or all of the defined blueprints are builtins,
+       **Duck's** default site blueprint will be added blueprints list.
     """
     ducksite_blueprint = x_import("duck.etc.apps.defaultsite.blueprint.DuckSite")
     blueprints = SETTINGS["BLUEPRINTS"]
@@ -383,10 +375,10 @@ def get_preferred_log_style() -> str:
 
 
 # Initialize components based on settings
-WSGI = get_wsgi() if not SETTINGS['ASYNC_HANDLING'] else Lazy(get_wsgi)
-ASGI = get_asgi() if SETTINGS['ASYNC_HANDLING'] else Lazy(get_asgi)
+WSGI = Lazy(get_wsgi)
+ASGI = Lazy(get_asgi)
 FILE_UPLOAD_HANDLER = Lazy(get_file_upload_handler)
-USER_TEMPLATETAGS = get_user_templatetags()
+USER_TEMPLATETAGS = Lazy(get_user_templatetags)
 TEMPLATE_HTML_COMPONENT_TAGS = (
     LivelyComponentSystem.get_html_tags()
     if  SETTINGS.get("ENABLE_COMPONENT_SYSTEM")
@@ -398,18 +390,18 @@ ALL_TEMPLATETAGS = (
     + TEMPLATE_HTML_COMPONENT_TAGS
 )
 REQUEST_CLASS = get_request_class()
-CONTENT_COMPRESSION = get_content_compression_settings()
-PROXY_HANDLER, ASYNC_PROXY_HANDLER = get_proxy_handlers() if SETTINGS["USE_DJANGO"] else (None, None)
+CONTENT_COMPRESSION = Lazy(get_content_compression_settings)
+PROXY_HANDLER, ASYNC_PROXY_HANDLER = Lazy(get_proxy_handlers) if SETTINGS["USE_DJANGO"] else (None, None)
 AUTOMATION_DISPATCHER, AUTOMATIONS = (
     Lazy(get_automation_dispatcher), Lazy(get_triggers_and_automations)
     if SETTINGS.get("RUN_AUTOMATIONS")
     else (None, []), 
 )
-URLPATTERNS = get_user_urlpatterns()
-BLUEPRINTS = get_blueprints()
-MIDDLEWARES = get_user_middlewares()
-NORMALIZERS = get_normalizers()
+URLPATTERNS = Lazy(get_user_urlpatterns)
+BLUEPRINTS = Lazy(get_blueprints)
+MIDDLEWARES = Lazy(get_user_middlewares)
+NORMALIZERS = Lazy(get_normalizers)
 SESSION_STORAGE = get_session_storage()
-SESSION_STORE = get_session_store()
+SESSION_STORE = Lazy(get_session_store)
 REQUEST_HANDLING_TASK_EXECUTOR = Lazy(get_request_handling_task_executor)
 PREFERRED_LOG_STYLE = Lazy(get_preferred_log_style)

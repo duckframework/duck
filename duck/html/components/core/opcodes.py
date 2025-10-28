@@ -142,3 +142,14 @@ class EventOpCode(enum.IntEnum):
         patches_list: List of patches to apply. 
         is_final: Whether this is a final navigation result. Useful in when sending partial patches to the client.
     """
+    
+    COMPONENT_UNKNOWN = 150
+    """
+    int: Send a response to the client that an event cannot be dispatched because the requested component is not found, maybe expired.
+    
+    Format: [150, [component_uid, reload]]
+    
+    Where:
+        component_uid: The unique ID for the unknown component.
+        reload: Whether to reload the page as a result of this component.
+    """

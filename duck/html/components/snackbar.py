@@ -45,6 +45,8 @@ class Snackbar(FlexContainer):
             bg = "#f44336"
         elif self.type == "info":
            bg = "#2196f3"
+        elif self.type == "warning":
+            bg = "#FFB300"
         else:
             bg = "#43a047"
         self.style["background"] = bg
@@ -62,7 +64,8 @@ class Snackbar(FlexContainer):
                 if (type === "error") bg = "#f44336";
                 else if (type === "info") bg = "#2196f3";
                 else if (type === "success") bg = "#43a047";
-        
+                else if (type === "warning") bg = "#FFB300";
+                
                 if (bg) {{
                     snackbar.style.background = bg;
                 }}

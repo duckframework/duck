@@ -58,7 +58,7 @@ class LivelyScripts(Container):
         self.prepare_script = Script(
             inner_html=(
                 f"window.LIVELY_WS_URL = '{ws_url}';"
-                f"window.LIVELY_DEBUG = {'true' if SETTINGS['DEBUG'] else 'false'}"
+                f"window.LIVELY_DEBUG = {'true' if SETTINGS['DEBUG'] else 'false'};"
             ),
         )
         
