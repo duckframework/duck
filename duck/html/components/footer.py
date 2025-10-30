@@ -31,7 +31,7 @@ class FooterBlock(FlexContainer):
         
         if "heading" in self.kwargs:
             heading = self.kwargs.get('heading')
-            self.heading = Heading("h2", text=heading, klass="footer-heading")
+            self.heading = Heading("h2", text=heading, klass="footer-heading", color="white")
             self.heading.style["font-size"] = "1.2rem"
             self.add_child(self.heading)
             
