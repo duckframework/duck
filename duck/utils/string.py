@@ -170,6 +170,14 @@ def to_camel_case(text: str, separator: str = "_") -> str:
     return words[0] + ''.join(word.title() for word in words[1:])
 
 
+def to_spaced_camel_case(value: str) -> str:
+    """
+    Converts a PascalCase or camelCase string into a spaced string.  
+    **Example:** 'SomeItem' -> 'Some Item'
+    """
+    return re.sub(r'(?<!^)(?=[A-Z])', ' ', value).strip()
+
+
 def find_and_replace(text: str, target: str, replacement: str) -> str:
     """
     Replace all occurrences of a target substring with a replacement string.

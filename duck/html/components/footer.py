@@ -56,7 +56,8 @@ class FooterItems(FlexContainer):
         super().on_create()
         self.style["gap"] = "10px"
         self.style["padding"] = Theme.padding
-        self.style["justify-content"] = "space-around"
+        self.style["justify-content"] = "space-between"
+        self.style["flex-wrap"] = "wrap"
         
         if "footer_items" in self.kwargs:
              for heading, elements in self.kwargs.get('footer_items', {}).items():

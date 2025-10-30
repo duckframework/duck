@@ -61,13 +61,12 @@ def run_on_available_loop(
                     sync_future.set_exception(e)
             future.add_done_callback(_transfer_result)
             return sync_future
-
         return future
     else:
         raise RuntimeError("Event loop is None or not running.")
 
 
-def get_available_event_loop():
+def get_available_event_loop() -> asyncio.AbstractEventLoop:
     """
     Retrieve an available asyncio event loop depending on the application's execution context.
 
@@ -78,12 +77,14 @@ def get_available_event_loop():
 
     Returns:
         asyncio.AbstractEventLoop: The available asyncio event loop.
-
+    
+    Raises:
+        RuntimeError: If no loop is found.
+        
     Example:
         >>> loop = get_available_event_loop()
         >>> print(loop.is_running())  # Check if the event loop is running
     """
-    from duck.settings import SETTINGS
     from duck.settings.loaded import SETTINGS, REQUEST_HANDLING_TASK_EXECUTOR
     
     if SETTINGS['ASYNC_HANDLING']:
@@ -92,4 +93,6 @@ def get_available_event_loop():
     else:
         # Retrieve the loop from the AsyncioLoopManager in non-async contexts
         event_loop = AsyncioLoopManager._loop
+    if not event_loop:
+        raise RuntimeError("Event loop is None or not running.")
     return event_loop

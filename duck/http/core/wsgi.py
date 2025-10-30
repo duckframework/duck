@@ -42,6 +42,7 @@ from duck.contrib.responses.errors import (
     get_bad_request_error_response,
 )
 from duck.contrib.sync import convert_to_sync_if_needed
+from duck.contrib.asyncio import get_available_event_loop
 from duck.utils.xsocket import xsocket
 from duck.settings import SETTINGS
 
@@ -50,19 +51,18 @@ class WSGI:
     """
     Web Server Gateway Interface for the Duck HTTP server
 
-    Notes:
-                - The WSGI callable is the entry point for the server to handle requests.
-                - The WSGI callable will be called for each incoming request.
-                - The WSGI callable will handle the request and send the response to the client.
-                - The WSGI callable will be called with the following arguments:
-                                - application: The Duck application instance.
-                                - client_socket: The client xsocket object.
-                                - client_address: The client address tuple.
-                                - request_data: The raw request data from the client.
-                - The WSGI is also responsible for sending request to remote servers like Django for processing.
-
-                Implement methods get_request, start_response and __call__ to create your custom WSGI callable.
-
+    **Notes:**
+    - The WSGI callable is the entry point for the server to handle requests.
+    - The WSGI callable will be called for each incoming request.
+    - The WSGI callable will handle the request and send the response to the client.
+    - The WSGI callable will be called with the following arguments:
+           - application: The Duck application instance.
+           - client_socket: The client xsocket object.
+           - client_address: The client address tuple.
+           - request_data: The raw request data from the client.
+    - The WSGI is also responsible for sending request to remote servers like Django for processing.
+     
+    Implement methods get_request, start_response and __call__ to create your custom WSGI callable.
     """
     def __init__(self, settings: Dict[str, Any]):
         self.settings = settings
@@ -257,6 +257,19 @@ class WSGI:
             disable_logging=False,
         )
         
+        # Check if another protocol is in use and the request is target on Django endpoint
+        if isinstance(response, HttpProxyResponse):
+            # If HttpProxyResponse, this mean this response is from Django remote server. 
+            if response.status_code == 101:
+                from duck.settings.loaded import ASGI
+                from duck.utils.asyncio import create_task
+                from duck.utils.asyncio.eventloop import AsyncioLoopManager
+                
+                # Start loop for handling some protocol other than HTTP e.g., websockets
+                async def task():
+                    create_task(ASGI.handle_django_connection_upgrade(request, response))
+                _ = AsyncioLoopManager.submit_task(task())
+                
     def __call__(
         self,
         application,

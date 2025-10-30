@@ -349,8 +349,7 @@ class CSRFMiddleware(BaseMiddleware):
             # csrf cookie needs to be sent to client
             csrf_secret = request.META.get("CSRF_COOKIE")
             csrf_cookie_name = SETTINGS["CSRF_COOKIE_NAME"]
-            csrf_cookie_domain = SETTINGS["CSRF_COOKIE_DOMAIN"] or \
-                Meta.get_metadata("DUCK_SERVER_DOMAIN")
+            csrf_cookie_domain = SETTINGS["CSRF_COOKIE_DOMAIN"] or Meta.get_metadata("DUCK_SERVER_DOMAIN")
             max_age = SETTINGS["CSRF_COOKIE_AGE"]
             expires = datetime.datetime.now(datetime.UTC) + datetime.timedelta(seconds=max_age)
             path = SETTINGS["CSRF_COOKIE_PATH"]
@@ -393,8 +392,7 @@ class CSRFMiddleware(BaseMiddleware):
         csrf_session_key = CSRF_SESSION_KEY
         csrf_cookie_name = SETTINGS["CSRF_COOKIE_NAME"]
         csrf_header_name = SETTINGS["CSRF_HEADER_NAME"]
-        csrf_secret_from_cookie = request.COOKIES.get(
-            csrf_cookie_name) or request.get_header(csrf_header_name)
+        csrf_secret_from_cookie = request.get_header(csrf_header_name) or request.COOKIES.get(csrf_cookie_name)
 
         if csrf_secret_from_cookie:
             request.META["CSRF_COOKIE"] = csrf_secret_from_cookie
@@ -407,6 +405,7 @@ class CSRFMiddleware(BaseMiddleware):
             correct_csrf_secret = request.SESSION.get(csrf_session_key)
         else:
             correct_csrf_secret = csrf_secret_from_cookie
+        
         try:
             cls.check_csrf_cookie(request)
         except CSRFCookieError as e:

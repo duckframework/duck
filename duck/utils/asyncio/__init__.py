@@ -24,10 +24,14 @@ def create_task(
         loop (Optional): Custom event loop to use for creating task.
          
     Raises:
+        RuntimeError: If the loop is provided and is not running.
         Exception or CancelledError: If not ignored and raise_on_exception is True.
     """
     if ignore_errors is None:
         ignore_errors = [asyncio.CancelledError]
+    
+    if loop and not loop.is_running():
+        raise RuntimeError("Event loop provided yet it is not running.")
 
     task = loop.create_task(coro) if loop else asyncio.create_task(coro)
     
@@ -50,7 +54,6 @@ def create_task(
                     on_complete(t)
                 except Exception as e:
                     logger.log_exception(e)  # Optionally log
-
     task.add_done_callback(on_task_done)
     return task
 

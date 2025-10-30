@@ -1,11 +1,13 @@
 """
-This module provides the ASGI (Web Server Gateway Interface) for the Duck HTTP server.
+This module provides the **ASGI** (Web Server Gateway Interface) for the Duck HTTP server.
 
 ASGI is a specification that describes how a web server communicates with web applications.
 This module will define the ASGI callable that the server will use to serve requests.
 """
+import ssl
 import time
 import socket
+import asyncio
 
 from typing import (
     Any,
@@ -44,6 +46,8 @@ from duck.contrib.responses.errors import (
 )
 from duck.contrib.sync import convert_to_async_if_needed
 from duck.utils.xsocket import xsocket
+from duck.utils.xsocket.io import SocketIO
+from duck.utils.asyncio import create_task
 from duck.settings import SETTINGS
 
 
@@ -51,19 +55,18 @@ class ASGI:
     """
     Asynchronous Server Gateway Interface for the Duck HTTP server
 
-    Notes:
-                - The ASGI callable is the entry point for the server to handle requests.
-                - The ASGI callable will be called for each incoming request.
-                - The ASGI callable will handle the request and send the response to the client.
-                - The ASGI callable will be called with the following arguments:
-                                - application: The Duck application instance.
-                                - client_socket: The client xsocket object.
-                                - client_address: The client address tuple.
-                                - request_data: The raw request data from the client.
-                - The ASGI is also responsible for sending request to remote servers like Django for processing.
-
-                Implement methods get_request, start_response and __call__ to create your custom ASGI callable.
-
+    **Notes:**
+    - The ASGI callable is the entry point for the server to handle requests.
+    - The ASGI callable will be called for each incoming request.
+    - The ASGI callable will handle the request and send the response to the client.
+    - The ASGI callable will be called with the following arguments:
+           - application: The Duck application instance.
+           - client_socket: The client xsocket object.
+           - client_address: The client address tuple.
+           - request_data: The raw request data from the client.
+    - The ASGI is also responsible for sending request to remote servers like Django for processing.
+    
+    Implement methods get_request, start_response and __call__ to create your custom ASGI callable.
     """
 
     def __init__(self, settings: Dict[str, Any]):
@@ -283,7 +286,6 @@ class ASGI:
         """
         # Upgrade response already sent at this point.
         from duck.contrib.websockets import log_message
-        
         upgrade = upgrade_request.get_header("upgrade", "").strip()
         
         if upgrade and upgrade_response.status_code == 101:
@@ -294,20 +296,19 @@ class ASGI:
             
             if upgrade.lower() == "websocket":
                 is_ws_upgrade = True
-                log_message(self.request, f"{path} [Django] [WebSocket] [OPEN]")
+                log_message(upgrade_request, f"{path} [Django] [WebSocket] [OPEN]")
             else:
-                log_message(self.request, f"{path} [Django] {upgrade.capitalize()} [OPEN]")
-            
-            # Now handle the new protocol
-            # Ensure both sockets are not in blocking mode.
-            sock.setblocking(False)
-            django_server_sock.setblocking(False)
+                log_message(upgrade_request, f"{path} [Django] {upgrade.capitalize()} [OPEN]")
             
             try:
+                # Now handle the new protocol
+                # Ensure both sockets are not in blocking mode.
+                sock.setblocking(False)
+                django_server_sock.setblocking(False)
+            
                 # First receive something from client
                 while True:
                     await asyncio.sleep(0)
-                    
                     client_data = await SocketIO.async_receive(
                         sock,
                         protocol_receive_buffer,
@@ -323,7 +324,7 @@ class ASGI:
                         )
                     
                     # Receive data from Django and send it to client
-                    django_data = await SocketIO.async_receive(django_server_sock, protocol_receive_buffer, protocol_receive_buffer)
+                    django_data = await SocketIO.async_receive(django_server_sock, protocol_receive_buffer, protocol_receive_timeout)
                     
                     if django_data:
                         # Send data to client immediately
@@ -338,15 +339,16 @@ class ASGI:
                 OSError,
                 BrokenPipeError,
                 TimeoutError,
+                asyncio.CancelledError,
             ):
                 # Ignore connection related errors.
                 pass
             
             finally:
                 if is_ws_upgrade:
-                    log_message(self.request, f"{path} [Django] [WebSocket] [OPEN]")
+                    log_message(upgrade_request, f"{path} [Django] [WebSocket] [CLOSE]")
                 else:
-                     log_message(self.request, f"{path} [Django] {upgrade.capitalize()} [CLOSE]")     
+                     log_message(upgrade_request, f"{path} [Django] {upgrade.capitalize()} [CLOSE]")     
     
     async def __call__(
         self,

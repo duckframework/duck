@@ -117,7 +117,7 @@ class VDomNode:
             patches.append([PatchCode.REPLACE_NODE, old.key, new.to_list()])
             return patches
     
-        # Text update
+        # Text/html update
         if old.text != new.text:
             patches.append([PatchCode.ALTER_TEXT, old.key, new.text])
             

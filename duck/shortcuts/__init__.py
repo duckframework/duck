@@ -94,12 +94,7 @@ def csrf_token(request) -> str:
     Returns the csrf token, whether for django or duck request.
     """
     from duck.template.csrf import get_csrf_token
-    
-    if not SETTINGS["USE_DJANGO"]:
-        token = get_csrf_token(request)  # csrf_token
-    else:
-        from django.middleware.csrf import get_token
-        token = get_token(request)
+    token = get_csrf_token(request)  # csrf_token
     return token
 
 
@@ -633,23 +628,28 @@ def resolve(name: str, absolute: bool = True, fallback_url: Optional[str] = None
         raise URLResolveError(f"No URL in registry is associated with name '{name}' ")
 
 
-def to_response(value: Any) -> Union[BaseResponse, HttpResponse]:
+def to_response(value: Any, **kwargs) -> Union[BaseResponse, HttpResponse]:
     """
     Converts any value to http response (including html components).
-
+    
+    Args:
+        value (Any): The target object to convert/transform.
+        **kwargs: The keyword arguments to parse to the HTTP response instance.
+        
+    Raises:
+        TypeError: If the value is not convertable to http response.
+    
     Notes:
     - If value is already a response object, nothing will be done.
 
-    Raises:
-        TypeError: If the value is not convertable to http response.
     """
-    allowed_types = (int, str, float, dict, list, set, Component)
+    allowed_types = (int, str, bytes, float, dict, list, set, Component)
 
     if not isinstance(value, BaseResponse):
         if not any([isinstance(value, t) for t in allowed_types]):
             raise TypeError(f"Value '{value}' cannot be converted to http response. Consider these types: {allowed_types}")
         if isinstance(value, Component):
-            value = ComponentResponse(value)
+            value = ComponentResponse(value, **kwargs)
         else:
-            value = HttpResponse("%s" % value)
+            value = HttpResponse("%s" % value if not isinstance(value, bytes) else value, **kwargs)
     return value

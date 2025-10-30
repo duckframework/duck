@@ -77,7 +77,7 @@ class AsyncioLoopManager:
                 return sync_future
             return future
         else:
-            raise RuntimeError("Event loop is not running. Call start() first.")
+            raise RuntimeError("Event loop is not running. Method start() must be called first.")
 
     @classmethod
     def get_event_loop(cls) -> asyncio.AbstractEventLoop:

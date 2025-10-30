@@ -927,28 +927,81 @@ class DOMPatcher {
         }
     }
   }
-
- /**
-   * Sets an element textContent or innerHTML depending on text provided.
-   * Uses regex to check for HTML tags or HTML entities.
+  
+  /**
+   * Sets an element's `textContent` or `innerHTML` depending on the provided text.
+   * Automatically initializes <script> tags if HTML is inserted.
+   *
+   * Logic:
+   *  - Uses regex to detect if the text contains HTML tags or entities.
+   *  - If it’s plain text → sets `textContent`.
+   *  - If it’s HTML → sets `innerHTML` and executes embedded <script> tags.
+   *  - External scripts (`src`) are loaded before inline ones, preserving order.
+   *  - Skips re-initializing scripts already marked with `data-init="true"`.
+   *
    * @param {HTMLElement} el The target element.
-   * @param {string} text The raw or markup text.
+   * @param {string | any} text The raw or markup text.
+   * @returns {Promise<void>} Resolves after scripts are executed (if any).
    */
-  setElementTextOrHtml(el, text) {
+  async setElementTextOrHtml(el, text) {
+    /**
+     * Initializes <script> tags within or matching the element.
+     * Must be called after setting `innerHTML`.
+     */
+    async function reinitializeElementScripts() {
+      // Collect <script> tags that haven’t been initialized yet.
+      const scripts = Array.from(el.querySelectorAll("script"))
+        .filter(s => !s.dataset.init);
+  
+      // If the element itself is a <script>, include it.
+      if (el.tagName && el.tagName.toUpperCase() === "SCRIPT" && !el.dataset.init) {
+        scripts.push(el);
+      }
+  
+      // Execute scripts sequentially to preserve order.
+      for (const oldScript of scripts) {
+        const newScript = document.createElement("script");
+  
+        // Copy all attributes (src, type, etc.)
+        for (const attr of oldScript.attributes) {
+          newScript.setAttribute(attr.name, attr.value);
+        }
+  
+        // Mark as initialized to prevent duplicate execution.
+        newScript.dataset.init = "true";
+  
+        if (oldScript.src) {
+          // External script — wait for it to load before continuing.
+          await new Promise((resolve, reject) => {
+            newScript.onload = resolve;
+            newScript.onerror = reject;
+            oldScript.replaceWith(newScript);
+          });
+        } else {
+          // Inline script — execute immediately.
+          newScript.textContent = oldScript.textContent;
+          oldScript.replaceWith(newScript);
+        }
+      }
+    }
+  
+    // Handle non-string or null values gracefully.
     if (typeof text !== "string") {
       el.textContent = text == null ? "" : String(text);
       return;
     }
-    
-   // Check for HTML tags OR HTML entities.
+  
+    // Detect HTML tags or entities.
     const hasHtmlTag = /<[a-z][\s\S]*>/i.test(text.trim());
     const hasHtmlEntity = /&[a-zA-Z0-9#]+;/.test(text);
-    
+  
     if (hasHtmlTag || hasHtmlEntity) {
       el.innerHTML = text;
     } else {
       el.textContent = text;
     }
+    // Maybe the scripts inside the innerHTML changed or the el itself is a script tag.
+    await reinitializeElementScripts();
   }
   
   /**

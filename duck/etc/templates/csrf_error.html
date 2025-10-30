@@ -2,7 +2,7 @@
 {# This template uses Django's templating engine and is only rendered in the user's browser if DEBUG=True #}  
 {% extends "base_response.html" %}  
 
-{% block title %}CSRF Error{% endblock title %}  
+{% block title %}CSRF Middleware Error{% endblock title %}  
 
 {% block nav_links %}
 <!-- Clear navigation links for this error page -->  
@@ -10,20 +10,35 @@
 
 {% block main %}
 <div class="container" id="error-container">
-    <h1>Oops! Something went wrong</h1>
-    <h2 id="subheading">CSRF Middleware token error!</h2>
+    <h1>CSRF Middleware Error</h1>
     <p>
-        Duck does not trust this site: {{ request.build_absolute_uri('/') }}
+        Duck does not trust this site: <b>{{ request.build_absolute_uri('/') }}</b>
     </p>
 
     {% if reason %}
     <p><strong>Reason:</strong> {{ reason }}.</p>
+    {% endif %}
+    
     <p>
     Duck implements CSRF tokens to enhance security, ensuring that your browser is protected from unauthorized third-party access and preventing potential hijacking attempts.
     </p>
-    <p>Perhaps, you forgot to include &#123;% csrf_token &#125; or CSRFInput component in your form!</p>
-    <br>
-    {% endif %}
+    
+    <p>
+      It looks like you may have forgotten to include a CSRF token in your form.  
+      Please ensure you’ve added one of the following:
+    </p>
+    <ul>
+      <li><code>&#123;% csrf_token %&#125;</code> — for Django templates.</li>
+      <li><code>&#123;&#123; csrf_token() &#125;&#125;</code> — for Jinja2 templates.</li>
+      <li>or just use the <code>CSRFInput</code> component from <code>duck.html.components.input</code> module.</li>
+    </ul>
+    
+    <p>
+      The <code>csrf_token</code> function is available at <code>duck.shortcuts.csrf_token</code>.  
+      To bypass the need for a CSRF token from cookies, you can instead send the
+      <code>X-Csrf-Token</code> header.  
+      This approach is especially useful when making <b>AJAX</b> requests.
+    </p>
 
     <p>
         You are seeing this page because <code>DEBUG=True</code> in your Duck settings.  
