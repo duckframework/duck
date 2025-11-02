@@ -4,17 +4,15 @@ Module for setting up Duck space and configure all necessary components to ensur
 
 import os
 import sys
+import threading
 import asyncio
+
 from typing import List
 
 from duck.exceptions.all import SettingsError
 from duck.routes import register_blueprints, register_urlpatterns
 from duck.settings import SETTINGS
-from duck.settings.loaded import (
-    BLUEPRINTS,
-    URLPATTERNS,
-    REQUEST_HANDLING_TASK_EXECUTOR,
-)
+from duck.settings.loaded import SettingsLoaded
 from duck.html.components.core.system import LivelyComponentSystem
 from duck.env import is_testing_environment
 
@@ -115,7 +113,7 @@ def set_asyncio_loop():
             asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
-def setup(make_app_dirs: bool = True):
+def setup(make_app_dirs: bool = True, use_threads_for_heavy_work: bool = True):
     """
     Setup the Duck application.
 
@@ -126,6 +124,7 @@ def setup(make_app_dirs: bool = True):
     Notes:
         - This configures and registers all routes either simple or ones created
     """
+    # Improve the setup it's taking approx >= 2s
     from duck.backend.django.setup import prepare_django, DjangoSetupWarning
     
     base_dir = str(SETTINGS['BASE_DIR'])
@@ -133,12 +132,15 @@ def setup(make_app_dirs: bool = True):
     # Set asyncio event loop for ASYNC_HANDLING or HTTP/2
     set_asyncio_loop()
     
-    # Create base application directories
+    # Create base application (directories
     if make_app_dirs:
         # Only make app dirs if not in testing environment
         if not is_testing_environment():
-            makedirs()  # app dirs creation
-            
+            if use_threads_for_heavy_work:
+                threading.Thread(target=makedirs).start()  # app dirs creation
+            else:
+                makedirs()
+                
     # Try preparing Django backend
     try:
         prepare_django(True)
@@ -146,8 +148,8 @@ def setup(make_app_dirs: bool = True):
         logger.warn(f"Django setup failed: {e}", DjangoSetupWarning)
     
     # Register some urlpatterns
-    register_urlpatterns(URLPATTERNS)
-    register_blueprints(BLUEPRINTS)
+    register_urlpatterns(SettingsLoaded.URLPATTERNS)
+    register_blueprints(SettingsLoaded.BLUEPRINTS)
     
     # Register Lively component system urlpattern
     if LivelyComponentSystem.is_active():
@@ -160,4 +162,7 @@ def setup(make_app_dirs: bool = True):
     
     # Initialize the RequestHandlingExecutor lazily after prepare_django as this line will
     # make the whole setup very slow.
-    REQUEST_HANDLING_TASK_EXECUTOR() # load executor lazilyu
+    if use_threads_for_heavy_work:
+        threading.Thread(target=lambda: SettingsLoaded.REQUEST_HANDLING_TASK_EXECUTOR()).start() # load executor lazily
+    else:
+        SettingsLoaded.REQUEST_HANDLING_TASK_EXECUTOR()

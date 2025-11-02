@@ -84,7 +84,6 @@ def log_raw(
     """
     if SILENT:
         # Do not log anything in this mode.
-        print(SILENT)
         return
         
     std = sys.stderr if level in {ERROR, CRITICAL} else sys.stdout

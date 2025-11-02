@@ -143,10 +143,10 @@ class Jinja2Engine(Engine):
         environment: Optional[jinja2.Environment] = None,
         loader: Any = None,
     ):
-        from duck.settings.loaded import ALL_TEMPLATETAGS
+        from duck.settings.loaded import SettingsLoaded
         from duck.template.loaders import Jinja2FileSystemLoader, BaseLoader # Best for Duck use-case
         
-        self._duck_templatetags = ALL_TEMPLATETAGS
+        self._duck_templatetags = SettingsLoaded.ALL_TEMPLATETAGS
         self.autoescape = autoescape
         self.custom_templatetags = custom_templatetags or []
         self.loader = loader or Jinja2FileSystemLoader()

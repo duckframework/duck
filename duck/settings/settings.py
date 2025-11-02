@@ -47,6 +47,35 @@ class Settings(dict):
     The source of settings e.g., `web.settings`.
     """
     
+    def reload(self):
+        """
+        Re-execute the settings module and update this dict in-place.
+        
+        Notes:
+            The settings module will be the latest one set in `DUCK_SETTINGS_MODULE`.
+        """
+        import importlib
+        
+        mod_str = os.environ.get("DUCK_SETTINGS_MODULE")
+        mod = sys.modules.get(mod_str, None)
+        mods = []
+        
+        if mod:
+            importlib.reload_module(mod)
+            mods.append(mod) 
+        else:
+            mod = import_module_once(mod_str)
+            mods.append(import_module_once("duck.etc.settings"))
+            mods.append(mod)
+            
+        # Apply settings inplace
+        self.source = mod
+        for mod in mods:
+            for var in dir(mod):
+                if var.isupper():
+                    # is a valid setting variable
+                    self[var] = getattr(mod, var)
+                
     def __repr__(self):
         # Provide a more detailed and readable string representation of the Settings object
         return (

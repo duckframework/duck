@@ -78,7 +78,7 @@ class Request:
             - The QUERY attribute is an instance of QueryDict which contains 'CONTENT_QUERY' and 'URL_QUERY'
             - These two keys contains both content queries and url queries respectively
         """
-        from duck.settings.loaded import SESSION_STORE
+        from duck.settings.loaded import SettingsLoaded
         
         # The `request_store` is a dictionary originating from the RequestData object.
         # It allows you to attach custom metadata to the request during early parsing,
@@ -94,7 +94,7 @@ class Request:
         # print(request.request_store["something"]) # Outputs 'anything'
         
         self.__meta: Dict = {}  # meta for the request
-        self.__session = SESSION_STORE(None)  # session for the request
+        self.__session = SettingsLoaded.SESSION_STORE(None)  # session for the request
         self.__remote_addr: Tuple[str, int] = None  # client remote address and port
         self.__headers: Headers = Headers()  # request headers
         self.__fullpath: str = None  # full path for the request
@@ -669,8 +669,8 @@ class Request:
             QueryDict: A dictionary-like object containing extracted query parameters
                        and file data from the request.
         """
-        from duck.settings.loaded import FILE_UPLOAD_HANDLER
-
+        from duck.settings.loaded import SettingsLoaded
+        
         content_type = request.get_header("content-type", "").strip()
 
         if content_type.lower().startswith("application/json"):
@@ -739,7 +739,7 @@ class Request:
                         "content_disposition": content_disposition,
                     }
 
-                    file_upload_handler = FILE_UPLOAD_HANDLER(filename, content, **additional_kw)
+                    file_upload_handler = SettingsLoaded.FILE_UPLOAD_HANDLER(filename, content, **additional_kw)
 
                     # Add file in request.FILES
                     request.FILES[query_key] = file_upload_handler

@@ -23,7 +23,8 @@ def exec_time(func):
         start_time = time.time()
         result = func(*args, **kwargs)
         end_time = time.time()
-        console.log_raw(f'Execution time: "{func.__name__}": {(end_time - start_time)/1000:.8f} ms')
+        exec_t = end_time - start_time
+        console.log_raw(f'Execution time: "{func.__name__}": {exec_t*1000:.8f} ms ({exec_t:.8f} s)')
         return result
     return wrapper
 
@@ -42,7 +43,8 @@ def async_exec_time(func):
         start_time = time.time()
         result = await func(*args, **kwargs)
         end_time = time.time()
-        console.log_raw(f'Execution time: "{func.__name__}": {(end_time - start_time)/1000:.8f} ms')
+        exec_t = end_time - start_time
+        console.log_raw(f'Execution time: "{func.__name__}": {exec_t*1000:.8f} ms ({exec_t:.8f} s)')
         return result
     return async_wrapper
 

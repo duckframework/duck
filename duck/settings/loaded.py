@@ -10,9 +10,7 @@ from typing import (
     Type,
     Coroutine,
 )
-from duck.etc.templatetags import (
-    BUILTIN_TEMPLATETAGS,
-)
+
 from duck.template.templatetags import (
     TemplateTag,
     TemplateFilter,
@@ -284,7 +282,7 @@ def get_blueprints() -> List[Blueprint]:
                 builtins_count += 1
             final_blueprints.append(blueprint)
         
-        if SETTINGS['DEBUG'] and not URLPATTERNS and len(blueprints) == builtins_count:
+        if SETTINGS['DEBUG'] and not SettingsLoaded.URLPATTERNS and len(blueprints) == builtins_count:
             # No urlpatterns defined
             # No blueprints defined or all of the defined blueprints are builtins
             final_blueprints.append(ducksite_blueprint)
@@ -374,34 +372,45 @@ def get_preferred_log_style() -> str:
         raise SettingsError(f"PREFERRED_LOG_STYLE unsupported. Supported styles: {supported}")
 
 
-# Initialize components based on settings
-WSGI = Lazy(get_wsgi)
-ASGI = Lazy(get_asgi)
-FILE_UPLOAD_HANDLER = Lazy(get_file_upload_handler)
-USER_TEMPLATETAGS = Lazy(get_user_templatetags)
-TEMPLATE_HTML_COMPONENT_TAGS = (
-    LivelyComponentSystem.get_html_tags()
-    if  SETTINGS.get("ENABLE_COMPONENT_SYSTEM")
-    else []
-)
-ALL_TEMPLATETAGS = (
-    USER_TEMPLATETAGS
-    + BUILTIN_TEMPLATETAGS
-    + TEMPLATE_HTML_COMPONENT_TAGS
-)
-REQUEST_CLASS = get_request_class()
-CONTENT_COMPRESSION = Lazy(get_content_compression_settings)
-PROXY_HANDLER, ASYNC_PROXY_HANDLER = Lazy(get_proxy_handlers) if SETTINGS["USE_DJANGO"] else (None, None)
-AUTOMATION_DISPATCHER, AUTOMATIONS = (
-    Lazy(get_automation_dispatcher), Lazy(get_triggers_and_automations)
-    if SETTINGS.get("RUN_AUTOMATIONS")
-    else (None, []), 
-)
-URLPATTERNS = Lazy(get_user_urlpatterns)
-BLUEPRINTS = Lazy(get_blueprints)
-MIDDLEWARES = Lazy(get_user_middlewares)
-NORMALIZERS = Lazy(get_normalizers)
-SESSION_STORAGE = get_session_storage()
-SESSION_STORE = Lazy(get_session_store)
-REQUEST_HANDLING_TASK_EXECUTOR = Lazy(get_request_handling_task_executor)
-PREFERRED_LOG_STYLE = Lazy(get_preferred_log_style)
+class Loaded:
+    """
+    Loaded settings's objects.
+    """
+    def __init__(self):
+        from duck.etc.templatetags import BUILTIN_TEMPLATETAGS
+        
+        self.WSGI = Lazy(get_wsgi)
+        self.ASGI = Lazy(get_asgi)
+        self.FILE_UPLOAD_HANDLER = Lazy(get_file_upload_handler)
+        self.USER_TEMPLATETAGS = Lazy(get_user_templatetags)
+        self.BUILTIN_TEMPLATETAGS = BUILTIN_TEMPLATETAGS
+        self.TEMPLATE_HTML_COMPONENT_TAGS = (
+            LivelyComponentSystem.get_html_tags()
+            if  SETTINGS.get("ENABLE_COMPONENT_SYSTEM")
+            else []
+        )
+        self.ALL_TEMPLATETAGS = (
+            self.USER_TEMPLATETAGS
+            + self.BUILTIN_TEMPLATETAGS
+            + self.TEMPLATE_HTML_COMPONENT_TAGS
+        )
+        self.REQUEST_CLASS = get_request_class()
+        self.CONTENT_COMPRESSION = Lazy(get_content_compression_settings)
+        self.PROXY_HANDLER, ASYNC_PROXY_HANDLER = Lazy(get_proxy_handlers) if SETTINGS["USE_DJANGO"] else (None, None)
+        self.AUTOMATION_DISPATCHER, self.AUTOMATIONS = (
+            Lazy(get_automation_dispatcher), Lazy(get_triggers_and_automations)
+            if SETTINGS.get("RUN_AUTOMATIONS")
+            else (None, []), 
+        )
+        self.URLPATTERNS = Lazy(get_user_urlpatterns)
+        self.BLUEPRINTS = Lazy(get_blueprints)
+        self.MIDDLEWARES = Lazy(get_user_middlewares)
+        self.NORMALIZERS = Lazy(get_normalizers)
+        self.SESSION_STORAGE = get_session_storage()
+        self.SESSION_STORE = Lazy(get_session_store)
+        self.REQUEST_HANDLING_TASK_EXECUTOR = Lazy(get_request_handling_task_executor)
+        self.PREFERRED_LOG_STYLE = Lazy(get_preferred_log_style)
+
+
+# Initialize the loaded object.
+SettingsLoaded = Lazy(Loaded) #: noqa

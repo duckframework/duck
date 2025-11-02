@@ -84,9 +84,9 @@ class WSGI:
         Returns:
             HttpRequest: The request object
         """
-        from duck.settings.loaded import REQUEST_CLASS
-
-        request_class = REQUEST_CLASS
+        from duck.settings.loaded import SettingsLoaded
+        
+        request_class = SettingsLoaded.REQUEST_CLASS
 
         if not issubclass(request_class, HttpRequest):
             raise SettingsError(
@@ -138,9 +138,9 @@ class WSGI:
         last middleware in list to the first middlewares. Its just like reversing middleware
         list and iterating through each and every one of them.
         """
-        from duck.settings.loaded import MIDDLEWARES
-
-        middlewares = MIDDLEWARES
+        from duck.settings.loaded import SettingsLoaded
+        
+        middlewares = SettingsLoaded.MIDDLEWARES
         failed_middleware = request.META.get("FAILED_MIDDLEWARE")
         
         if failed_middleware:

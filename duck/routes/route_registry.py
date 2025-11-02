@@ -116,8 +116,10 @@ class BaseRouteRegistry:
         handler: Callable,
         name: Optional[str] = None,
         methods: Optional[List[str]] = None,
-        **kw):
-        """Registers a Regular expression route
+        **kw
+    ):
+        """
+        Registers a Regular expression route
 
         Args:
             re_url (str): Regular expression route (e.g /some/path/.*)

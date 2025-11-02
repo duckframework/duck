@@ -9,7 +9,7 @@ import uuid
 from typing import Callable
 
 from duck.settings import SETTINGS
-from duck.settings.loaded import SESSION_STORAGE
+from duck.settings.loaded import SettingsLoaded
 from duck.utils.caching import CacheBase, InMemoryCache
 from duck.utils.importer import import_module_once
 
@@ -22,7 +22,7 @@ def get_session_storage_connector():
     Returns the session storage connector object.
     """
     if not globals.session_storage_connector:
-        session_storage_cls = SESSION_STORAGE
+        session_storage_cls = SettingsLoaded.SESSION_STORAGE
         globals.session_storage_connector = SessionStorageConnector(session_storage_cls)
     return globals.session_storage_connector
 

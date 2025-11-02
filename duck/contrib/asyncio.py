@@ -85,11 +85,11 @@ def get_available_event_loop() -> asyncio.AbstractEventLoop:
         >>> loop = get_available_event_loop()
         >>> print(loop.is_running())  # Check if the event loop is running
     """
-    from duck.settings.loaded import SETTINGS, REQUEST_HANDLING_TASK_EXECUTOR
+    from duck.settings.loaded import SETTINGS, SettingsLoaded
     
     if SETTINGS['ASYNC_HANDLING']:
         # Retrieve the event loop from the request handling executor in ASGI
-        event_loop = REQUEST_HANDLING_TASK_EXECUTOR._loop
+        event_loop = SettingsLoaded.REQUEST_HANDLING_TASK_EXECUTOR._loop
     else:
         # Retrieve the loop from the AsyncioLoopManager in non-async contexts
         event_loop = AsyncioLoopManager._loop

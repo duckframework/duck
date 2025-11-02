@@ -18,7 +18,7 @@ You need to load the duck tags by using this line:
 from functools import partial
 from typing import Dict, Any
 from django import template
-from duck.settings.loaded import ALL_TEMPLATETAGS # include html component tags, filters and all other tags
+from duck.settings.loaded import SettingsLoaded
 
 
 register = template.Library()
@@ -28,7 +28,7 @@ def register_duck_templatetags(library):
     """
     Registers all template tags and filters created within Duck.
     """
-    for tag_or_filter in ALL_TEMPLATETAGS:
+    for tag_or_filter in SettingsLoaded.ALL_TEMPLATETAGS:
         tag_or_filter.register_in_django(library)
 
 

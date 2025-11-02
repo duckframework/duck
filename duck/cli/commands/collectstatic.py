@@ -118,10 +118,10 @@ class CollectStaticCommand:
             Generator: The generator of static directory and blueprint pair.
         """
         from duck.settings import SETTINGS
-        from duck.settings.loaded import BLUEPRINTS
+        from duck.settings.loaded import SettingsLoaded
         from duck.etc.apps.defaultsite.blueprint import DuckSite
         
-        _blueprints = BLUEPRINTS
+        _blueprints = SettingsLoaded.BLUEPRINTS
         
         # The DuckSite blueprint might not be available in BLUEPRINTS
         # yet it might have some static files it would like to share with the whole app.

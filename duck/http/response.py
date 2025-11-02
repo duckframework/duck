@@ -5,7 +5,6 @@ import io
 import re
 import os
 import json
-import importlib
 
 from http.cookies import SimpleCookie, Morsel
 from inspect import isasyncgen
@@ -49,7 +48,6 @@ from duck.utils.fileio import (
     AsyncFileIOStream,
     to_async_fileio_stream,
 )
-
 
 StreamingType = Union[
     Callable[[], Union[bytes, str]],

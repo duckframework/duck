@@ -58,7 +58,8 @@ def log_raw(
         end (str): The log suffix, defaults to `"\n"` for newline.
     """
     std = sys.stdout
-
+    color = Fore.WHITE
+    
     if SILENT:
         if LOG_TO_FILE:
             cleaned_data = remove_ansi_escape_codes([msg])[0]
@@ -342,8 +343,8 @@ class Logger:
         file_fd = cls.get_current_logfile_fd()
         
         # Record default write methods
-        default_stdout_write = sys.stdout.write
-        default_stderr_write = sys.stderr.write
+        cls._original_stdout_write = default_stdout_write = sys.stdout.write
+        cls._original_stderr_write = default_stderr_write = sys.stderr.write
         
         # Create a lock for synchronized writing
         write_lock = threading.Lock()
@@ -379,7 +380,18 @@ class Logger:
         # Assign new write methods
         sys.stdout.write = stdout_write
         sys.stderr.write = stderr_write
-        
+    
+    @classmethod
+    def undo_console_output_redirect(cls):
+        """
+        Undo redirecting of console output.
+        """
+        original_stdout_write = getattr(cls, "_original_stdout_write", None)
+        original_stderr_write = getattr(cls, "_original_stderr_write", None)
+        if all([original_stdout_write, original_stderr_write]):
+            sys.stdout.write = original_stdout_write
+            sys.stderr.write = original_stderr_write
+            
     @classmethod
     def get_latest_logfile(cls) -> Optional[str]:
         """
@@ -437,11 +449,9 @@ class Logger:
         """
         logfile_fd = cls.__current_logfile_fd
         if logfile_fd is not None:
-            try:
-                logfile_fd.close()
-            except Exception:
-                pass
-
+            logfile_fd.close()
+            cls.undo_console_output_redirect()
+            
 
 if not os.path.isdir(LOGGING_DIR):
     # If not in testing environment.

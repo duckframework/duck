@@ -1,5 +1,3 @@
-import mimetypes
-
 
 def guess_file_mimetype(filename: str) -> str:
     """
@@ -16,6 +14,8 @@ def guess_file_mimetype(filename: str) -> str:
     Returns:
         str: The determined MIME type of the file. Defaults to 'application/octet-stream' if the type cannot be determined.
     """
+    import mimetypes
+    
     mimetype = None
 
     if filename:

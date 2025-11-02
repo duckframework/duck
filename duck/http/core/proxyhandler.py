@@ -13,7 +13,6 @@ from typing import (
     AsyncGenerator,
     Union
 )
-
 from duck.settings import SETTINGS
 from duck.http.content import Content
 from duck.http.headers import Headers

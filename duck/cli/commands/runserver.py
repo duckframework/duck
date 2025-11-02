@@ -27,18 +27,15 @@ class RunserverCommand:
         settings_module: Optional[str] = None,
         mainfile: Optional[str] = None,
         uses_ipv6: bool = False,
-        reload: bool = False,
     ):
-        cls.setup(settings_module)
-        
         # Runserver
+        cls.setup(settings_module)
         cls.runserver(
             address=address,
             port=port,
             domain=domain,
             mainfile=mainfile,
             uses_ipv6=uses_ipv6,
-            reload=reload
         )
     
     @classmethod
@@ -49,7 +46,6 @@ class RunserverCommand:
          domain: Optional[str] = None,
          mainfile: Optional[str] = None,
          uses_ipv6: bool = False,
-         reload: bool = False,
      ):
         from duck.app import App
         from duck.settings import SETTINGS
@@ -80,6 +76,4 @@ class RunserverCommand:
                 domain=domain,
                 uses_ipv6=uses_ipv6
             )
-           
-             # If --reload arg in sys.argv, app will be restarted nomatter if run was called instead.
             application.run()  

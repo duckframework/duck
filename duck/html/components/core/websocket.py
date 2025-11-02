@@ -465,7 +465,7 @@ class EventHandler:
         """
         Handle a navigation request from the client.
         """
-        from duck.settings.loaded import ASGI
+        from duck.settings.loaded import SettingsLoaded
         from duck.http.response import ComponentResponse
         from duck.html.components.core.system import LivelyComponentSystem
         
@@ -536,7 +536,7 @@ class EventHandler:
                             request.META["DUCK_CSP_NONCE"] = first_csp_nonce
                             
                         # Get the new response
-                        response = await ASGI.get_response(request)
+                        response = await SettingsLoaded.ASGI.get_response(request)
                     
                         if isinstance(response, ComponentResponse):
                             # This is easy to diff

@@ -72,6 +72,20 @@ class AutomationDispatcher:
         self.__force_stop = False
         self.application = application
 
+    @property
+    def executed_automations(self) -> list[Automation]:
+        """
+        Get all automations that have been executed, whether running or finished.
+        """
+        return self.__executed_automations
+
+    @property
+    def queue(self) -> dict[AutomationTrigger, list[Automation]]:
+        """
+        Returns a dictionary mapping of triggers to their automations.
+        """
+        return self.__queue
+        
     def start(self):
         """
         Start listening for registered triggers and executes automations
@@ -83,6 +97,19 @@ class AutomationDispatcher:
                 break
             time.sleep(self.poll)  # sleep before listening to new triggers.
 
+    def stop(self):
+        """
+        Stops the dispatcher alongside all its automations.
+        
+        Notes:
+            This only stop automations that are about to execute their next execution cycle.
+        """
+        self.__force_stop = True # Stops processing of all other automations.
+        for executed_automation in self.executed_automations:
+            if executed_automation.is_running:
+                executed_automation.prepare_stop()
+                executed_automation.join() # Will just trigger stop execution of future automation executions.
+        
     def listen(self):
         """
         Listen for any triggers and execute any automations associated with those triggers.
@@ -115,28 +142,6 @@ class AutomationDispatcher:
             if not automation.disable_execution:
                 automation.start()
                 self.__executed_automations.append(automation)
-    
-    @property
-    def executed_automations(self) -> list[Automation]:
-        """
-        Get all automations that have been executed, whether running or finished.
-        """
-        return self.__executed_automations
-
-    @property
-    def queue(self) -> dict[AutomationTrigger, list[Automation]]:
-        """
-        Returns a dictionary mapping of triggers to their automations.
-        """
-        return self.__queue
-
-    def prepare_stop(self):
-        """
-        Called before the main application termination.
-        """
-        for executed_automation in self.executed_automations:
-            if executed_automation.is_running:
-                executed_automation.prepare_stop()
     
     def unregister(self, trigger: AutomationTrigger, automation: Automation):
         """

@@ -280,7 +280,7 @@ def get_bad_request_error_response(exception: Exception, request: Optional[HttpR
         "<p>Bad request, there is an error in request.</p><p>"
         "You might need to reconstruct request in right format</p>"
     )
-    ref = f"<p>Ref: {exception}</p>"
+    ref = f"<p><b>Reference:</b> {exception}</p>"
     
     if isinstance(exception, RequestSyntaxError):
         response_cls = HttpBadRequestSyntaxResponse

@@ -23,14 +23,7 @@ from duck.contrib.sync import (
 )
 from duck.views import View
 from duck.settings import SETTINGS
-from duck.settings.loaded import (
-    WSGI,
-    ASGI,
-    MIDDLEWARES,
-    NORMALIZERS,
-    PROXY_HANDLER,
-    ASYNC_PROXY_HANDLER,
-)
+from duck.settings.loaded import SettingsLoaded
 from duck.exceptions.all import (
     MiddlewareError,
     RouteNotFoundError,
@@ -124,7 +117,7 @@ class RequestProcessor:
         """
         Normalizes the request object.
         """
-        for normalizer in NORMALIZERS:
+        for normalizer in SettingsLoaded.NORMALIZERS:
             try:
                 normalizer.normalize(self.request)
             except Exception as e:
@@ -153,7 +146,7 @@ class RequestProcessor:
                 - middleware (Optional[BaseMiddleware]): The middleware that the
                     request failed to meet, or None if all checks passed.
         """
-        for middleware in MIDDLEWARES:
+        for middleware in SettingsLoaded.MIDDLEWARES:
             if issubclass(middleware, BaseMiddleware):
                 middleware_state = convert_to_sync_if_needed(middleware.process_request)(self.request)
 
@@ -296,7 +289,7 @@ class RequestProcessor:
                 raise e # reraise error
         
         try:
-            proxy_handler = PROXY_HANDLER(
+            proxy_handler = SettingsLoaded.PROXY_HANDLER(
                 target_host=django_host,
                 target_port=django_port,
                 uses_ipv6=uses_ipv6,
@@ -334,7 +327,7 @@ class RequestProcessor:
             ExpectingNoResponse: Raised if we are never going to get a response e.g. when we reach a WebSocketView.
                 This handles everything on its own and it will never return a response.
         """
-        response = WSGI.get_response(request)
+        response = SettingsLoaded.WSGI.get_response(request)
         return response
         
     def process_request(self) -> HttpResponse:
@@ -446,7 +439,7 @@ class AsyncRequestProcessor(RequestProcessor):
                 - middleware (Optional[BaseMiddleware]): The middleware that the
                     request failed to meet, or None if all checks passed.
         """
-        for middleware in MIDDLEWARES:
+        for middleware in SettingsLoaded.MIDDLEWARES:
             if issubclass(middleware, BaseMiddleware):
                 middleware_state = await convert_to_async_if_needed(middleware.process_request)(self.request)
                 if middleware_state == BaseMiddleware.request_ok:
@@ -548,7 +541,7 @@ class AsyncRequestProcessor(RequestProcessor):
                 raise e # reraise error
         
         try:
-            proxy_handler = ASYNC_PROXY_HANDLER(
+            proxy_handler = SettingsLoaded.ASYNC_PROXY_HANDLER(
                 target_host=django_host,
                 target_port=django_port,
                 uses_ipv6=uses_ipv6,
@@ -582,7 +575,7 @@ class AsyncRequestProcessor(RequestProcessor):
         Returns:
             HttpResponse: Http response
         """
-        response = await ASGI.get_response(request)
+        response = await SettingsLoaded.ASGI.get_response(request)
         return response
         
     async def process_request(self) -> HttpResponse:

@@ -13,29 +13,22 @@ from duck.http.mimes import (
 )
 from duck.settings import SETTINGS
 
-
 CONTENT_COMPRESSION = SETTINGS["CONTENT_COMPRESSION"]
-
 COMPRESSION_ENCODING = CONTENT_COMPRESSION.get(
     "encoding", "identity",
 )  # defaults to gzip
-    
 COMPRESSION_MIN_SIZE = CONTENT_COMPRESSION.get(
     "min_size", 1024,
 )  # defaults to files more than 1KB
-
 COMPRESSION_MAX_SIZE = CONTENT_COMPRESSION.get(
     "max_size", 512 * 1024,
 )  # defaults to files not more than 512KB
-    
 COMPRESSION_LEVEL = CONTENT_COMPRESSION.get(
     "level", 5,
 )  # defaults to 5, optimum in most cases
-
 COMPRESS_STREAMING_RESPONSES = CONTENT_COMPRESSION.get(
     "compress_streaming_responses", True,
 )  # defaults to True
-
 COMPRESSION_MIMETYPES = CONTENT_COMPRESSION.get(
     "mimetypes",
     [

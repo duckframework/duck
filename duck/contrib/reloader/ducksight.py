@@ -1,381 +1,156 @@
 """
-**Ducksight Reloader** watches for file changes and enables dynamic reloading in **DEBUG mode**.
+**Ducksight Reloader**
+
+Watches for file changes in Duck framework projects and restarts the
+webserver in DEBUG mode whenever relevant `.py` files change.
+
 """
 import os
 import sys
 import time
-import signal
 import fnmatch
+import threading
 import platform
-import traceback
 import subprocess
-import setproctitle
-import multiprocessing
 
-import duck.processes as processes
-
-from threading import Timer
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from duck.logging import logger
 from duck.settings import SETTINGS
-from duck.utils.filelock import open_and_lock
-from duck.utils.path import joinpaths
-from duck.utils import ipc
-
-
-# Define the base directory for the application
-BASE_DIR = str(SETTINGS["BASE_DIR"]).rstrip("/")
-
-
-def set_state(state: str) -> str:
-    """
-    Set the state of the `DuckSightReloader` in a file.
-
-    Args:
-        state (str): The new state, either 'alive' or 'dead'.
-
-    Returns:
-        str: Path to the state file.
-
-    Raises:
-        TypeError: If the provided state is not 'alive' or 'dead'.
-    """
-    state_file = joinpaths(BASE_DIR, ".ducksight")
-
-    if state not in {"alive", "dead"}:
-        raise TypeError("State should be one of ['alive', 'dead']")
-        
-    mode = "w" if os.path.isfile(state_file) else "x"
-    
-    with open_and_lock(state_file, mode) as fd:
-        fd.write(state)
-
-    return state_file
-
-
-def get_state() -> str:
-    """
-    Retrieve the state of the DuckSightReloader from the state file.
-
-    Returns:
-        str: Current state of the reloader ('dead' or 'alive').
-    """
-    state_file = joinpaths(BASE_DIR, ".ducksight")
-
-    if not os.path.isfile(state_file):
-        return "dead"
-
-    with open_and_lock(state_file) as fd:
-        return fd.read()
-
-
-def _cleanup_current_webserver() -> list:
-    """
-    Cleans up the current Duck server if running. (Useful before server restart as new process is spawned on same address and port.)
-
-    Returns:
-        data (dict): The current Duck application server process data.
-
-    Raises:
-        RuntimeError: If there was a failure in retrieving the process data respective file.
-    """
-    data = None
-    
-    try:
-        data = processes.get_process_data("main")
-        server_sys_argv = data.get("sys_argv")
-        
-        if not server_sys_argv:
-            raise RuntimeError(
-                "Failed to retrieve Duck application process `sys.argv`, ensure the app is running."
-            )
-    except KeyError:
-        raise RuntimeError(
-            "Failed to retrieve Duck application process data, ensure the app is running."
-        )
-    try:
-        with ipc.get_writer() as writer:
-            # Send message to main application process for cleanup
-            writer.write_message("prepare-restart")
-    finally:
-        time.sleep(1)  # wait a second for server to finish cleanup
-    return data
-
-
-def _restart_webserver() -> dict:
-    """
-    Restart the webserver by terminating the current process and re-executing the command.
-    
-    Returns:
-        dict: Old server data.
-    """
-    server_data = _cleanup_current_webserver() # cleanup the current running server
-    server_sys_argv = server_data.get("sys_argv")  # sys.argv for the cleaned webserver
-
-    def get_server_command() -> list:
-        """
-        Builds and returns the command to start a new Duck webserver instance, using arguments from the current instance.
-        """
-        if (server_sys_argv[0].endswith(".py") and not "runserver" in server_sys_argv):
-            # Server was started directly from py file
-            cmd = [
-                sys.executable,
-                "-m",
-                "duck",
-                "runserver",
-                "--file",
-                server_sys_argv[0],
-                "--reload",
-            ]
-        else:
-            # server was started through terminal
-            cmd = server_sys_argv[:]
-            if "--reload" not in cmd:
-                cmd.extend(["--reload"])
-        return cmd
-
-    # Continue to re-start server again
-    cmd = get_server_command()
-    
-    # Run as a child process.
-    subprocess.run(cmd)
-
-
-def restart_webserver():
-    """
-    Restart the webserver gracefully, logging any errors during the process.
-    """
-    try:
-        _restart_webserver()
-    except Exception as e:
-        logger.log_exception(e)
-        
-
-def _start_reloader():
-    # This is run in new process, set process name
-    setproctitle.setproctitle("duck-reloader")
-    
-    # Initialize and start reloader.
-    reloader = DuckSightReloader(BASE_DIR)
-    reloader.run()
-
-
-def start_ducksight_reloader_process():
-    """
-    Start the DuckSightReloader in a new background process.
-
-    Behavior:
-        - If there is another instance of DuckSightReloader process running, there will be an attempt to stop that process.
-
-    Returns:
-        multiprocess.Process: The process object for the reloader.
-    """
-    process = multiprocessing.Process(target=_start_reloader, daemon=False)
-    process.start()
-    
-    # Set process data.
-    processes.set_process_data(
-        "ducksight-reloader", {
-            "pid": process.pid,
-            "start_time": time.time(),
-         }
-    )
-    return process
-
-
-def stop_ducksight_reloader_process():
-    """
-    Stop the DuckSightReloader process by setting its state to 'dead'.
-    """
-    set_state("dead")
-
-
-def is_process_running(pid: int) -> bool:
-    """
-    Checks if process is running.
-    """
-    try:
-        # Sending signal 0 to the process ID
-        os.kill(pid, 0)
-    except OSError:
-        return False
-    else:
-        return True
-
-
-def ducksight_reloader_process_alive() -> bool:
-    """
-    Check if the DuckSightReloader process is running.
-
-    Returns:
-        bool: True if the process is running, False otherwise.
-    """
-    state = get_state() == "alive"
-    
-    try:
-        pid = processes.get_process_data("ducksight-reloader").get("pid")
-        
-        # Check if process is running
-        live_result = is_process_running(pid)
-        
-        if live_result == state:
-            return state
-        
-        else:
-            set_state("alive" if live_result else "dead")
-            return live_result
-    
-    except KeyError:
-        pass
+from duck.logging import logger
 
 
 class DuckSightReloader:
     """
-    Observes local file changes and triggers a server restart when necessary.
-
-    Args:
-        watch_dir (str): The directory to monitor for changes.
+    Monitors the project directory for Python file changes and triggers reloads.
     """
-
     def __init__(self, watch_dir: str):
+        # Set a dynamic timeout
         timeout = SETTINGS.get("AUTO_RELOAD_POLL", 1.0)
-
-        if platform.system() == "Windows":
-            timeout = max(timeout, 2.0)  # Minimum timeout for stability on Windows
-
+        if platform.system().lower() == "windows":
+            timeout = max(timeout, 2.0)
+        
+        # Create some attributes
         self.observer = Observer(timeout=timeout)
         self.watch_dir = watch_dir
+        self.__force_stop = False
 
+    def stop(self):
+        """
+        Stops the reloader.
+        """
+        self.__force_stop = True
+        
     def run(self):
         """
-        Start the file observer and handle events until interrupted.
+        Start the observer loop; ensures single reloader process is active.
+        
+        Notes:
+            This method is blocking.
         """
         try:
-            # Stop any other running reloader process
-            set_state("dead")  # first method to trigger a stop
-
-            try:
-                # Second method to kill old reloader process if still running.
-                current_pid = os.getpid()
-                old_pid = processes.get_process_data("ducksight-reloader").get("pid")
-                
-                if not old_pid == current_pid:
-                    os.kill(old_pid, signal.SIGKILL)
-            
-            except (KeyError, ProcessLookupError):
-                pass
-            
-            finally:
-                # wait for old reloader process to terminate if running.
-                time.sleep(1)
-
             event_handler = Handler()
-            self.observer.schedule(
-                event_handler,
-                self.watch_dir,
-                recursive=True
-            )
-            
+            self.observer.schedule(event_handler, self.watch_dir, recursive=True)
             self.observer.start()
-            set_state("alive")
-
-            while get_state() == "alive":
-                time.sleep(0.1)
-                
+            
+            while not self.__force_stop:
+                time.sleep(.1)
+            
         except KeyboardInterrupt:
-            set_state("dead")
+            pass
         
         finally:
-            set_state("dead")
             self.observer.stop()
-            
             if self.observer.is_alive():
                 self.observer.join()
 
 
 class Handler(FileSystemEventHandler):
     """
-    Event handler to respond to file changes by restarting the server.
-
-    Listens for modifications, creations, deletions, and moves of `.py` files.
+    Handles filesystem events and triggers debounced full server reloads.
     """
-
-    def __init__(self, debounce_interval=1.0):
-        """
-        Initialize the file event handler with a debounce mechanism.
-
-        Args:
-            debounce_interval (float): The time (in seconds) to wait before restarting the server.
-        """
+    def __init__(self, debounce_interval=0.6):
         super().__init__()
         self.debounce_interval = debounce_interval
         self.restart_timer = None
         self.latest_event = None
-        self.restarting = False
+        self.restarting = threading.Lock()
+        self.last_restart_time = 0
 
     def on_any_event(self, event):
-        # Only process relevant events for `.py` files
+        """
+        Called on any filesystem event; filters `.py` files and schedules reload.
+        """
         watch_files = SETTINGS["AUTO_RELOAD_WATCH_FILES"]
-        src_file = str(event.src_path)
-        file_allowed = False
-
-        for pattern in watch_files:
-            if fnmatch.fnmatch(src_file, pattern):
-                file_allowed = True
-                break
-
-        if event.is_directory or not file_allowed:
-            # ignore file, we don't need to watch for any of its changes.
+        
+        if event.is_directory:
+            return
+        
+        if not any(fnmatch.fnmatch(event.src_path, pat) for pat in watch_files):
             return
 
         if event.event_type not in {"created", "modified", "deleted", "moved"}:
-            return  # Ignore unwanted events
-
-        # Store the latest event details
+            # Ignore event.
+            return
+        
+        # Update the latest event    
         self.latest_event = event
-
-        # Cancel any pending restart timers
+        
         if self.restart_timer:
             self.restart_timer.cancel()
-
-        # Schedule a new restart with a delay
-        self.restart_timer = Timer(self.debounce_interval, self._trigger_restart)
+        
+        # Set & start the timer
+        self.restart_timer = threading.Timer(self.debounce_interval, self._trigger_restart)
         self.restart_timer.start()
-
+        
+    def restart_webserver(self, changed_file: str):
+        """
+        Perform the actual server reload.
+        
+        Args:
+            changed_file (str): This is the path to the file which triggered this reload.
+        """
+        from duck.app import App
+        
+        mainapp = App.get_main_app()
+        mainapp.stop(
+            log_to_console=False,
+            no_exit=True,
+            kill_ducksight_reloader=False,
+            close_log_file=True,
+        )
+        
+        def restart_app():
+            """
+            This restarts the application.
+            """
+            # Was started from a file
+            cmd = [sys.executable, *sys.argv, "--is-reload"]
+            subprocess.run(cmd)
+            
+        try:
+            restart_app()
+        except Exception as e:
+            # Log any encountered exception
+            logger.log_exception(e)
+                 
     def _trigger_restart(self):
         """
-        Perform the server restart and log the specific file change event.
+        Trigger the real restart.
         """
-        if self.restarting:
-            return  # Prevent overlapping restarts
+        if self.restarting.locked():
+            return
+        
+        # Check for overlapping reloads
+        now = time.time()
+        if now - self.last_restart_time < 0.5:
+            return  # avoid overlapping reloads
 
-        if self.latest_event:
-            self.restarting = True
-            action = self.latest_event.event_type
+        with self.restarting:
+            self.last_restart_time = now
+            event = self.latest_event
+            file_path = event.src_path
             
-            if action == "moved":
-                src_path = self.latest_event.src_path
-                dest_path = getattr(self.latest_event, "dest_path", "unknown")
-                
-                logger.log_raw(
-                    f"\nFile {src_path} was moved to {dest_path}, reloading...",
-                    custom_color=logger.Fore.YELLOW,
-                 )
-            else:
-                file_path = self.latest_event.src_path
-                
-                logger.log_raw(
-                    f"\nFile {file_path} was {action}, reloading...",
-                    custom_color=logger.Fore.YELLOW,
-                 )
-            
-            # Restart webserver
-            restart_webserver()
-            self.restarting = False
-            self.latest_event = None  # Clear the latest event after handling
-
-
-if __name__ == "__main__":
-    multiprocessing.freeze_support()
+            # Log something and restart the server.
+            logger.log_raw(f"\nFile {file_path} changed, attempting reload...", custom_color=logger.Fore.YELLOW)
+            self.restart_webserver(file_path)

@@ -14,8 +14,8 @@ Key Features:
 - **Signal Handling**: Gracefully handles termination signals (e.g., Ctrl-C) to stop the application.
 
 """
-
 from duck.app.app import App
 from duck.app.microapp import MicroApp
+
 
 __all__ = ["App", "MicroApp"]

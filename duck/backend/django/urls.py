@@ -10,24 +10,12 @@ from django.views.decorators.http import require_http_methods
 from duck.backend.django import views
 from duck.backend.django.utils import duck_url_to_django_syntax
 from duck.settings import SETTINGS
-from duck.settings.loaded import (
-    BLUEPRINTS,
-    URLPATTERNS,
-)
+from duck.settings.loaded import SettingsLoaded
 from duck.exceptions.all import (
     PortError,
     RouteError,
     BlueprintError,
 )
-from duck.setup import setup
-
-
-try:
-    # Ensure Duck app is properly set up
-    setup(make_app_dirs=False)
-except (RouteError, BlueprintError, PortError) as setup_error:
-    # Catch setup errors but continue execution (e.g., if Duck app is already set up)
-     pass
 
 
 class DjangoURLConflict(RouteError):
@@ -41,9 +29,9 @@ def get_duck_urlpatterns() -> List:
     """
     Returns all urlpatterns registered within Duck including blueprint urlpatterns.
     """
-    duck_urlpatterns = URLPATTERNS
+    duck_urlpatterns = SettingsLoaded.URLPATTERNS
     
-    for blueprint in BLUEPRINTS:
+    for blueprint in SettingsLoaded.BLUEPRINTS:
         duck_urlpatterns.extend(blueprint.urlpatterns)
     
     return duck_urlpatterns

@@ -30,12 +30,7 @@ from duck.http.core.handler import (
     log_response,
 )
 from duck.settings import SETTINGS
-from duck.settings.loaded import (
-    ASGI,
-    WSGI,
-    REQUEST_CLASS,
-    REQUEST_HANDLING_TASK_EXECUTOR,
-)
+from duck.settings.loaded import SettingsLoaded
 from duck.exceptions.all import SettingsError
 from duck.logging import logger
 from duck.meta import Meta
@@ -69,7 +64,7 @@ def call_request_handling_executor(task: Union[threading.Thread, Coroutine]):
     This calls the request handling executor with the provided task (thread or coroutine) and the 
     request handling executor keyword arguments set in settings.py.
     """
-    REQUEST_HANDLING_TASK_EXECUTOR.execute(task) # execute thread or coroutine.
+    SettingsLoaded.REQUEST_HANDLING_TASK_EXECUTOR.execute(task) # execute thread or coroutine.
 
 
 class BaseServer:
@@ -479,12 +474,10 @@ class BaseServer:
             sock (xsocket): Client socket object
             addr (Tuple[str, int]): Client ip address and port.
         """
-        from duck.settings.loaded import WSGI
-        
         # Send timeout error message to client.
         timeout_response = get_timeout_error_response(timeout=SETTINGS["REQUEST_TIMEOUT"])
         
-        WSGI.finalize_response(timeout_response, request=None)
+        SettingsLoaded.WSGI.finalize_response(timeout_response, request=None)
         
         # Send timeout response
         response_handler.send_response(
@@ -510,7 +503,7 @@ class BaseServer:
             addr (Tuple[str, int]): Tuple for ip and port from where this request is coming from, ie Client addr
             request_data (RequestData): The request data object
         """
-        handle_wsgi_request = WSGI
+        handle_wsgi_request = SettingsLoaded.WSGI
         
         handle_wsgi_request(
             self.application,
@@ -659,12 +652,12 @@ class BaseServer:
             sock (xsocket): Client socket object
             addr (Tuple[str, int]): Client ip address and port.
         """
-        from duck.settings.loaded import ASGI
+        from duck.settings.loaded import SettingsLoaded
         
         # Send timeout error message to client.
         timeout_response = get_timeout_error_response(timeout=SETTINGS["REQUEST_TIMEOUT"])
         
-        await ASGI.finalize_response(timeout_response, request=None)
+        await SettingsLoaded.ASGI.finalize_response(timeout_response, request=None)
         
         # Send timeout response
         await response_handler.async_send_response(
@@ -690,7 +683,7 @@ class BaseServer:
             addr (Tuple[str, int]): Tuple for ip and port from where this request is coming from, ie Client addr
             request_data (RequestData): The request data object
         """
-        handle_asgi_request = ASGI
+        handle_asgi_request = SettingsLoaded.ASGI
         
         await handle_asgi_request(
             self.application,
@@ -734,7 +727,7 @@ class BaseMicroServer(BaseServer):
         """
         from duck.shortcuts import to_response
         
-        request_class = REQUEST_CLASS
+        request_class = SettingsLoaded.REQUEST_CLASS
 
         if not issubclass(request_class, HttpRequest):
             raise SettingsError(
@@ -777,7 +770,7 @@ class BaseMicroServer(BaseServer):
             response = get_server_error_response(e, request)
            
             # Finalize server error response
-            WSGI.finalize_response(response, request)
+            SettingsLoaded.WSGI.finalize_response(response, request)
             
             response_handler.send_response(
                 response,
@@ -805,9 +798,8 @@ class BaseMicroServer(BaseServer):
             request_data (RequestData): The full request data object.
         """
         from duck.shortcuts import to_response
-        from duck.settings.loaded import ASGI, REQUEST_CLASS 
-
-        request_class = REQUEST_CLASS
+        
+        request_class = SettingsLoaded.REQUEST_CLASS
 
         if not issubclass(request_class, HttpRequest):
             raise SettingsError(
@@ -850,7 +842,7 @@ class BaseMicroServer(BaseServer):
             response = get_server_error_response(e, request)
            
             # Finalize server error response
-            await ASGI.finalize_response(response, request)
+            await SettingsLoaded.ASGI.finalize_response(response, request)
             
             await response_handler.async_send_response(
                 response,
