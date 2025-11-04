@@ -187,11 +187,14 @@ class ASGI:
             
             if SETTINGS["USE_DJANGO"]:
                 # Obtain the http response for the request
-                response: AsyncHttpProxyResponse = await processor.process_django_request()
+                response: Union[HttpResponse, AsyncHttpProxyResponse] = await processor.process_django_request()
                 
                 # Apply middlewares in reverse order
-                await self.django_apply_middlewares_to_response(response, request)
-            
+                if isinstance(response, AsyncHttpProxyResponse):
+                    await self.django_apply_middlewares_to_response(response, request)
+                else:
+                    await self.apply_middlewares_to_response(response, request)
+                    
             else:
                 # Obtain the http response for the request
                 response = await processor.process_request()

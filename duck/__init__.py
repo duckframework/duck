@@ -3,7 +3,9 @@
 
 With **Duck**, developers can quickly deploy secure, high-performance applications with minimal 
 configuration. Ideal for creating scalable, secure, and customizable **web solutions**, **Duck** 
-streamlines the development process while ensuring top-notch security and performance.
+streamlines the development process while ensuring top-notch security and performance.  
+
+> **Duck is not a small or mini web framework, it is a full-fledged framework which makes you do almost everything!**
 
 ## Quick Start Example
 

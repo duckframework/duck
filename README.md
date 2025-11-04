@@ -39,7 +39,8 @@ And more — see [feature list](https://duckframework.xyz/features)
 4. **Customizable Dashboards** – Tailor interfaces to your workflow and preferences.  
 5. **MQTT (Message Queuing Telementry Transport) Integration** – Run your own broker and manage IoT devices with ease.  
 6. **Duck WebApp to APK** – Easily convert a Duck web application to APK.
-6. **...and more** – [Request a feature](./feature_request.md)
+7. **DuckSight Hot Reload** – Instead of full reload on file changes, implement **hot reload** for the **DuckSight Reloader**. This is faster and efficient than full reload.
+8. **...and more** – [Request a feature](./feature_request.md)
 
 ---
 
@@ -70,6 +71,12 @@ It is recommended to use **pipx** for installing **Duck**, as it allows you to r
 
 ```sh
 pipx install git+https://github.com/duckframework/duck.git
+```
+
+**Or using original `pip`:**
+
+```sh
+pip install git+https://github.com/duckframework/duck.git
 ```
 
 ---
@@ -149,7 +156,7 @@ duck runserver --dj
 ### Notes:
 
 - Follow instructions provided by `django-add` command carefully  
-- Make sure your Django project defines at least one `urlpattern`  
+- Make sure your Django project defines at least one `urlpattern`
 - Once setup, you’re good to go!
 
 ---

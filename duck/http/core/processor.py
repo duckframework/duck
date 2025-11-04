@@ -360,7 +360,7 @@ class RequestProcessor:
         response = self.get_view_response()
         return response
 
-    def process_django_request(self) -> HttpProxyResponse:
+    def process_django_request(self) -> Union[HttpResponse, HttpProxyResponse]:
         """
         Processes the request and send it to Django proxy for 
         receiving the appropriate http response.
@@ -608,7 +608,7 @@ class AsyncRequestProcessor(RequestProcessor):
         response = await self.get_view_response()
         return response
         
-    async def process_django_request(self) -> HttpProxyResponse:
+    async def process_django_request(self) -> Union[HttpResponse, AsyncHttpProxyResponse]:
         """
         Processes the request and send it to Django proxy for 
         receiving the appropriate http response.

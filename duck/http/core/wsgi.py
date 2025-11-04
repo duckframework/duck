@@ -181,11 +181,14 @@ class WSGI:
             
             if SETTINGS["USE_DJANGO"]:
                 # Obtain the http response for the request
-                response: HttpProxyResponse = processor.process_django_request()
+                response: Union[HttpResponse, HttpProxyResponse] = processor.process_django_request()
                 
                 # Apply middlewares in reverse order
-                self.django_apply_middlewares_to_response(response, request)
-            
+                if isinstance(response, HttpProxyResponse):
+                    self.django_apply_middlewares_to_response(response, request)
+                else:
+                    self.apply_middlewares_to_response(response, request)
+                    
             else:
                 # Obtain the http response for the request
                 response = processor.process_request()

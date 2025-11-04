@@ -34,9 +34,9 @@ class BaseLoader:
         """
         Returns a generator for the template directories for all blueprints.
         """
-        from duck.settings.loaded import BLUEPRINTS
+        from duck.settings.loaded import SettingsLoaded
         
-        for blueprint in BLUEPRINTS:
+        for blueprint in SettingsLoaded.BLUEPRINTS:
             if blueprint.enable_template_dir:
                 template_dir = joinpaths(blueprint.root_directory, blueprint.template_dir)
                 yield (blueprint, template_dir)

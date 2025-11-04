@@ -139,7 +139,12 @@ class Modal(FlexContainer):
                   * Closes a modal by setting display to "none"
                   */
                 function closeModal(modal) {{
-                  if (modal) modal.style.display = "none";
+                  if (modal) {{
+                    modal.style.display = "none";
+                    
+                    // Restore modal height
+                    modal.style["height"] = modal._originalHeight || "";
+                  }}
                 }}
                 
                 /**
@@ -167,10 +172,11 @@ class Modal(FlexContainer):
                 }}
             
             function setModalHeight(modal) {{
+              modal._originalHeight = modal.style["height"];
               const height = document.documentElement.scrollHeight;
               const modalOffsetTop = getOffsetTop(modal);
               const heightPx = (height - modalOffsetTop) + "px";
-              modal.style["height"] = modal.style["min-height"] = heightPx;
+              modal.style["height"] = heightPx;
             }}
             
             if (document.readyState !== "complete") {{

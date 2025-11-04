@@ -32,12 +32,12 @@ from duck.utils.urlcrack import URL
 
 class MicroApp:
     """
-    Duck micro app class to create a new lightweight sub-application/server
+    **Duck** micro app class to create a new lightweight sub-application/server.  
 
     This micro app can be used to create a new sub-application with its own server, meaning,
-    you can create multiple micro apps in a single Duck application.
-
-    Notes:
+    you can create multiple micro apps in a single Duck application.  
+    
+    **Notes:**
     - MicroApp should be used when you want to create a new server with its own address and port.
     - Every request to the micro app will be handled by the `view` method, no request will be passed to WSGI.
     - Everything is to be handled manually in the view method and none of all available middlewares will be applied.
@@ -168,9 +168,9 @@ class MicroApp:
             request (HttpRequest): The http request object.
             processor (RequestProcessor): Default request processor which may be used to process request.
         """
-        from duck.settings.loaded import WSGI
+        from duck.settings.loaded import SettingsLoaded
         response = convert_to_sync_if_needed(self.view)(request, processor)
-        WSGI.finalize_response(response, request)  # finalize response
+        SettingsLoaded.WSGI.finalize_response(response, request)  # finalize response
         return response
 
     async def _async_view(self, request: HttpRequest, processor: AsyncRequestProcessor) -> HttpResponse:
@@ -181,9 +181,9 @@ class MicroApp:
             request (HttpRequest): The http request object.
             processor (AsyncRequestProcessor): Default asynchronous request processor which may be used to process request.
         """
-        from duck.settings.loaded import ASGI
+        from duck.settings.loaded import SettingsLoaded
         response = await convert_to_async_if_needed(self.view)(request, processor)
-        await ASGI.finalize_response(response, request)  # finalize response
+        await SettingsLoaded.ASGI.finalize_response(response, request)  # finalize response
         return response
 
     def run(self):
@@ -212,34 +212,24 @@ class HttpsRedirectMicroApp(MicroApp):
         """
         Returns an http redirect response.
         """
-        from duck.settings.loaded import WSGI
-        
         query = request.META.get("QUERY_STRING", "")
         dest_url = self.location_root_url.join(request.path)
         dest_url.query = query
         dest_url = dest_url.to_str()
         redirect = HttpRedirectResponse(location=dest_url, permanent=False)
         
-        # Finalize response
-        WSGI.finalize_response(redirect, request)
+        # Return response
         return redirect
 
     async def async_view(self, request: HttpRequest, request_processor: RequestProcessor) -> HttpResponse:
         """
         Returns an http redirect response.
         """
-        from duck.settings.loaded import ASGI
-        
         query = request.META.get("QUERY_STRING", "")
         dest_url = self.location_root_url.join(request.path)
         dest_url.query = query
         dest_url = dest_url.to_str()
         redirect = HttpRedirectResponse(location=dest_url, permanent=False)
         
-        # Finalize response
-        await ASGI.finalize_response(redirect, request)
+        # Return response
         return redirect
-
-
-if SETTINGS['ASYNC_HANDLING']:
-    HttpsRedirectMicroApp.view = HttpsRedirectMicroApp.async_view
