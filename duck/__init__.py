@@ -25,11 +25,15 @@ import sys
 import pathlib
 
 from duck.version import version
+from duck.compat import apply_backward_compatibility
 
 
 __author__ = "Brian Musakwa"
 __email__ = "digreatbrian@gmail.com"
 __version__ = version
+
+# Apply backward compatibility (if applicable)
+apply_backward_compatibility()
 
 # Add current directory or parent directory to pythonpath
 # This is critical for resolving modules inside the project.
