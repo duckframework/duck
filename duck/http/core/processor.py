@@ -9,6 +9,7 @@ from typing import (
     Dict,
     Any,
     Tuple,
+    Union,
 )
 from functools import lru_cache
 
