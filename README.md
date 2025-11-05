@@ -1,6 +1,26 @@
 # Duck Framework
 ![Duck image](./images/duck-icon.png)
 
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/release/python-3100/)
+[![GitHub stars](https://img.shields.io/github/stars/duckframework/duck?style=social)](https://github.com/duckframework/duck/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/duckframework/duck?style=social)](https://github.com/duckframework/duck/network/members)
+[![License](https://img.shields.io/github/license/duckframework/duck)](https://github.com/duckframework/duck/blob/main/LICENSE)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/duckframework/duck/python-package.yml?branch=main)](https://github.com/duckframework/duck/actions)
+[![Open Issues](https://img.shields.io/github/issues/duckframework/duck)](https://github.com/duckframework/duck/issues)
+[![Contributors](https://img.shields.io/github/contributors/duckframework/duck)](https://github.com/duckframework/duck/graphs/contributors)
+[![HTTPS](https://img.shields.io/badge/HTTPS-supported-brightgreen.svg)](#)
+[![HTTP/2](https://img.shields.io/badge/HTTP--2-supported-brightgreen.svg)](#)
+[![WebSocket](https://img.shields.io/badge/WebSocket-supported-brightgreen.svg)](#)
+[![Async Views](https://img.shields.io/badge/Async-WSGI%2FASGI-blue.svg)](#)
+[![Task Automation](https://img.shields.io/badge/Task-Automation-blueviolet.svg)](#)
+[![Content Compression](https://img.shields.io/badge/Compression-gzip%2C%20brotli%2C%20deflate-blue.svg)](#)
+[![SSL Auto-Renewal](https://img.shields.io/badge/SSL-Auto%20Renewal-brightgreen.svg)](#)
+[![Resumable Downloads](https://img.shields.io/badge/Downloads-Resumable-orange.svg)](#)
+[![Security](https://img.shields.io/badge/Security-DoS%2C%20SQLi%2C%20CmdInj-red.svg)](#)
+[![DuckSight Hot Reload](https://img.shields.io/badge/HotReload-DuckSight-yellow.svg)](#)
+[![Django Integration](https://img.shields.io/badge/Django-Integration-blue.svg)](#)
+[![Monitoring](https://img.shields.io/badge/Monitoring-CPU%2FRAM%2FDisk%2FI%2FO-brightgreen.svg)](#)
+
 **Duck** is a powerful, open-source, full-fledged Python-based **web server**, **framework**, and **reverse proxy** designed for building modern, customizable web applications — from small sites to large-scale platforms.  
 
 **It simplifies web development with:**
