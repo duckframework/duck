@@ -51,26 +51,14 @@ And more — see [feature list](https://duckframework.xyz/features)
 
 ---
 
-> ⚠️ **Repository Notice**  
-> We're currently making significant upgrades to ensure this project is **production-ready**!
-
-
-### 🚀 What's Changing?
-
-- **Enhanced `sync_to_async` Function**
-  - Upgrading our `sync_to_async` implementation to be **truly asynchronous** and more **thread-sensitive**.
-  - Unlike `asgiref.sync.sync_to_async`, which can create challenges for DB operations and often requires you to pass `thread_sensitive=False` for true async behavior (leading to various problems and limitations), our improved version aims to deliver a seamless, robust async experience—**without the gotchas**.
-
----
-
 ## Getting Started
 
-It is recommended to use **pipx** for installing **Duck**, as it allows you to run **Duck** system-wide in an isolated environment without affecting your main **Python** installation.  
+It is recommended to use **uv** for installing **Duck**.
 
-**Install Duck using `pipx`:**
+**Install Duck using `uv`:**
 
 ```sh
-pipx install git+https://github.com/duckframework/duck.git
+uv pip install git+https://github.com/duckframework/duck.git
 ```
 
 **Or using original `pip`:**
