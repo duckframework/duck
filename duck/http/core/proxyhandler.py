@@ -426,7 +426,7 @@ class AsyncHttpProxyResponse(HttpProxyResponse):
         content_obj: Content object with the initial or incomplete content.
         chunk_size: The streaming chunk size.
     """
-    async def async_iter_content(self) -> AsyncGenerator[bytes]:
+    async def async_iter_content(self) -> AsyncGenerator[bytes, None]:
         """
         An asynchronous generator to stream the current content followed by additional data as it is received.
 
