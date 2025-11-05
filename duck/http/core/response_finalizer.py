@@ -175,13 +175,19 @@ class ResponseFinalizer:
             csp_directives = SETTINGS['CSP_TRUSTED_SOURCES']
             nonce = csp_nonce(request)
             if csp_directives:
-                # Build CSP header string
-                csp_value = "; ".join(
-                    f"{directive} {' '.join([f"'nonce-{nonce}'" if i == csp_nonce_flag else i for i in sources])}"
-                    for directive, sources in csp_directives.items() if sources
-                ) + ";"
+                csp_parts = []
+                for directive, sources in csp_directives.items():
+                    if not sources:
+                        continue
+                    # Build each source string
+                    source_parts = [
+                        f"'nonce-{nonce}'" if i == csp_nonce_flag else i
+                        for i in sources
+                    ]
+                    csp_parts.append(f"{directive} {' '.join(source_parts)}")
+                csp_value = "; ".join(csp_parts) + ";"
                 response.set_header("Content-Security-Policy", csp_value)
-            
+
     @log_failsafe
     def do_set_connection_mode(self, response, request) -> None:
         """
