@@ -46,6 +46,7 @@ class RunserverCommand:
          domain: Optional[str] = None,
          mainfile: Optional[str] = None,
          uses_ipv6: bool = False,
+         is_reload: bool = False,
      ):
         from duck.app import App
         from duck.settings import SETTINGS
@@ -63,8 +64,8 @@ class RunserverCommand:
             # Execute sub-command
             command = [sys.executable, mainfile]
             
-            if reload:
-                command.extend(["--reload"])
+            if is_reload:
+                command.extend(["--is-reload"])
             
             # Execute command and replace current process.
             os.execve(sys.executable, command, os.environ)

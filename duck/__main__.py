@@ -141,6 +141,7 @@ def runserver(address, port, domain, settings, ipv6, file, use_django, is_reload
         settings_module=settings,
         mainfile=file,
         uses_ipv6=ipv6,
+        is_reload=is_reload,
     )
 
 

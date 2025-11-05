@@ -379,8 +379,8 @@ SSL_PRIVATE_KEY_LOCATION: str = BASE_DIR / "etc/ssl/server.key"
 
 # Systemd Execution Command
 # Specifies the command that will be executed when the systemd service starts.
-# In this case, it runs the Duck web server on port 80, binding it to all available interfaces.
-SYSTEMD_EXEC_COMMAND: str = "python3 -m duck runserver -p 80 -a 0.0.0.0 -d localhost"
+# In this case, it runs the Duck web server from web/main.py.
+SYSTEMD_EXEC_COMMAND: str = "$(python -c 'import sys; print(sys.executable)') web/main.py"
 
 
 # Systemd Service Name
