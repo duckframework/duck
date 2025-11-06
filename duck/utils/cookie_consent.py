@@ -132,7 +132,7 @@ def set_cookie_consent(
     max_age=60*60*24*365,  # 1 year
     path="/",
     domain=None,
-    secure=True,
+    secure=False,
     httponly=False,
     samesite="Lax",
     expires=None,
@@ -147,7 +147,7 @@ def set_cookie_consent(
         max_age (int): Cookie duration in seconds. Default: 1 year.
         path (str): Path for cookie. Default: "/".
         domain (str): Domain for cookie. Default: None.
-        secure (bool): Set True for HTTPS sites. Default: True.
+        secure (bool): Set True for HTTPS sites. Default: False.
         httponly (bool): Prevent JS access if True. Default: False.
         samesite (str): SameSite policy. Default: "Lax".
         expires (datetime|str|None): Optional absolute expiration.
@@ -176,7 +176,7 @@ def generate_cookie_consent_str(
     max_age=60*60*24*365,  # 1 year
     path="/",
     domain=None,
-    secure=True,
+    secure=False,
     samesite="Lax",
     expires=None,
 ):
@@ -189,7 +189,7 @@ def generate_cookie_consent_str(
         max_age (int): Cookie duration in seconds. Default: 1 year.
         path (str): Path for cookie. Default: "/".
         domain (str): Domain for cookie. Default: None.
-        secure (bool): Add "; Secure" if True.
+        secure (bool): Add "; Secure" if True. Defaults to False.
         samesite (str): SameSite policy. Default: "Lax".
         expires (datetime|str|None): Optional absolute expiration.
 

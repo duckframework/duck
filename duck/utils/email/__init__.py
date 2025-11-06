@@ -9,7 +9,7 @@ Note:
         from dotenv import load_dotenv; load_dotenv()
     Or by passing them directly as arguments to class constructors.
 
-Author: digreatbrian
+Author: Brian Musakwa <digreatbrian@gmail.com>
 """
 
 import smtplib
