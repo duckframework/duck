@@ -76,6 +76,7 @@ class BaseCertbotAutoSSL(Automation):
         - Only useful if `ENABLE_HTTPS=True`.
         """
         default_view = microapp.view
+        default_async_view = microapp.async_view
         
         def wrapped_view(request, request_processor):
             """
@@ -92,12 +93,28 @@ class BaseCertbotAutoSSL(Automation):
             else:
                 return default_view(request, request_processor)
         
+        async def async_wrapped_view(request, request_processor):
+            """
+            Micro application `async_view` method patched with new functionality.
+            """
+            route = "/.well-known/.*"
+            pattern = re.compile(route)
+            
+            if pattern.fullmatch(request.path):
+                # This is an acme verification challenge path
+                response = await request_processor.get_response(request)
+                response.payload_obj.http_version = "HTTP/1.1" # http may be set to HTTP/2
+                return response
+            else:
+                return await default_async_view(request, request_processor)
+        
         # Apply view mathod patch
         microapp.view = wrapped_view
+        microapp.async_view = async_wrapped_view
         
     def on_start(self):
         if SETTINGS["ENABLE_HTTPS"] and not SETTINGS["FORCE_HTTPS"]:
-            logger.log("CertbotAutoSSL: `FORCE_HTTPS` disabled in settings", level=logger.WARNING)
+            logger.log("CertbotAutoSSL: 'FORCE_HTTPS' disabled in settings", level=logger.WARNING)
             self.disable_execution = True
             
     def extract_config_values(self, config_path: str, *args):

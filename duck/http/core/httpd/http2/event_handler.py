@@ -30,7 +30,7 @@ from h2.settings import SettingCodes
 from duck.settings import SETTINGS
 from duck.http.request_data import RequestData
 from duck.http.response import HttpResponse
-from duck.contrib.sync import iscoroutinefunction
+from duck.contrib.sync import iscoroutinefunction, convert_to_async_if_needed
 from duck.utils.caching import InMemoryCache
 from duck.utils.threading import SyncFuture
 from duck.utils.asyncio import create_task
@@ -142,7 +142,7 @@ class EventHandler:
         else:
             # The server is using threads to manage the connection, so we need to dispose the processing of request
             # back to the current thread so that it will be handled synchronously rather than in async context.
-            self.execute_synchronously_in_current_thread(
+            await self.execute_synchronously_in_current_thread(
                 partial(
                     self.server.handle_request_data,
                     self.protocol.sock,
@@ -151,7 +151,7 @@ class EventHandler:
                 )
             )
             
-    def execute_synchronously_in_current_thread(self, func: Callable):
+    async def execute_synchronously_in_current_thread(self, func: Callable):
         """
         Adds a callable to `sync_queue` so that it will be executed outside async context,
         useful in multithreaded environment where threads are created for each connection
@@ -170,7 +170,9 @@ class EventHandler:
             )
             
         # Add task to queue so that will be executed synchronously.
-        self.protocol.sync_queue.put(func)
+        future = SyncFuture()
+        self.protocol.sync_queue.put((func, future))
+        await convert_to_async_if_needed(future.result)()
         
     def on_window_updated(self, stream_id, delta):
         """

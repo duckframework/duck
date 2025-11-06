@@ -42,16 +42,21 @@ import warnings
 
 from colorama import Fore, Style
 
+
 # Whether to silence all logs
 SILENT = False
+RESPECT_SILENT_CONSOLE_LOGS = False
 
 try:
     # If the below import succeeds, this means we are in a Duck project env.
     from duck.settings import SETTINGS
+    
     SILENT = SETTINGS['SILENT']
+    RESPECT_SILENT_CONSOLE_LOGS = SETTINGS.get("RESPECT_SILENT_CONSOLE_LOGS", False)
 except Exception:
     pass
-    
+
+        
 # Logging Levels
 INFO = 0x0
 DEBUG = 0x1
@@ -82,7 +87,7 @@ def log_raw(
             Requires `use_colors` to be `True`.
         end (str): The log suffix, defaults to `"\n"` for newline.
     """
-    if SILENT:
+    if SILENT and RESPECT_SILENT_CONSOLE_LOGS:
         # Do not log anything in this mode.
         return
         
@@ -135,7 +140,7 @@ def log(
             Requires `use_colors` to be `True`.
         end (str): The log suffix, defaults to `"\n"` for newline.
     """
-    if SILENT:
+    if SILENT and RESPECT_SILENT_CONSOLE_LOGS:
         # Do not log anything in this mode.
         return
         

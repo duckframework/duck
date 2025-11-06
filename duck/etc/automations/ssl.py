@@ -10,7 +10,6 @@ from duck.settings import SETTINGS
 
 
 SSL_CERT_PATH = SETTINGS["SSL_CERTFILE_LOCATION"]
-
 SSL_CERT_KEY_PATH = SETTINGS["SSL_PRIVATE_KEY_LOCATION"]
 
 
@@ -35,7 +34,7 @@ class BaseDuckSSLWatch(Automation):
     def on_start(self):
         if not self.logged_automation_start:
             if not SETTINGS["ENABLE_HTTPS"]:
-                logger.log("DuckSSLWatch: `ENABLE_HTTPS` required, automation disabled", level=logger.WARNING)
+                logger.log("DuckSSLWatch: 'ENABLE_HTTPS' required, automation disabled", level=logger.WARNING)
                 self.disable_execution = True
             else:
                 logger.log("DuckSSLWatch: Watching SSL file changes", level=logger.DEBUG)

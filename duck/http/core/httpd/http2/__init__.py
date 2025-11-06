@@ -50,6 +50,12 @@ H2_SETTINGS_REGEX = re.compile(
 )
 
 
+class SyncH2ProtocolStartWarning(UserWarning):
+    """
+    Flagged when `H2` protocol failed to start within specific timeframe in a synchronous environment.
+    """
+    
+
 class BaseHTTP2Server(BaseServer):
     """
     Base HTTP/2 server with HTTP/1.1 backward compatibility.
@@ -92,7 +98,6 @@ class BaseHTTP2Server(BaseServer):
         if not has_h2_alpn or not strictly_http2:
             # Fallback to HTTP/1
             # The user selected alpn protocol is not h2, switch to default HTTP/1 only if Upgrade to h2c is not set
-             
              try:
                 # Receive the full request (in bytes)
                 data = SocketIO.receive_full_request(sock=sock)
@@ -214,7 +219,7 @@ class BaseHTTP2Server(BaseServer):
             addr=addr,
             conn=h2_connection,
             event_handler=None,
-            event_loop=event_loop, # required in sync mode.
+            event_loop=event_loop, # Required in sync mode.
             sync_queue=queue.Queue(),
         )
         
@@ -230,22 +235,38 @@ class BaseHTTP2Server(BaseServer):
         # but we create a loop for executing synchronous tasks out of async context, in the current thread.
         AsyncioLoopManager.submit_task(coro)
         
+        # Wait for protocol to start but for limited time
+        wait_time_interval = .1
+        total_wait_time = 0
+        max_wait_time = 0
+        
+        while protocol.closing:
+            if total_wait_time >= max_wait_time:
+                # The protocol did not start within expected time
+                if SETTINGS['DEBUG']:
+                    logger.warn(f"H2 protocol failed to start within {max_wait_time} seconds for addr {addr}", SyncH2ProtocolStartWarning)
+                break
+            time.sleep(wait_time_interval)
+            total_wait_time += wait_time_interval
+         
         # As h2 is asynchrous, some tasks may require to be executed directly in current thread, thats the
         # use of the following loop.
-        while not protocol._closing:
+        while not protocol.closing:
             # Listen for synchronous tasks to handle only when h2 connection is valid
             try:
-                func = protocol.sync_queue.get(timeout=0.000000001)
+                func, future = protocol.sync_queue.get(timeout=0.000000001)
                 
                 # Execute function synchronously in current thread
                 result = func()
+                future.set_result(result)
                 
             except queue.Empty:
                 continue
             
             except Exception as e:
+                future.set_exception(e)
                 logger.log_exception(e)
-                
+        
     # ASYNCHRONOUS IMPLEMENTATIONS
      
     async def async_handle_conn(

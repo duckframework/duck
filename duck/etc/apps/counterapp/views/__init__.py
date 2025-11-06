@@ -50,7 +50,7 @@ class HomePage(Page):
         self.container.style["padding"] = "20px"
         
         # Add topheading
-        self.heading = Heading("h1", text="Counter App", color="#bbb")
+        self.heading = Heading("h1", text="Counter App", color="green")
         self.container.add_child(self.heading)
         
         # Add label
@@ -127,7 +127,7 @@ class HomePage(Page):
         self.container.style["padding"] = "20px"
         
         # Add topheading
-        self.heading = Heading("h1", text="Counter App", color="#bbb")
+        self.heading = Heading("h1", text="Counter App", color="green")
         self.container.add_child(self.heading)
         
         # Add label

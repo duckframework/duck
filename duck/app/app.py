@@ -270,12 +270,12 @@ class App:
             
         # Vital objects creation
         if self.force_https:
-            force_https_addr = addr
+            self.force_https_addr = addr
             self.force_https_app = Lazy(
                 HttpsRedirectMicroApp,
                 location_root_url=self.absolute_uri,
-                addr=force_https_addr,
-                port=force_https_port,
+                addr=self.force_https_addr,
+                port=self.force_https_port,
                 parent_app=self,
                 domain=self.domain,
                 uses_ipv6=uses_ipv6,
@@ -793,7 +793,7 @@ class App:
         # Shutdown threadpool executor if not stopped.            
         if self.thread_pool_executor:
             try:
-                self.thread_pool_executor.shutdown(wait=wait_for_thread_pool_executor_shutdown if not no_exit else False)
+                self.thread_pool_executor.shutdown(wait=wait_for_thread_pool_executor_shutdown if no_exit else False)
             except Exception as e:
                 logger.log_exception(e)
         

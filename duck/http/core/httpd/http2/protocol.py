@@ -54,7 +54,7 @@ class H2Protocol:
         "event_handler",
         "event_loop",
         "sync_queue",
-        "_closing",
+        "__closing",
     )
     
     def __init__(
@@ -84,7 +84,18 @@ class H2Protocol:
         self.event_handler = event_handler
         self.event_loop = event_loop
         self.sync_queue = sync_queue
-        self._closing = False
+        self.__closing = False
+        
+    @property
+    def closing(self) -> bool:
+        """
+        Returns a boolean on whether if protocol is in closing state.
+        """
+        return self.__closing
+        
+    @closing.setter
+    def closing(self, state: bool):
+        self.__closing = state
         
     async def run_forever(self):
         """
@@ -107,13 +118,13 @@ class H2Protocol:
                 
             else:
                 # Likely a connection close.
-                self._closing = True
+                self.closing = True
                 
                 # Finally sending goaway frame. 
                 await self.async_send_goaway(0)
             
         # Read and handle H2 frames.
-        while not  self._closing:
+        while not  self.closing:
             
             # Yield control to the eventloop
             await asyncio.sleep(0)
@@ -134,7 +145,7 @@ class H2Protocol:
                 OSError,
                 BrokenPipeError,
             ): # Connection errors
-                self._closing = True
+                self.closing = True
                 break
                 
             except ProtocolError as e:
@@ -156,13 +167,13 @@ class H2Protocol:
         """
         Called on socket connection lost.
         """
-        self._closing = True
+        self.closing = True
         
     def close_connection(self, error_code: int = 0, debug_message: bytes = None):
         """
         Closes the socket connection.
         """
-        self._closing = True
+        self.closing = True
         SocketIO.close(self.sock)
         
     def send_pending_data(self):

@@ -30,7 +30,6 @@ class CollectStaticCommand:
         from duck.settings import SETTINGS
         
         static_root = str(SETTINGS["STATIC_ROOT"])
-        
         blueprint_static_dirs: List[str, Blueprint] = list(cls.find_blueprint_static_dirs())
         blueprint_staticfiles: List[str] = list(cls.get_blueprint_staticfiles(blueprint_static_dirs))
         global_static_dirs = SETTINGS["GLOBAL_STATIC_DIRS"] or []
@@ -57,7 +56,7 @@ class CollectStaticCommand:
             
             # Obtain confirmation from console.
             choice = input("")
-                
+            
             if not choice.lower().startswith("y"):
                 console.log_raw("\nCancelled, bye!", level=console.WARNING)
                 return
@@ -110,7 +109,7 @@ class CollectStaticCommand:
                         yield i
     
     @classmethod
-    def find_blueprint_static_dirs(cls) -> Generator:
+    def find_blueprint_static_dirs(cls) -> Generator[Tuple[str, Blueprint], None, None]:
         """
         Finds and returns static directories from all blueprint base directories.
     
@@ -120,6 +119,14 @@ class CollectStaticCommand:
         from duck.settings import SETTINGS
         from duck.settings.loaded import SettingsLoaded
         from duck.etc.apps.defaultsite.blueprint import DuckSite
+        from duck.backend.django.setup import prepare_django, DjangoSetupWarning
+        
+        # Setup Django if not set
+        # Try preparing Django backend
+        try:
+            prepare_django(True)
+        except Exception as e:
+            console.warn(f"Django setup failed: {e}", DjangoSetupWarning)
         
         _blueprints = SettingsLoaded.BLUEPRINTS
         
