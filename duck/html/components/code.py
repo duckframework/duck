@@ -123,6 +123,12 @@ class Code(InnerComponent):
                     copyBtn.addClass(initialCopyIconClass);
                     copyBtn.removeClass(successCopyIconClass);
                     
+                    // Check for compatibility
+                    if (!navigator.clipboard) {
+                      console.warn("Clipboard not available, make sure this code is run in secure context e.g. in HTTPS secure environment.");
+                      return;
+                    }
+                    
                     // Copy the content to clipboard here (use Clipboard API)
                     navigator.clipboard.writeText(codeBlock[0].innerText)
                         .then(() => {
