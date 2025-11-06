@@ -3,6 +3,7 @@ File containing settings for Duck application.
 """
 # yapf: disable
 import os
+import sys
 import pathlib
 
 from duck.html.components.utils.include import (
@@ -380,7 +381,7 @@ SSL_PRIVATE_KEY_LOCATION: str = BASE_DIR / "etc/ssl/server.key"
 # Systemd Execution Command
 # Specifies the command that will be executed when the systemd service starts.
 # In this case, it runs the Duck web server from web/main.py.
-SYSTEMD_EXEC_COMMAND: str = "$(python -c 'import sys; print(sys.executable)') web/main.py"
+SYSTEMD_EXEC_COMMAND: str = f"{sys.executable} web/main.py"
 
 
 # Systemd Service Name
