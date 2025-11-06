@@ -101,7 +101,7 @@ class Email:
         """
         self.smtp_host = smtp_host
         self.smtp_port = smtp_port
-        self.username = username
+        self.username = username or from_addr
         self.password = password
         self.from_addr = from_addr
         self.name = name
@@ -198,6 +198,23 @@ class Email:
                 recipients=all_recipients,
             )
         self.is_sent = True
+
+    def __repr__(self):
+        return (
+            f'<{self.__class__.__name__}'
+            f' from="{self.from_addr}"'
+            f' to="{self.to}"'
+            f' host="{self.smtp_host}">'
+        )
+    
+    def __str__(self):
+        return (
+            f'<{self.__class__.__name__}'
+            f' from="{self.from_addr}"'
+            f' to="{self.to}"'
+            f' host="{self.smtp_host}">'
+        )
+
 
 
 class Gmail(Email):
