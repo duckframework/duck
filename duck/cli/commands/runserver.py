@@ -27,6 +27,7 @@ class RunserverCommand:
         settings_module: Optional[str] = None,
         mainfile: Optional[str] = None,
         uses_ipv6: bool = False,
+        is_reload: bool = False,
     ):
         # Runserver
         cls.setup(settings_module)
@@ -36,6 +37,7 @@ class RunserverCommand:
             domain=domain,
             mainfile=mainfile,
             uses_ipv6=uses_ipv6,
+            is_reload=is_reload,
         )
     
     @classmethod
