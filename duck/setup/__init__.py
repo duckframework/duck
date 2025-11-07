@@ -12,6 +12,7 @@ from typing import List
 
 from duck.exceptions.all import SettingsError
 from duck.routes import register_blueprints, register_urlpatterns
+from duck.logging import logger
 from duck.settings import SETTINGS
 from duck.settings.loaded import SettingsLoaded
 from duck.html.components.core.system import LivelyComponentSystem
