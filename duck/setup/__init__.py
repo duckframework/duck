@@ -4,8 +4,9 @@ Module for setting up Duck space and configure all necessary components to ensur
 
 import os
 import sys
-import threading
 import asyncio
+import platform
+import threading
 
 from typing import List
 
@@ -106,6 +107,15 @@ def set_asyncio_loop():
             )
 
         if loop_choice == "uvloop":
+            current_platform = platform.system() or ""
+            if current_platform.lower() == "windows":
+                # There are some community/experimental efforts for Windows but they are
+                # not reliable across all uvloop releases. Provide a clear message.
+                raise SettingsError(
+                    "uvloop is generally not supported on Windows in official releases. "
+                    "Set ASYNC_LOOP to 'asyncio' or run on a Unix-like OS (Linux, macOS)."
+                )
+            
             try:
                 import uvloop
             except ImportError as e:

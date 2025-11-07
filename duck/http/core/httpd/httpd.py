@@ -11,6 +11,7 @@ import select
 import socket
 import asyncio
 import threading
+import platform
 
 from functools import partial
 from typing import (
@@ -191,9 +192,9 @@ class BaseServer:
                  )
                  
                 if SETTINGS['SUPPORT_HTTP_2'] or SETTINGS['ASYNC_HANDLING']:
-                     if SETTINGS['ASYNC_LOOP'] != "uvloop":
+                     if SETTINGS['ASYNC_LOOP'] != "uvloop" and (platform.system() or "").lower() != "windows":
                          logger.log("Default asyncio loop enabled", level=logger.WARNING)
-                         logger.log("'uvloop' is recommended for better performance", level=logger.WARNING)
+                         logger.log("Loop: 'uvloop' is recommended for better performance", level=logger.WARNING)
                          
         # Listen and set the server in running state
         self.running = True
