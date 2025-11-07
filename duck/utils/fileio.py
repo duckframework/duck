@@ -21,8 +21,9 @@ import asyncio
 from typing import Optional
 
 from duck.exceptions.all import AsyncViolationError
-from duck.utils.asyncio import create_task, in_async_context
-from duck.contrib.sync import sync_to_async
+from duck.utils.asyncio import in_async_context
+from duck.utils.threading import async_to_sync_future
+from duck.contrib.sync import convert_to_async_if_needed
 
 
 def to_async_fileio_stream(fileio_stream: "FileIOStream") -> "AsyncFileIOStream":
@@ -71,6 +72,7 @@ class FileIOStream(io.IOBase):
         "chunk_size",
         "open_now",
         "ignore_file_open_on_delete",
+        "close_on_delete",
         "_file",
         "_pos",
         "_mode",
@@ -97,6 +99,7 @@ class FileIOStream(io.IOBase):
         self.filepath = filepath
         self.chunk_size = chunk_size
         self.ignore_file_open_on_delete = False
+        self.close_on_delete = True # Closes fileio stream if still open on delete
         self._file: Optional[io.BufferedIOBase] = None
         self._pos = 0
         self._mode = mode
@@ -201,6 +204,17 @@ class FileIOStream(io.IOBase):
         Ensure the file is closed on delete else it raises a RuntimeError if file not closed.
         """
         if self.is_open() and not self.ignore_file_open_on_delete:
+            if self.close_on_delete:
+                try:
+                    if not in_async_context:
+                        self.close() # Close file io stream if stil open
+                    else:
+                        # If in async context, fire and forget close coro
+                        loop = asyncio.get_event_loop()
+                        asyncio.run_coroutine_threadsafe(convert_to_async_if_needed(self.close)(), loop)
+                    return # Avoid raising runtime error
+                except Exception:
+                    pass
             raise RuntimeError("File is not closed yet, please ensure the file is closed before deletion.")
 
 
@@ -224,7 +238,7 @@ class AsyncFileIOStream(FileIOStream):
         Asynchronously open the file.
         """
         if not self.is_open():
-            await sync_to_async(super().open)(self.filepath, self._mode)
+            await convert_to_async_if_needed(super().open)(self.filepath, self._mode)
 
     async def read(self, size: int = -1) -> bytes:
         """
@@ -243,10 +257,10 @@ class AsyncFileIOStream(FileIOStream):
             self._file.seek(self._pos)
             
             if size == -1:
-                data = await sync_to_async(self._file.read)()
+                data = await convert_to_async_if_needed(self._file.read)()
             
             else:
-                data = await sync_to_async(self._file.read)(min(size, self.chunk_size))
+                data = await convert_to_async_if_needed(self._file.read)(min(size, self.chunk_size))
             
             self._pos += len(data)
             return data
@@ -267,7 +281,7 @@ class AsyncFileIOStream(FileIOStream):
             # Seek musn't be async its very fast.
             self._file.seek(self._pos)
             
-            written = await sync_to_async(self._file.write)(data)
+            written = await convert_to_async_if_needed(self._file.write)(data)
             self._pos += written
             return written
 
@@ -277,7 +291,7 @@ class AsyncFileIOStream(FileIOStream):
         """
         async with self._lock:
             if self.is_open():
-                await sync_to_async(super().close)()
+                await convert_to_async_if_needed(super().close)()
                 
     async def __aenter__(self):
         await self.async_open()

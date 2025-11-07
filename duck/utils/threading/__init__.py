@@ -2,6 +2,7 @@
 Threading utilities and helpers.
 """
 import os
+import asyncio
 import platform
 import threading
 
@@ -61,6 +62,21 @@ def get_max_workers() -> int:
     max_workers = min(cpu_limit, mem_limit, thread_adjustment, 2000)
     return max(8, max_workers)
 
+
+def async_to_sync_future(async_future: asyncio.Future) -> "SyncFuture":
+    """
+    Converts an asynchronous future to a synchronous future.
+    """
+    sync_future = SyncFuture()
+    def _transfer_result(fut: asyncio.Future):
+        try:
+            result = fut.result()
+            sync_future.set_result(result)
+        except Exception as e:
+            sync_future.set_exception(e)
+    async_future.add_done_callback(_transfer_result)
+    return sync_future
+    
 
 class SyncFuture:
     """

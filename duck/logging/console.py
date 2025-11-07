@@ -39,7 +39,9 @@ log_raw("Raw debug message", level=DEBUG, use_colors=True, custom_color=Fore.MAG
 import sys
 import threading
 import warnings
+import traceback
 
+from typing import Callable
 from colorama import Fore, Style
 
 
@@ -198,3 +200,56 @@ def warn(message: str, category: Warning = UserWarning, use_colors: bool = True,
     """
     if not should_filter_warning(category, message, module, lineno):
         log_raw(f"{category.__name__}: {message}", level=WARNING, use_colors=use_colors)
+
+
+
+def expand_exception(e: Exception) -> str:
+    """
+    Expands an exception to show the traceback and more information.
+
+    Args:
+        e (Exception): The exception to expand.
+
+    Returns:
+        str: The expanded exception.
+    """
+    return "".join(
+        traceback.format_exception(type(e), value=e, tb=e.__traceback__))
+
+
+def handle_exception(func: Callable):
+    """
+    Decorator that executes a function or callable. If an exception occurs, logs the exception to console and file or both.
+
+    Args:
+        func (Callable): The function to be decorated.
+
+    Returns:
+        callable: The wrapped function with exception handling.
+    """
+    def wrapper(*args, **kwargs):
+        """
+        Wrapper function for the callable provided to the decorator.
+
+        Args:
+            *args: Variable length argument list for the callable.
+            **kwargs: Arbitrary keyword arguments for the callable.
+
+        Returns:
+            Any: The return value of the callable, if no exception occurs.
+        """
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            log_exception(e)
+    return wrapper
+
+
+def log_exception(e: Exception):
+    """
+    Logs exception to console and file or both.
+    """
+    exception = expand_exception(e)
+    
+    if not (SILENT and RESPECT_SILENT_CONSOLE_LOGS):
+        log_raw(exception)

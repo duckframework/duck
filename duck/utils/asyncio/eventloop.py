@@ -16,7 +16,7 @@ import threading
 
 from typing import Union, Coroutine
 
-from duck.utils.threading import SyncFuture
+from duck.utils.threading import SyncFuture, async_to_sync_future
 
 
 class AsyncioLoopManager:
@@ -64,17 +64,8 @@ class AsyncioLoopManager:
         """
         if cls._loop is not None and cls._loop.is_running():
             future = asyncio.run_coroutine_threadsafe(coro, cls._loop)
-            
             if return_sync_future:
-                sync_future = SyncFuture()
-                def _transfer_result(fut: asyncio.Future):
-                    try:
-                        result = fut.result()
-                        sync_future.set_result(result)
-                    except Exception as e:
-                        sync_future.set_exception(e)
-                future.add_done_callback(_transfer_result)
-                return sync_future
+                future = async_to_sync_future(future)
             return future
         else:
             raise RuntimeError("Event loop is not running. Method start() must be called first.")
