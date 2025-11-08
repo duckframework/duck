@@ -5,6 +5,7 @@ by automatically handling certificate issuance and renewal.
 """
 import re
 import os
+import sys
 import time
 import subprocess
 import configparser
@@ -227,7 +228,7 @@ class BaseCertbotAutoSSL(Automation):
     def execute(self):
         certbot_root = SETTINGS["CERTBOT_ROOT"]
         certbot_email = SETTINGS["CERTBOT_EMAIL"]
-        certbot_executable = SETTINGS.get("CERTBOT_EXECUTABLE", "certbot")
+        certbot_executable = SETTINGS.get("CERTBOT_EXECUTABLE")
         certbot_extra_args = SETTINGS.get("CERTBOT_EXTRA_ARGS", [])
         
         app = self.get_running_app()
@@ -275,7 +276,8 @@ class BaseCertbotAutoSSL(Automation):
         
         # Construct Certbot command
         certbot_command = [
-            certbot_executable, "certonly",
+            certbot_executable or *[sys.executable, "-m", "certbot"],
+            "certonly",
             "--webroot", "--webroot-path", certbot_root,
             "--config-dir", certbot_root,
             "--work-dir", joinpaths(str(certbot_root), "work"),

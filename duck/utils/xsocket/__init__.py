@@ -302,7 +302,7 @@ class xsocket:
         sock.settimeout(timeout)
         
         try:
-            count = sock.recv_into(mv, 0)
+            count = sock.recv_into(mv, n)
             if count == 0:
                 # Connection closed gracefully
                 return b""
@@ -312,13 +312,6 @@ class xsocket:
         finally:
             sock.settimeout(original_timeout)
     
-    async def async_accept(self, timeout: float = None) -> None:
-        """
-        Accept client connection.
-        """
-        self.raise_if_blocking()
-        await asyncio.wait_for(self.loop.sock_accept(self.raw_socket, target), timeout=timeout)
-        
     async def async_connect(self, target = Tuple[str, int], timeout: float = None) -> None:
         """
         Connect socket to a target.
