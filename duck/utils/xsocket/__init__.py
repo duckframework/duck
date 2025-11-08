@@ -581,10 +581,13 @@ class ssl_xsocket(xsocket):
         
         while not self._handshake_done:
             try:
+                print("Attempting ssl_obj.do_handshake")
                 self.ssl_obj.do_handshake()
                 
                 # Flush any data remaining in outbio
+                print("Sending data over using send_pending_data")
                 self.send_pending_data(timeout=timeout)
+                print("Handshake complete")
                 self._handshake_done = True
                 return
                 
