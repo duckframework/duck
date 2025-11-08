@@ -797,8 +797,10 @@ class ssl_xsocket(xsocket):
                 
                 # The following statement may stall if the handshake is done already.
                 if not self.is_handshake_done():
-                    # if recv returns EOF -> will raise ConnectionResetError
-                    await self.async_recv_more_encrypted_data(timeout=timeout)
+                    # Only receive data if data already available
+                    if self.transport_readable(.01):
+                        # if recv returns EOF -> will raise ConnectionResetError
+                        await self.async_recv_more_encrypted_data(timeout=timeout)
                 else:
                     self._hanshake_done = True
                     return
