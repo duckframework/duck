@@ -10,6 +10,8 @@ import time
 import subprocess
 import configparser
 
+from pathlib import Path
+
 from duck.exceptions.all import SettingsError
 from duck.http.core.handler import ResponseHandler
 from duck.automation import Automation
@@ -266,21 +268,23 @@ class BaseCertbotAutoSSL(Automation):
             time.sleep(.5) # wait for app to start
             
         # Construct Certbot command
-        certbot_command = ["%s"%certbot_executable] or ["%s"%sys.executable, "-m", "certbot"]
-        certbot_command.extend([
+        bin_dir = Path(sys.executable).parent
+        default_certbot_exe = bin_dir / "certbot"
+        certbot_command = [
+            "%s"%(certbot_executable or default_certbot_exe),
             "certonly",
-            "--webroot", "--webroot-path", certbot_root,
-            "--config-dir", certbot_root,
+            "--webroot", "--webroot-path", "%"%certbot_root,
+            "--config-dir", "%s"%certbot_root,
             "--work-dir", joinpaths(str(certbot_root), "work"),
             "--logs-dir", joinpaths(str(certbot_root), "logs"),
             "--cert-name", self.certname,
             "-d", domain,
             "-d", f"www.{domain}",
-            "--fullchain-path", SSL_CERT_PATH,
-            "--key-path", SSL_CERT_KEY_PATH,
+            "--fullchain-path", "%s"%SSL_CERT_PATH,
+            "--key-path", ""%s%SSL_CERT_KEY_PATH,
             "--agree-tos", "--non-interactive",
             "--email", certbot_email,
-        ])
+        ]
         certbot_command.extend(certbot_extra_args) if certbot_extra_args else None
         
         if not called_before:
@@ -288,10 +292,10 @@ class BaseCertbotAutoSSL(Automation):
                 "CertbotAutoSSL: App has been started, executing `certbot`",
                 level=logger.DEBUG,
             )
-        else:
-            logger.log("CertbotAutoSSL: Executing `certbot`", level=logger.DEBUG)
             if SETTINGS['DEBUG'] or "-v" in certbot_command:
                 logger.log(f"Executing command: {certbot_command}", level=logger.DEBUG)
+        else:
+            logger.log("CertbotAutoSSL: Executing `certbot`", level=logger.DEBUG)
                 
         try:
             result = subprocess.run(
