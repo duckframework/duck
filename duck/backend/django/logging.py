@@ -49,7 +49,7 @@ if SETTINGS["DJANGO_SILENT"]:
 
     SIMPLE_CONFIG = {
         "version": 1,
-        "disable_existing_loggers": True,
+        "disable_existing_loggers": False,
         "formatters": {
             "exception_only": {
                 "format": "{message}",
