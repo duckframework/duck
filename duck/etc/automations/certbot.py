@@ -300,14 +300,13 @@ class BaseCertbotAutoSSL(Automation):
         try:
             result = subprocess.run(
                 certbot_command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=subprocess.PIPE if not (SETTINGS['DEBUG'] or '-v' in certbot_command) else sys.stdout,
+                stderr=subprocess.PIPE if not (SETTINGS['DEBUG'] or '-v' in certbot_command) else sys.stderr,
                 text=True
             )
 
             if result.returncode == 0:
                 self.on_cert_success()
-            
             else:
                 if SETTINGS['DEBUG']:
                     logger.log(f"CertbotAutoSSL: Certbot failed with exit code {result.returncode}", level=logger.WARNING)
