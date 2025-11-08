@@ -265,15 +265,6 @@ class BaseCertbotAutoSSL(Automation):
         while not app.started:
             time.sleep(.5) # wait for app to start
             
-        if not called_before:
-            logger.log(
-                "CertbotAutoSSL: App has been started, executing `certbot`",
-                level=logger.DEBUG,
-            )
-        
-        else:
-            logger.log("CertbotAutoSSL: Executing `certbot`", level=logger.DEBUG)
-        
         # Construct Certbot command
         certbot_command = ["%s"%certbot_executable] or ["%s"%sys.executable, "-m", "certbot"]
         certbot_command.extend([
@@ -290,9 +281,18 @@ class BaseCertbotAutoSSL(Automation):
             "--agree-tos", "--non-interactive",
             "--email", certbot_email,
         ])
-        
         certbot_command.extend(certbot_extra_args) if certbot_extra_args else None
         
+        if not called_before:
+            logger.log(
+                "CertbotAutoSSL: App has been started, executing `certbot`",
+                level=logger.DEBUG,
+            )
+        else:
+            logger.log("CertbotAutoSSL: Executing `certbot`", level=logger.DEBUG)
+            if SETTINGS['DEBUG'] or "-v" in certbot_command:
+                logger.log(f"Executing command: {certbot_command}", level=logger.DEBUG)
+                
         try:
             result = subprocess.run(
                 certbot_command,
@@ -305,7 +305,6 @@ class BaseCertbotAutoSSL(Automation):
                 self.on_cert_success()
             
             else:
-                
                 if SETTINGS['DEBUG']:
                     logger.log(f"CertbotAutoSSL: Certbot failed with exit code {result.returncode}", level=logger.WARNING)
                     logger.log(f"CertbotAutoSSL: STDERR: \n{result.stderr.strip()}\n", level=logger.WARNING)

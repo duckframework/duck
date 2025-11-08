@@ -448,6 +448,7 @@ class ssl_xsocket(xsocket):
             "data_to_send",
             "send_pending_data",
             "recv_pending_data",
+            "is_handshake_done",
             "do_handshake",
             # async implementations
             "async_send_pending_data",
@@ -579,9 +580,6 @@ class ssl_xsocket(xsocket):
         This function accesses the low-level OpenSSL object to check the handshake status flags.
         """
         try:
-            # Access the low-level SSLObject
-            ssl_object = self.ssl_obj
-            
             # Check OpenSSL's internal flags for SSL_CB_HANDSHAKE_DONE (0x20)
             # The info_callback function is used here to monitor the state.
             # As a direct check, we can leverage the internal state representation.
@@ -598,7 +596,7 @@ class ssl_xsocket(xsocket):
             
             # Let's use the standard method of attempting to get the peer certificate, 
             # which will raise an exception if the handshake is not complete.
-            ssl_sock.getpeercert()
+            self.getpeercert()
             return True
         except ssl.SSLError as e:
             # This will catch errors like 'ssl handshake failure' if the handshake 
@@ -606,8 +604,8 @@ class ssl_xsocket(xsocket):
             # This approach assumes you want to know if the handshake *can* be done.
             # A better, more direct way is unavailable in stock Python < 3.10.
             return False
-        except AttributeError:
-            # If _sslobj doesn't exist (not an SSLSocket)
+        except ValueError:
+            # Handshake not complete
             return False
         except Exception:
             # Other potential errors during the check
