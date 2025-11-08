@@ -573,6 +573,23 @@ class ssl_xsocket(xsocket):
         self.ssl_inbio.write(data)
         return len(data)
     
+    def transport_readable(self, timeout: Optional[float]) -> bool:
+        """
+        Returns True if the underlying transport has bytes available for reading.
+        Uses select.select on the socket fileno. If timeout is None, select will block
+        until readability (which preserves blocking behaviour when the caller intentionally
+        passes None). If timeout is a number, it is used as the select timeout.
+        """
+        try:
+            fd = self.fileno()
+        except Exception:
+            # fallback: if fileno not available, assume readable (safer to try recv)
+            return True
+
+        # For non-blocking check, timeout may be 0. select handles None (block), 0 (poll), >0 (wait).
+        rlist, _, _ = select.select([fd], [], [], timeout)
+        return bool(rlist)
+        
     def is_handshake_done(self) -> bool:
         """
         Checks if handshake is complete directly from `ssl_obj`.  
@@ -617,11 +634,8 @@ class ssl_xsocket(xsocket):
         Blocking handshake loop with flush/recv handling and EOF detection.
         """
         self.raise_if_in_async_context("This method is blocking, use `async_do_handshake` instead.")
-        counter = -1
         
         while not self._handshake_done:
-            counter += 1
-            
             try:
                 self.ssl_obj.do_handshake()
                 
@@ -636,17 +650,10 @@ class ssl_xsocket(xsocket):
                 
                 # The following statement may stall if the handshake is done already.
                 if not self.is_handshake_done():
-                    # On some cases on second iteration, handshake might be done
-                    if counter > 1:
-                        try:
-                            self.recv_more_encrypted_data(timeout=.1)
-                        except TimeoutError:
-                            self._handshake_done = True
-                            return
-                            
-                    # If recv returns EOF -> will raise ConnectionResetError
-                    self.recv_more_encrypted_data(timeout=timeout)
-                
+                    # Only receive data if data already available
+                    if self.transport_readable(.01):
+                        # If recv returns EOF -> will raise ConnectionResetError
+                        self.recv_more_encrypted_data(timeout=timeout)
                 else:
                     self._handshake_done = True
                     return
