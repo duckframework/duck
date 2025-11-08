@@ -1081,7 +1081,7 @@ class App:
                 
                 # Log some info
                 host_url += f"{host}:{port}"
-                logger.log_raw("\n")
+                #logger.log_raw("")
                 logger.log(
                     "Django started yey, that's good!",
                     level=logger.DEBUG,

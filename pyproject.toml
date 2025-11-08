@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "Duck"
 version = "1.0.1"
-description = "Duck is a Python-based webserver, framework, and proxy that integrates seamlessly with Django."
+description = "**Duck** is a powerful, open-source, full-fledged Python-based **web server**, **framework**, and **reverse proxy** designed for building modern, customizable web applications — from small sites to large-scale platforms."
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
@@ -67,9 +67,9 @@ keywords = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/digreatbrian/duck"
-Repository = "https://github.com/digreatbrian/duck"
-Issues = "https://github.com/digreatbrian/duck/issues"
+Homepage = "https://github.com/duckframework/duck"
+Repository = "https://github.com/duckframework/duck"
+Issues = "https://github.com/duckframework/duck/issues"
 Documentation = "https://duckframework.xyz/documentation"
 
 [project.entry-points.console_scripts]

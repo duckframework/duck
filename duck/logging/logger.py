@@ -399,7 +399,7 @@ class Logger:
         """
         if os.path.isdir(LOGGING_DIR):
             scan = {i.stat().st_ctime: i for i in os.scandir(LOGGING_DIR)}
-            return scan.get(sorted(scan)[-1]) if scan else None
+            return "%s"%scan.get(sorted(scan)[-1]).path if scan else None
             
     @classmethod
     def log_to_file(cls, data: Union[str, bytes], end: Union[str, bytes] = "\n") -> str | bytes:

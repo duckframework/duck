@@ -157,7 +157,9 @@ def setup(make_app_dirs: bool = True, use_threads_for_heavy_work: bool = True):
         prepare_django(True)
     except Exception as e:
         logger.warn(f"Django setup failed: {e}", DjangoSetupWarning)
-    
+        if SETTINGS['DEBUG']:
+            logger.log_exception(e)
+            
     # Register some urlpatterns
     register_urlpatterns(SettingsLoaded.URLPATTERNS)
     register_blueprints(SettingsLoaded.BLUEPRINTS)
