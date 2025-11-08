@@ -281,7 +281,7 @@ class BaseCertbotAutoSSL(Automation):
             "-d", domain,
             "-d", f"www.{domain}",
             "--fullchain-path", "%s"%SSL_CERT_PATH,
-            "--key-path", ""%s%SSL_CERT_KEY_PATH,
+            "--key-path", "%s"%SSL_CERT_KEY_PATH,
             "--agree-tos", "--non-interactive",
             "--email", certbot_email,
         ]
