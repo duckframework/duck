@@ -617,8 +617,11 @@ class ssl_xsocket(xsocket):
         Blocking handshake loop with flush/recv handling and EOF detection.
         """
         self.raise_if_in_async_context("This method is blocking, use `async_do_handshake` instead.")
+        counter = -1
         
         while not self._handshake_done:
+            counter += 1
+            
             try:
                 self.ssl_obj.do_handshake()
                 
@@ -633,8 +636,17 @@ class ssl_xsocket(xsocket):
                 
                 # The following statement may stall if the handshake is done already.
                 if not self.is_handshake_done():
+                    # On some cases on second iteration, handshake might be done
+                    if counter > 1:
+                        try:
+                            self.recv_more_encrypted_data(timeout=.1)
+                        except TimeoutError:
+                            self._handshake_done = True
+                            return
+                            
                     # If recv returns EOF -> will raise ConnectionResetError
                     self.recv_more_encrypted_data(timeout=timeout)
+                
                 else:
                     self._handshake_done = True
                     return
