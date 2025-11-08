@@ -275,7 +275,7 @@ class BaseCertbotAutoSSL(Automation):
             logger.log("CertbotAutoSSL: Executing `certbot`", level=logger.DEBUG)
         
         # Construct Certbot command
-        certbot_command = [certbot_executable] or [sys.executable, "-m", "certbot"]
+        certbot_command = ["%s"%certbot_executable] or ["%s"%sys.executable, "-m", "certbot"]
         certbot_command.extend([
             "certonly",
             "--webroot", "--webroot-path", certbot_root,
