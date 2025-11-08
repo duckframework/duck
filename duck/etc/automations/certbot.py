@@ -273,7 +273,7 @@ class BaseCertbotAutoSSL(Automation):
         certbot_command = [
             "%s"%(certbot_executable or default_certbot_exe),
             "certonly",
-            "--webroot", "--webroot-path", "%"%certbot_root,
+            "--webroot", "--webroot-path", "%s"%certbot_root,
             "--config-dir", "%s"%certbot_root,
             "--work-dir", joinpaths(str(certbot_root), "work"),
             "--logs-dir", joinpaths(str(certbot_root), "logs"),
