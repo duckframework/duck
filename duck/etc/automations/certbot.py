@@ -11,6 +11,7 @@ import subprocess
 import configparser
 
 from pathlib import Path
+from typing import Any, Optional, Union, Tuple
 
 from duck.exceptions.all import SettingsError
 from duck.http.core.handler import ResponseHandler
@@ -56,15 +57,26 @@ class BaseCertbotAutoSSL(Automation):
         self.config_path = joinpaths(str(self.certbot_root), f"renewal/{self.certname}.conf")
         
     @staticmethod
-    def get_file_signature(path):
+    def get_file_signature(path, content_signature: bool = True) -> Optional[Union[str, Tuple]]:
         """
         Returns the file signature else None if file doesn't exist.
+        
+        Args:
+            content_signature (bool): Whether to return the file content instead. Defaults to True.
         """
         if not os.path.isfile(path):
             return
-        stats = os.stat(path)
-        return (stats.st_mtime, stats.st_ino)
-    
+        
+        if not content_signature:
+            stats = os.stat(path)
+            return (stats.st_mtime, stats.st_ino)
+        
+        # Return file content instead
+        data = None
+        with open(path, "r") as fd:
+            data = fd.read()
+        return data
+        
     def patch_microapp(self, microapp):
         """
         Applies patches to microapp view method so that route `certbot`acme challenge files
@@ -223,8 +235,9 @@ class BaseCertbotAutoSSL(Automation):
              
              # Reload ssl context
              try:
-                 self.app.server.reload_ssl_context()
-                 logger.log("CertbotAutoSSL: Reloaded server SSL context", level=logger.DEBUG)
+                 reloaded = self.app.server.reload_ssl_context()
+                 if reloaded:
+                     logger.log("CertbotAutoSSL: Reloaded server SSL context", level=logger.DEBUG)
              except Exception as e:
                  logger.log("Failed to reload server SSL context: {e}", level=logger.WARNING)
                  if SETTINGS['DEBUG']:

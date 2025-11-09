@@ -80,7 +80,7 @@ class HTTPServer(BaseServer):
         # Increment instances
         type(self).__instances += 1
         
-    def reload_ssl_context(self):
+    def reload_ssl_context(self) -> bool:
         """
         Reloads only the SSL certificate and key files.
         Keeps the base context (protocols, ciphers, etc.) intact.
@@ -89,16 +89,20 @@ class HTTPServer(BaseServer):
             RuntimeError: If `_ssl_context` is not set and `ssl_wrap_socket` has already been used.
             Exception: Any other exception on error.
         
+        Returns:
+            bool: Whether reload has actually been performed.
+            
         Notes:
             This does nothing if `_ssl_context` not set.
         """
         if not self._ssl_context:
             if not self._ssl_wrap_socket_called:
-                return
+                return False
             raise RuntimeError("SSL context not set yet `ssl_wrap_socket` has already been used.")
         keyfile = self.ssl_params.get("keyfile")
         certfile = self.ssl_params.get("certfile")
         self._ssl_context.load_cert_chain(certfile=certfile, keyfile=keyfile)
+        return True
         
     def ssl_wrap_socket(self, client_socket: socket.socket) -> ssl_xsocket:
         """
