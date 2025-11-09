@@ -736,6 +736,10 @@ SERVER_ORGANIZATION: str = ""
 SERVER_ORGANIZATION_UNIT: str = ""
 
 
+# Preconfigured Certbot config
+CERTBOT_ROOT: str = BASE_DIR / "etc/certbot"
+
+
 # SYSTEMD CONFIGURATION
 # systemd is a system and service manager used in Linux distributions.
 # It controls the starting, stopping, and monitoring of services, making 
