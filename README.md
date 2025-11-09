@@ -68,6 +68,7 @@ And more — see [feature list](https://duckframework.xyz/features)
 
 - The **Duck** official website is powered by the **Duck** framework itself—showcasing a true "dogfooding" approach!
 - **Duck's Lively components** bring you a **Lively UI** that's exceptionally fast and responsive, eliminating slow page re-rendering for a seamless user experience.
+- Also, **Duck** official site is hosted directly with `Duck` itself, no NGINX or a reverse proxy is behind it. **Duck** handles everything including renewing expired `SSL` certificate & handle `HTTP/2` protocol!
 
 ---
 

@@ -436,7 +436,7 @@ class ssl_xsocket(xsocket):
             self.ssl_outbio,
             server_side=server_side,
         )
-          
+        
         # Record some attributes, they belong to this class explicitly rather than raw_socket.
         self._cls_attrs.update({
             "_handshake_done",
