@@ -328,7 +328,10 @@ class H2Protocol:
                     end_stream=(not view and end_stream),
                 )
     
-            except (StreamClosedError, ProtocolError, KeyError) as e:
+            except StreamClosedError:
+                self.event_handler.on_stream_reset(stream_id)
+        
+            except (ProtocolError, KeyError) as e:
                 if SETTINGS['DEBUG']:
                     logger.log(f"Error sending H2 data: {e}", level=logger.WARNING)
     
@@ -337,7 +340,11 @@ class H2Protocol:
             try:
                 self.conn.end_stream(stream_id)
                 await self.async_send_pending_data()
-            except (StreamClosedError, ProtocolError, KeyError) as e:
+            
+            except StreamClosedError:
+                self.event_handler.on_stream_reset(stream_id)
+        
+            except (ProtocolError, KeyError) as e:
                 if SETTINGS['DEBUG']:
                     logger.log(f"Error sending H2 data: {e}", level=logger.WARNING)
             
@@ -502,6 +509,9 @@ class H2Protocol:
                 # Send any pending data
                 await self.async_send_pending_data()
                 
+        except StreamClosedError:
+            self.event_handler.on_stream_reset(stream_id)
+            
         except Exception as e:
             # Something interrupted the process, manually call close_streaming_response if not called.
             await ResponseHandler.async_close_streaming_response(response)

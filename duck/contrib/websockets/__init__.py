@@ -624,7 +624,7 @@ class WebSocketView(View):
         then it sends the frame to the connected client socket.
         """
         data = frame.serialize(mask=False, extensions=self.extensions)
-        await SocketIO.async_send(sock=self.sock, data=data, ignore_error_list=[ssl.SSLError, BrokenPipeError])
+        await SocketIO.async_send(sock=self.sock, data=data, ignore_error_list=[ssl.SSLError, BrokenPipeError, ConnectionResetError, ConnectionError])
         
     async def send(self, data: Union[str, bytes], opcode: int = OpCode.TEXT):
         """
