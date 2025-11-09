@@ -175,7 +175,4 @@ def setup(make_app_dirs: bool = True, use_threads_for_heavy_work: bool = True):
     
     # Initialize the RequestHandlingExecutor lazily after prepare_django as this line will
     # make the whole setup very slow.
-    if use_threads_for_heavy_work:
-        threading.Thread(target=lambda: SettingsLoaded.REQUEST_HANDLING_TASK_EXECUTOR()).start() # load executor lazily
-    else:
-        SettingsLoaded.REQUEST_HANDLING_TASK_EXECUTOR()
+    SettingsLoaded.REQUEST_HANDLING_TASK_EXECUTOR()

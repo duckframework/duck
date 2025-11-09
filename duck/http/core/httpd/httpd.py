@@ -293,7 +293,9 @@ class BaseServer:
                         logged_error = True
                 
                 if not self.no_logs and not logged_error:
-                    logger.log(f"SSLError: {e}", level=logger.WARNING)
+                    if not ("SSLV3_ALERT_CERTIFICATE_UNKNOWN" in str(e) or "unknown ca" in str(e)):
+                        # Ignore certificate unknown errors.
+                        logger.log(f"SSLError: {e}", level=logger.WARNING)
                         
             except Exception as e:
                 if not self.no_logs:
@@ -335,7 +337,9 @@ class BaseServer:
                         logged_error = True
                 
                 if not self.no_logs and not logged_error:
-                    logger.log(f"SSLError: {e}", level=logger.WARNING)
+                    if not ("SSLV3_ALERT_CERTIFICATE_UNKNOWN" in str(e) or "unknown ca" in str(e)):
+                        # Ignore certificate unknown errors.
+                        logger.log(f"SSLError: {e}", level=logger.WARNING)
                     
             except Exception as e:
                 if not self.no_logs:

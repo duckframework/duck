@@ -93,6 +93,9 @@ class InMemoryCache(CacheBase):
             self.cache.move_to_end(key)  # Mark as recently used
         return self.cache.pop(key, default) if pop else self.cache.get(key, default)
 
+    def has(self, key: str):
+        return key in self.cache
+        
     def delete(self, key: str):
         self.cache.pop(key, None)
         self.expiry_map.pop(key, None)

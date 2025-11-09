@@ -81,7 +81,7 @@ class BaseHTTP2Server(BaseServer):
         addr: Tuple[str, int],
         flowinfo: Optional = None,
         scopeid: Optional = None,
-        strictly_http2: bool = True,
+        strictly_http2: bool = False,
     ) -> None:
         """
         Main entry point to handle new connection (supports both ipv6 and ipv4).
@@ -93,9 +93,14 @@ class BaseHTTP2Server(BaseServer):
             scopeid (Optional): Scope id if IPv6.
             strictly_http2 (bool): Whether to srtrictly use `HTTP/2` without checking if user selected it.
         """
-        has_h2_alpn = hasattr(sock, 'selected_alpn_protocol') and sock.selected_alpn_protocol() == 'h2'
+        has_h2_alpn = False
         
-        if not has_h2_alpn or not strictly_http2:
+        try:
+            has_h2_alpn = sock.selected_alpn_protocol() == 'h2'
+        except AttributeError:
+            pass
+            
+        if not has_h2_alpn and not strictly_http2:
             # Fallback to HTTP/1
             # The user selected alpn protocol is not h2, switch to default HTTP/1 only if Upgrade to h2c is not set
              try:
@@ -266,7 +271,7 @@ class BaseHTTP2Server(BaseServer):
             except Exception as e:
                 future.set_exception(e)
                 logger.log_exception(e)
-        
+                
     # ASYNCHRONOUS IMPLEMENTATIONS
      
     async def async_handle_conn(
@@ -275,7 +280,7 @@ class BaseHTTP2Server(BaseServer):
         addr: Tuple[str, int],
         flowinfo: Optional = None,
         scopeid: Optional = None,
-        strictly_http2: bool = True,
+        strictly_http2: bool = False,
     ) -> None:
         """
         Main entry point to handle new connection asynchronously (supports both ipv6 and ipv4).
@@ -287,9 +292,14 @@ class BaseHTTP2Server(BaseServer):
             scopeid (Optional): Scope id if IPv6.
             strictly_http2 (bool): Whether to srtrictly use `HTTP/2` without checking if user selected it.
         """
-        has_h2_alpn = hasattr(sock, 'selected_alpn_protocol') and sock.selected_alpn_protocol() == 'h2'
+        has_h2_alpn = False
         
-        if not has_h2_alpn or not strictly_http2:
+        try:
+            has_h2_alpn = sock.selected_alpn_protocol() == 'h2'
+        except AttributeError:
+            pass
+            
+        if not has_h2_alpn and not strictly_http2:
             # Fallback to HTTP/1
             # The user selected alpn protocol is not h2, switch to default HTTP/1 only if Upgrade to h2c is not set
              

@@ -124,8 +124,7 @@ class H2Protocol:
                 await self.async_send_goaway(0)
             
         # Read and handle H2 frames.
-        while not  self.closing:
-            
+        while not self.closing:  
             # Yield control to the eventloop
             await asyncio.sleep(0)
             
@@ -133,15 +132,19 @@ class H2Protocol:
                 # Read & handle H2 frames
                 await async_read_and_handle_data() 
             
-            except (ssl.SSLError, ssl.SSLWantReadError, ssl.SSLWantWriteError):
-                # Ignore SSL errors.
+            except (
+                ssl.SSLError,
+                ssl.SSLWantReadError,
+                ssl.SSLWantWriteError,
+                TimeoutError,
+                 BlockingIOError,
+             ):
+                # Ignore SSL errors and other errors that are raised because of SSL protocol
                 pass
             
             except (
                 ConnectionError,
                 ConnectionResetError,
-                TimeoutError,
-                BlockingIOError,
                 OSError,
                 BrokenPipeError,
             ): # Connection errors
@@ -280,7 +283,7 @@ class H2Protocol:
                     except asyncio.CancelledError:
                         return
             except StreamClosedError:
-                break
+                pass
                 
             try:
                 chunk_size = min(
@@ -386,7 +389,7 @@ class H2Protocol:
                 max_incr = 2147483647
                 incr = min(real_content_length, max_incr)
             
-                if real_content_length > 0 and real_content_length > 635535:
+                if real_content_length > 635535:
                     self.conn.increment_flow_control_window(incr, stream_id)
         
             # Send any pending h2 data

@@ -396,7 +396,7 @@ class Loaded:
         )
         self.REQUEST_CLASS = get_request_class()
         self.CONTENT_COMPRESSION = Lazy(get_content_compression_settings)
-        self.PROXY_HANDLER, ASYNC_PROXY_HANDLER = Lazy(get_proxy_handlers) if SETTINGS["USE_DJANGO"] else (None, None)
+        self.PROXY_HANDLER, self.ASYNC_PROXY_HANDLER = Lazy(get_proxy_handlers) if SETTINGS["USE_DJANGO"] else (None, None)
         self.AUTOMATION_DISPATCHER, self.AUTOMATIONS = (
             Lazy(get_automation_dispatcher), Lazy(get_triggers_and_automations)
             if SETTINGS.get("RUN_AUTOMATIONS")

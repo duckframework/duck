@@ -174,6 +174,30 @@ class EventHandler:
         self.protocol.sync_queue.put((func, future))
         await convert_to_async_if_needed(future.result)()
         
+    def on_stream_reset(self, stream_id: int):
+        """
+        Called when the client resets a stream.
+        
+        This can occur when:
+        - The client cancels an in-progress request.
+        - The client connection is aborted or timed out.
+        - An internal protocol error is detected.
+        
+        Cleans up any cached request data, pending flow control futures,
+        or in-progress tasks associated with the given stream.
+        
+        Args:
+            stream_id (int): The HTTP/2 stream ID that was reset.
+        """
+        # Remove stream request data if exists
+        if self.stream_data.has(stream_id):
+            self.stream_data.pop(stream_id)
+            
+        # Cancel flow control future if one exists
+        future = self.flow_control_futures.pop(stream_id, None)
+        if future and not future.done():
+            future.cancel()
+
     def on_window_updated(self, stream_id, delta):
         """
         A window update frame was received.
@@ -200,7 +224,6 @@ class EventHandler:
         """
         for future in self.flow_control_futures.values():
             future.cancel()
-        
         self.flow_control_futures = {}
         self.protocol.connection_lost()
         
@@ -214,17 +237,6 @@ class EventHandler:
         f = asyncio.Future()
         self.flow_control_futures[stream_id] = f
         await f
-    
-    def sync_wait_for_flow_control(self, stream_id: int):
-        """
-        Synchronously waits for a Future that fires when the flow control window is opened.
-        
-        Args:
-            stream_id (int): The HTTP/2 stream ID.
-        """
-        f = SyncFuture()
-        self.flow_control_futures[stream_id] = f
-        f.result() # blocks until a result is set.
         
     async def dispatch_events(self, events: List):
         """
@@ -237,7 +249,11 @@ class EventHandler:
             try:
                 if handler:
                     if iscoroutinefunction(handler):
-                        await handler(event)
+                        if isinstance(event, (RequestReceived, StreamEnded, DataReceived)):
+                            # This event need to be executed in background
+                            create_task(handler(event))
+                        else:
+                            await handler(event)
                     else:
                         handler(event)
             except Exception as e:
