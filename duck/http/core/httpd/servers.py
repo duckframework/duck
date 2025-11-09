@@ -64,6 +64,7 @@ class HTTPServer(BaseServer):
         """
         # This is the server context, will be set on first HTTPS request.
         self._ssl_context = None
+        self._ssl_wrap_socket_called = False # Will be set to True if ssl_wrap_socket has been used somehow
         
         # Super initialize
         super().__init__(
@@ -85,11 +86,16 @@ class HTTPServer(BaseServer):
         Keeps the base context (protocols, ciphers, etc.) intact.
         
         Raises:
-            RuntimeError: Raised if SSL context not yet available.
+            RuntimeError: If `_ssl_context` is not set and `ssl_wrap_socket` has already been used.
             Exception: Any other exception on error.
+        
+        Notes:
+            This does nothing if `_ssl_context` not set.
         """
         if not self._ssl_context:
-            raise RuntimeError("SSL context not yet set, must be set using `ssl_wrap_socket` on first client connection.")
+            if not self._ssl_wrap_socket_called:
+                return
+             raise RuntimeError("SSL context not set yet `ssl_wrap_socket` has already been used.")
         keyfile = self.ssl_params.get("keyfile")
         certfile = self.ssl_params.get("certfile")
         self._ssl_context.load_cert_chain(certfile=certfile, keyfile=keyfile)
@@ -115,6 +121,7 @@ class HTTPServer(BaseServer):
         
         # Set SSL context and return the ssl socket
         self._ssl_context = ssl_sock.context
+        self._ssl_wrap_socket_called = True
         return ssl_sock
 
 
