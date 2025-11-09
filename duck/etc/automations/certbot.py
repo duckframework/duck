@@ -23,8 +23,8 @@ from duck.utils.filelock import (unlock_file, open_and_lock)
 
 # Fetch SSL certificate and key paths from the settings.
 SSL_CERT_PATH = SETTINGS["SSL_CERTFILE_LOCATION"]
-
 SSL_CERT_KEY_PATH = SETTINGS["SSL_PRIVATE_KEY_LOCATION"]
+
 
 # Validate required Certbot configuration in settings
 if "CERTBOT_ROOT" not in SETTINGS:
@@ -32,7 +32,6 @@ if "CERTBOT_ROOT" not in SETTINGS:
         "Missing 'CERTBOT_ROOT' in settings. "
         "This path is required for Certbot to store challenge files used during domain validation."
     )
-
 if "CERTBOT_EMAIL" not in SETTINGS:
     raise SettingsError(
         "Missing 'CERTBOT_EMAIL' in settings. "
@@ -54,12 +53,7 @@ class BaseCertbotAutoSSL(Automation):
         super().__init__(*args, **kwargs)
         self.certbot_root = SETTINGS["CERTBOT_ROOT"]
         self.config_path = joinpaths(str(self.certbot_root), f"renewal/{self.certname}.conf")
-        self.config = self.extract_config_values(self.config_path, "fullchain", "privkey")
-        self.key_path = self.config.get("privkey", None)
-        self.fullchain_path = self.config.get("fullchain", None)
-        self.latest_cert_signature = self.get_file_signature(self.fullchain_path) if self.fullchain_path is not None else None
-        self.latest_cert_key_signature = self.get_file_signature(self.key_path) if self.key_path is not None else None
-            
+        
     @staticmethod
     def get_file_signature(path):
         """
@@ -175,6 +169,11 @@ class BaseCertbotAutoSSL(Automation):
         """
         cert_data = None
         key_data = None
+        self.config = self.extract_config_values(self.config_path, "fullchain", "privkey")
+        self.key_path = self.config.get("privkey", None)
+        self.fullchain_path = self.config.get("fullchain", None)
+        self.latest_cert_signature = self.get_file_signature(SSL_CERT_PATH)
+        self.latest_cert_key_signature = self.get_file_signature(SSL_CERT_KEY_PATH)
         
         if self.latest_cert_signature is not None:
             current_cert_signature = self.get_file_signature(self.fullchain_path)
@@ -220,12 +219,6 @@ class BaseCertbotAutoSSL(Automation):
           
         if cert_data or key_data:
              logger.log("CertbotAutoSSL: SSL credentials updated\n", level=logger.DEBUG)
-        
-        self.config = self.extract_config_values(self.config_path, "fullchain", "privkey")
-        self.key_path = self.config.get("privkey", None)
-        self.fullchain_path = self.config.get("fullchain", None)
-        self.latest_cert_signature = self.get_file_signature(self.fullchain_path) if self.fullchain_path is not None else None
-        self.latest_cert_key_signature = self.get_file_signature(self.key_path) if self.key_path is not None else None
         
     def execute(self):
         certbot_root = SETTINGS["CERTBOT_ROOT"]
