@@ -208,7 +208,7 @@ class BaseCertbotAutoSSL(Automation):
                     # Unlock file descriptor
                     unlock_file(key_file)
                 
-                with open_and_lock(SSL_CERT_PATH, "w") as key_file:
+                with open_and_lock(SSL_CERT_KEY_PATH, "w") as key_file:
                     key_file.write(key_data)
                     
                     # Unlock file immediately after writing

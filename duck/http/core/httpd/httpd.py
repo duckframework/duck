@@ -289,7 +289,9 @@ class BaseServer:
                 if not self.no_logs and SETTINGS["VERBOSE_LOGGING"] and SETTINGS["DEBUG"]:
                     if "HTTP_REQUEST" in str(e):
                         logger.log(f"Client may be trying to connect with HTTPS on HTTP server or vice-versa: {e}\n", level=logger.WARNING)
-            
+                    else:
+                        logger.log(f"SSLError: {e}", level=logger.WARNING)
+                        
             except Exception as e:
                 if not self.no_logs:
                     # Log exception if allowed.
@@ -326,7 +328,9 @@ class BaseServer:
                 if not self.no_logs and SETTINGS["VERBOSE_LOGGING"] and SETTINGS["DEBUG"]:
                     if "HTTP_REQUEST" in str(e):
                         logger.log(f"Client may be trying to connect with HTTPS on HTTP server or vice-versa: {e}\n", level=logger.WARNING)
-            
+                    else:
+                        logger.log(f"SSLError: {e}", level=logger.WARNING)
+                        
             except Exception as e:
                 if not self.no_logs:
                     # Log exception if allowed.
