@@ -64,7 +64,7 @@ class SocketIO:
         if not ignore_xsocket_error:
             check_socket(sock.close)(shutdown, shutdown_reason)
         else:
-            sock.close(shutdown) # Omit reason because this may be a raw socket.
+            sock.close() # Ommit args because this may be a raw socket.
         
     @classmethod
     @check_socket
