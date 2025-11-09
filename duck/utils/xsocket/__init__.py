@@ -430,8 +430,8 @@ class ssl_xsocket(xsocket):
         self.server_side = server_side
         self.ssl_inbio = ssl.MemoryBIO() # write to this
         self.ssl_outbio = ssl.MemoryBIO() # read from this
-            
-        self.ssl_obj = ssl_context.wrap_bio(
+        self.context = ssl_context
+        self.ssl_obj = self.context.wrap_bio(
             self.ssl_inbio,
             self.ssl_outbio,
             server_side=server_side,
@@ -443,6 +443,7 @@ class ssl_xsocket(xsocket):
             "_set_ssl_attributes",
             "server_side",
             "ssl_obj",
+            "context",
             "ssl_inbio",
             "ssl_outbio",
             "data_to_send",
