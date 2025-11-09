@@ -221,7 +221,7 @@ class BaseServer:
             except Exception as e:
                 # Close socket immediately.
                 if sock:
-                    SocketIO.close(sock)
+                    SocketIO.close(sock, ignore_xsocket_error=True)
                     
                 # Log the exception if logging allowed.
                 if not self.no_logs and SETTINGS['DEBUG']:
@@ -229,7 +229,7 @@ class BaseServer:
                         # Explicitly log if server still in running state
                         logger.log_exception(e)
                     
-    def accept_and_handle(self):
+    def accept_and_handle(self) -> socket.socket:
         """
         Accepts and handle IPV4/IPV6 connection.
         
@@ -286,7 +286,7 @@ class BaseServer:
             
             finally:
                 # Close client socket if not closed
-                SocketIO.close(sock)
+                SocketIO.close(sock, ignore_xsocket_error=True)
                 
         def thread_task(sock):
             """
@@ -323,7 +323,7 @@ class BaseServer:
             
             finally:
                 # Close client socket if not closed
-                SocketIO.close(sock)  
+                SocketIO.close(sock, ignore_xsocket_error=True)  
         
         # Decide how to handle the connection.
         if async_handling:

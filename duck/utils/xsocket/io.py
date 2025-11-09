@@ -51,8 +51,7 @@ class SocketIO:
         sock.connect(target, timeout=timeout)
         
     @classmethod
-    @check_socket
-    def close(cls, sock: xsocket, shutdown: bool = True, shutdown_reason: int = socket.SHUT_RDWR):
+    def close(cls, sock: xsocket, shutdown: bool = True, shutdown_reason: int = socket.SHUT_RDWR, ignore_xsocket_error: bool = False):
         """
         Closes a socket.
         
@@ -60,8 +59,12 @@ class SocketIO:
             sock (xsocket): The underlying xsocket object.
             shutdown (bool): Whether to shutdown the socket using `sock.shutdown`.
             shutdown_reason (int): Reason for shutdown.
+            ignore_xsocket_error (bool): Whether to ignore xsocket error when closing socket.
         """
-        sock.close(shutdown, shutdown_reason)
+        if not ignore_xsocket_error:
+            cls.check_socket(sock.close)(shutdown, shutdown_reason)
+        else:
+            sock.close(shutdown, shutdown_reason)
         
     @classmethod
     @check_socket
