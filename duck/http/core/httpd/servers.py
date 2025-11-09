@@ -95,7 +95,7 @@ class HTTPServer(BaseServer):
         if not self._ssl_context:
             if not self._ssl_wrap_socket_called:
                 return
-             raise RuntimeError("SSL context not set yet `ssl_wrap_socket` has already been used.")
+            raise RuntimeError("SSL context not set yet `ssl_wrap_socket` has already been used.")
         keyfile = self.ssl_params.get("keyfile")
         certfile = self.ssl_params.get("certfile")
         self._ssl_context.load_cert_chain(certfile=certfile, keyfile=keyfile)
