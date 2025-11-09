@@ -137,7 +137,7 @@ class H2Protocol:
                 ssl.SSLWantReadError,
                 ssl.SSLWantWriteError,
                 TimeoutError,
-                 BlockingIOError,
+                BlockingIOError,
              ):
                 # Ignore SSL errors and other errors that are raised because of SSL protocol
                 pass
@@ -259,66 +259,97 @@ class H2Protocol:
         stream_id: int,
         end_stream: bool = False,
         on_data_sent: Callable = None,
+        flow_control_timeout: float = 30.0,
     ):
         """
-        Asynchronously Send data according to flow control.
-        
+        Asynchronously send data for a given HTTP/2 stream, respecting flow control.
+    
+        This method automatically chunks data according to the current flow control
+        window and the maximum outbound frame size. It also ensures that sending
+        pauses until the remote peer grants enough window updates.
+    
         Args:
-            data (bytes): Data to send.
-            stream_id (int): The respective stream ID for the data.
-            end_stream (bool): Whether to close stream after sending the data. Defaults to False.
-            on_data_sent (Optional[Callable]): Callable to execute right after all data has been sent. Defaults to None.
-        
-        Notes:
-        - The first argument to `on_data_sent` callable is the data sent.
+            data (bytes): The payload to send.
+            stream_id (int): The ID of the target HTTP/2 stream.
+            end_stream (bool, optional): Whether to close the stream after sending
+                all data. Defaults to False.
+            on_data_sent (Optional[Callable], optional): Optional callback or coroutine
+                to execute once the data has been fully sent.
+                The callback receives `original_data` as its only argument.
+            flow_control_timeout (float, optional): Max time (in seconds) to wait
+                for flow control window updates before giving up. Defaults to 30.0s.
+    
+        Raises:
+            asyncio.TimeoutError: If flow control window isn't updated within timeout.
+            asyncio.CancelledError: If task is cancelled during sending.
         """
-        original_data = data # keep a reference to original data as `data` variable may be modified by while loop.
-        await self.async_send_pending_data() # send pending data before sending the real data
-        
-        while data:
-            try:
-                while self.conn.local_flow_control_window(stream_id) < 1:
-                    try:
-                        await self.event_handler.wait_for_flow_control(stream_id)
-                    except asyncio.CancelledError:
-                        return
-            except StreamClosedError:
-                pass
+    
+        if not isinstance(data, (bytes, bytearray, memoryview)):
+            raise TypeError("Data must be bytes-like")
+    
+        original_data = data
+        view = memoryview(data)
+    
+        # Continue sending until all data is transmitted
+        while view:
+            # Wait for enough flow control window space
+            while self.conn.local_flow_control_window(stream_id) < 1:
+                try:
+                    await asyncio.wait_for(
+                        self.event_handler.wait_for_flow_control(stream_id),
+                        timeout=flow_control_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    if SETTINGS['DEBUG']:
+                        logger.log(
+                            f"Flow control timeout on stream {stream_id} "
+                            f"after {flow_control_timeout:.1f}s",
+                            level=logger.WARNING,
+                        )
+                    return
                 
+                except asyncio.CancelledError:
+                    return
+    
             try:
+                # Determine maximum chunk size to respect window and frame limits
                 chunk_size = min(
                     self.conn.local_flow_control_window(stream_id),
-                    len(data),
+                    len(view),
                     self.conn.max_outbound_frame_size,
                 )
-                
+                chunk = view[:chunk_size]
+                view = view[chunk_size:]
+    
+                # Send chunk (do not close stream until final chunk)
                 await self.async_flush_response_data(
-                    data=data[:chunk_size],
+                    data=chunk.tobytes(),
                     stream_id=stream_id,
-                    end_stream=end_stream,
+                    end_stream=(not view and end_stream),
                 )
-                
-                data = data[chunk_size:] # move to the next chunk
-                
-            except (StreamClosedError, ProtocolError):
-                break
-            
-        else:
-            if not original_data and end_stream:
-                # No data has been set yet end_stream is True, meaning we want to close the stream
-                try:
-                    self.conn.end_stream(stream_id)
-                except (StreamClosedError, KeyError):
-                    pass
-                
+    
+            except (StreamClosedError, ProtocolError, KeyError) as e:
+                if SETTINGS['DEBUG']:
+                    logger.log(f"Error sending H2 data: {e}", level=logger.WARNING)
+    
+        # Handle case where no data was sent but stream must be closed
+        if not original_data and end_stream:
+            try:
+                self.conn.end_stream(stream_id)
                 await self.async_send_pending_data()
-        
-        if on_data_sent is not None:
-            # Data has been successfully sent
-            if not iscoroutinefunction(on_data_sent):
-                on_data_sent(original_data) # execute an event on data sent
-            else:
-                await on_data_sent(original_data) # execute an event on data sent
+            except (StreamClosedError, ProtocolError, KeyError) as e:
+                if SETTINGS['DEBUG']:
+                    logger.log(f"Error sending H2 data: {e}", level=logger.WARNING)
+            
+        # Trigger post-send callback if provided
+        if on_data_sent:
+            try:
+                if iscoroutinefunction(on_data_sent):
+                    await on_data_sent(original_data)
+                else:
+                    on_data_sent(original_data)
+            except Exception as e:
+                logger.exception(e)
                 
     async def async_send_response(
         self,
