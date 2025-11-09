@@ -50,7 +50,7 @@ from duck.http.response import (
 )
 from duck.contrib.responses.errors import get_timeout_error_response
 from duck.utils.ssl import is_ssl_data
-from duck.utils.xsocket import xsocket, ssl_xsocket
+from duck.utils.xsocket import (xsocket, ssl_xsocket, create_xsocket)
 from duck.utils.xsocket.io import SocketIO 
 
 
@@ -119,6 +119,7 @@ class BaseServer:
         assert ssl_params is None or isinstance(ssl_params, dict), f"Argument ssl_params should be an instance of dictionary, not {type(ssl_params)}"
         
         # Create some socket object
+        self.__sock = None
         self.sock: xsocket = create_xsocket(family=socket.AF_INET6 if uses_ipv6 else socket.AF_INET)
         
         # Set some attributes.
@@ -130,7 +131,17 @@ class BaseServer:
         self.ssl_params = ssl_params or SSL_DEFAULTS
         self.no_logs = no_logs
         self.running: bool = False
-        
+    
+    @property
+    def sock(self):
+        return self.__sock
+    
+    @sock.setter
+    def sock(self, s: xsocket):
+         if not isinstance(s, xsocket):
+             raise TypeError(f"The provided argument must be an instance of `xsocket` not {type(s)}")
+         self.__sock = s
+         
     @property
     def running(self):
         return self.__running

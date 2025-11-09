@@ -763,7 +763,9 @@ class App:
         except Exception as e:
             logger.log_raw('\n')
             logger.log(f"Error stopping servers: {e}", level=logger.ERROR)
-        
+            if SETTINGS['DEBUG']:
+                logger.log_exception(e)
+                
         if call_on_pre_stop_handler:
             try:
                 # Execute a pre stop method before final termination.

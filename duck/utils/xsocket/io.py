@@ -62,7 +62,9 @@ class SocketIO:
             ignore_xsocket_error (bool): Whether to ignore xsocket error when closing socket.
         """
         if not ignore_xsocket_error:
-            check_socket(sock.close)(shutdown, shutdown_reason)
+            if not isinstance(sock, xsocket):
+                raise SocketIOError(f"Expected an instance of xsocket but got {type(sock)}. Please use `duck.utils.xsocket` module for converting to appropriate type.")
+            sock.close(shutdown, shutdown_reason)
         else:
             sock.close() # Ommit args because this may be a raw socket.
         
