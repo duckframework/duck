@@ -116,13 +116,6 @@ class H2Protocol:
             if data:
                 await self.event_handler.entry(data)
                 
-            else:
-                # Likely a connection close.
-                self.closing = True
-                
-                # Finally sending goaway frame. 
-                await self.async_send_goaway(0)
-            
         # Read and handle H2 frames.
         while not self.closing:  
             # Yield control to the eventloop
@@ -133,7 +126,6 @@ class H2Protocol:
                 await async_read_and_handle_data() 
             
             except (
-                ssl.SSLError,
                 ssl.SSLWantReadError,
                 ssl.SSLWantWriteError,
                 TimeoutError,
