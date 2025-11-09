@@ -67,8 +67,7 @@ def ssl_wrap_socket(
     context = ssl.SSLContext(version)
 
     # Load cert and key
-    if certfile and keyfile:
-        context.load_cert_chain(certfile=certfile, keyfile=keyfile)
+    context.load_cert_chain(certfile=certfile, keyfile=keyfile)
 
     # Set ciphers if provided
     if ciphers:

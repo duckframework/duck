@@ -286,11 +286,14 @@ class BaseServer:
                 
             except ssl.SSLError as e:
                 # Wrong protocol used e.g., https on http or vice versa
+                logged_error = False
                 if not self.no_logs and SETTINGS["VERBOSE_LOGGING"] and SETTINGS["DEBUG"]:
                     if "HTTP_REQUEST" in str(e):
                         logger.log(f"Client may be trying to connect with HTTPS on HTTP server or vice-versa: {e}\n", level=logger.WARNING)
-                    else:
-                        logger.log(f"SSLError: {e}", level=logger.WARNING)
+                        logged_error = True
+                
+                if not self.no_logs and not logged_error:
+                    logger.log(f"SSLError: {e}", level=logger.WARNING)
                         
             except Exception as e:
                 if not self.no_logs:
@@ -325,12 +328,15 @@ class BaseServer:
                 
             except ssl.SSLError as e:
                 # Wrong protocol used e.g., https on http or vice versa
+                logged_error = False
                 if not self.no_logs and SETTINGS["VERBOSE_LOGGING"] and SETTINGS["DEBUG"]:
                     if "HTTP_REQUEST" in str(e):
                         logger.log(f"Client may be trying to connect with HTTPS on HTTP server or vice-versa: {e}\n", level=logger.WARNING)
-                    else:
-                        logger.log(f"SSLError: {e}", level=logger.WARNING)
-                        
+                        logged_error = True
+                
+                if not self.no_logs and not logged_error:
+                    logger.log(f"SSLError: {e}", level=logger.WARNING)
+                    
             except Exception as e:
                 if not self.no_logs:
                     # Log exception if allowed.

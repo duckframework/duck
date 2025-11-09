@@ -36,7 +36,10 @@ class HTTPServer(BaseServer):
     """
     
     __instances: int = 0
-
+    """
+    This is the current number of server instances.
+    """
+    
     def __init__(
         self,
         addr: Tuple[str, int],
@@ -59,6 +62,10 @@ class HTTPServer(BaseServer):
             ssl_params (Optional[Dict]): Dictionary containing ssl parameters to parse to SSLSocket. If None, default ones will be used.
             no_logs (bool): Whether to disable logging.
         """
+        # This is the server context, will be set on first HTTPS request.
+        self._ssl_context = None
+        
+        # Super initialize
         super().__init__(
             addr=addr,
             application=application,
@@ -72,21 +79,43 @@ class HTTPServer(BaseServer):
         # Increment instances
         type(self).__instances += 1
         
+    def reload_ssl_context(self):
+        """
+        Reloads only the SSL certificate and key files.
+        Keeps the base context (protocols, ciphers, etc.) intact.
+        
+        Raises:
+            RuntimeError: Raised if SSL context not yet available.
+            Exception: Any other exception on error.
+        """
+        if not self._ssl_context:
+            raise RuntimeError("SSL context not yet set, must be set using `ssl_wrap_socket` on first client connection.")
+        keyfile = self.ssl_params.get("keyfile")
+        certfile = self.ssl_params.get("certfile")
+        self._ssl_context.load_cert_chain(certfile=certfile, keyfile=keyfile)
+        
     def ssl_wrap_socket(self, client_socket: socket.socket) -> ssl_xsocket:
         """
         Wraps client socket with SSL context.
         """
+        if self._ssl_context:
+            return ssl_xsocket(client_socket, ssl_context=self._ssl_context, server_side=True)
+            
         alpn_protocols = ["http/1.1", "http/1.0"]
-             
+        
         if SETTINGS['SUPPORT_HTTP_2']:
             alpn_protocols.insert(0, "h2")
                   
-        return ssl_wrap_socket(
+        ssl_sock = ssl_wrap_socket(
             socket_obj=client_socket,
             server_side=True,
             alpn_protocols=alpn_protocols,
             **self.ssl_params,
         )
+        
+        # Set SSL context and return the ssl socket
+        self._ssl_context = ssl_sock.context
+        return ssl_sock
 
 
 class MicroHTTPServer(BaseMicroServer, HTTPServer):

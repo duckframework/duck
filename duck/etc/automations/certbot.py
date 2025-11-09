@@ -51,6 +51,7 @@ class BaseCertbotAutoSSL(Automation):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.app = None
         self.certbot_root = SETTINGS["CERTBOT_ROOT"]
         self.config_path = joinpaths(str(self.certbot_root), f"renewal/{self.certname}.conf")
         
@@ -219,14 +220,22 @@ class BaseCertbotAutoSSL(Automation):
           
         if cert_data or key_data:
              logger.log("CertbotAutoSSL: SSL credentials updated\n", level=logger.DEBUG)
+             
+             # Reload ssl context
+             try:
+                 self.app.server.reload_ssl_context()
+                 logger.log("CertbotAutoSSL: Reloaded server SSL context", level=logger.DEBUG)
+             except Exception as e:
+                 logger.log("Failed to reload server SSL context: {e}", level=logger.WARNING)
+                 if SETTINGS['DEBUG']:
+                     logger.log_exception(e)   
         
     def execute(self):
         certbot_root = SETTINGS["CERTBOT_ROOT"]
         certbot_email = SETTINGS["CERTBOT_EMAIL"]
         certbot_executable = SETTINGS.get("CERTBOT_EXECUTABLE")
         certbot_extra_args = SETTINGS.get("CERTBOT_EXTRA_ARGS", [])
-        
-        app = self.get_running_app()
+        self.app = app = self.get_running_app()
         domain = app.domain
         called_before = False
         
