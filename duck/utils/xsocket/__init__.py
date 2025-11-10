@@ -5,6 +5,7 @@ import ssl
 import time
 import socket
 import select
+import enum
 import asyncio
 import threading
 
@@ -413,6 +414,27 @@ class xsocket:
         )
 
 
+class SSLObjectReadOrWrite(enum.IntEnum):
+    """
+    State on SSL object on whether if we are reading/writing to ssl object.
+    """
+    
+    READING = 0x2
+    """
+    We are reading from the SSL object.
+    """
+    
+    WRITING = 0x1
+    """
+    We are reading from the SSL object.
+    """
+    
+    NOTHING = 0x0
+    """
+    We are reading from the SSL object.
+    """
+    
+
 class ssl_xsocket(xsocket):
     """
     SSL Wrapper for raw sockets providing async support and
@@ -438,6 +460,7 @@ class ssl_xsocket(xsocket):
             self.ssl_outbio,
             server_side=server_side,
         )
+        self.ssl_state = SSLObjectReadOrWrite.NOTHING
         
         # Record some attributes, they belong to this class explicitly rather than raw_socket.
         self._cls_attrs.update({
@@ -447,6 +470,7 @@ class ssl_xsocket(xsocket):
             "_set_ssl_attributes",
             "server_side",
             "ssl_obj",
+            "ssl_state",
             "context",
             "ssl_inbio",
             "ssl_outbio",
@@ -719,6 +743,7 @@ class ssl_xsocket(xsocket):
         
         total = 0
         while True:
+            await asyncio.sleep(0) # Yield control to eventloop
             if not self.is_handshake_done():
                 async with self._asyncio_lock: # Avoid corrupting SSLObject if handshake is not done yet
                     data = self.ssl_outbio.read() # data to send
@@ -745,7 +770,10 @@ class ssl_xsocket(xsocket):
         Raises ConnectionResetError on EOF.
         """
         self.raise_if_blocking()
+        await asyncio.sleep(0) # Yield control to eventloop
+        
         data = await super().async_recv(n, timeout)
+        
         if not data:
             # peer closed connection — signal EOF
             # MemoryBIO has no explicit write_eof; writing empty bytes won't help.
@@ -810,8 +838,14 @@ class ssl_xsocket(xsocket):
         
         while total_written < len(data):
             try:
-                written = self.ssl_obj.write(view[total_written:])
-                
+                if self.ssl_state != SSLObjectReadOrWrite.READING:
+                    self.ssl_state = SSLObjectReadOrWrite.READING
+                    written = self.ssl_obj.write(view[total_written:])
+                    self.ssl_state = SSLObjectReadOrWrite.NOTHING
+                else:
+                    await asyncio.sleep(0)
+                    continue
+                    
                 # Written is number of application bytes accepted by SSLObject
                 total_written += written
                 
@@ -827,6 +861,10 @@ class ssl_xsocket(xsocket):
                 # read and feed more encrypted data
                 await self.async_recv_more_encrypted_data(timeout=timeout)
             
+            finally:
+                if not self.ssl_state != SSLObjectReadOrWrite.READING:
+                    self.ssl_state = SSLObjectReadOrWrite.NOTHING
+                    
         # Final flush attempt to ensure no bytes stuck in outbio
         await self.async_send_pending_data(timeout=timeout)
         return total_written
@@ -839,8 +877,16 @@ class ssl_xsocket(xsocket):
         self.raise_if_blocking()
         
         while True:
+            await self.async_send_pending_data()
             try:
-                data = self.ssl_obj.read(n)
+                if self.ssl_state != SSLObjectReadOrWrite.WRITING:
+                    self.ssl_state = SSLObjectReadOrWrite.READING
+                    data = self.ssl_obj.read(n)
+                    self.ssl_state = SSLObjectReadOrWrite.NOTHING
+                else:
+                    await asyncio.sleep(0)
+                    continue
+                    
                 # After reading decrypted data, there might be pending bytes to send (handshakes/renegotiation) —
                 # flush them to the wire.
                 try:
@@ -864,3 +910,8 @@ class ssl_xsocket(xsocket):
             
             except ssl.SSLError as e:
                 raise # Reraise SSLError
+            
+            finally:
+                if not self.ssl_state != SSLObjectReadOrWrite.WRITING:
+                    self.ssl_state = SSLObjectReadOrWrite.NOTHING
+            
