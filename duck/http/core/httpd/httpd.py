@@ -571,7 +571,7 @@ class BaseServer:
         
         if not data:
             # Client sent an empty request, terminate the connection immediately
-            await SocketIO.close(sock)
+            SocketIO.close(sock)
             return
         
         # Process data/request 

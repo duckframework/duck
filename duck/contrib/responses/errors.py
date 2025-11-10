@@ -291,7 +291,7 @@ def get_bad_request_error_response(exception: Exception, request: Optional[HttpR
 
     elif isinstance(exception, RequestUnsupportedVersionError):
         response_cls = HttpUnsupportedVersionResponse
-        body = "<p>Unsupported http version.</p><p>You might need to switch to supported protocol.</p>"
+        body = "<p>Unsupported HTTP version.</p><p>You might need to switch to supported protocol.</p>"
         if request:
             request.META["DEBUG_MESSAGE"] = f"Unsupported HTTP Version: {request.http_version}"
     else:

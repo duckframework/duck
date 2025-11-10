@@ -64,7 +64,7 @@ def _make_simple_response(
 
     response = response_class()
     body = body or ""
-    body = mark_safe(body)
+    response._body = body = mark_safe(body or response.status_explanation) # Set _body in case we wanna use it later.
 
     if not icon_link:
         data = simple_response_html.format(

@@ -40,10 +40,12 @@ def template_response(
         TemplateResponse: The transformed response.
     """
     response = response_class()
+    response._body = mark_safe(body or response.status_explanation) # Set body in case we wanna use it later
+    
     context = {}
     context["title"] = title or response.status_message
     context["heading"] = heading or response.status_message
-    context["body"] = mark_safe(body or response.status_explanation)
+    context["body"] = response._body
     context["icon_link"] = icon_link
     context["icon_type"] = icon_type
     context["debug"] = debug

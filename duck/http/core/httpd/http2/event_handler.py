@@ -49,6 +49,7 @@ class EventHandler:
         self.server = server
         self.stream_data = InMemoryCache()
         self.flow_control_futures = {}
+        self.async_tasks = {}
         self.event_map = {
             RequestReceived: self.on_new_request,
             DataReceived: self.on_request_body,
@@ -189,6 +190,7 @@ class EventHandler:
         Args:
             stream_id (int): The HTTP/2 stream ID that was reset.
         """
+        print("Reset", stream_id)
         # Remove stream request data if exists
         if self.stream_data.has(stream_id):
             self.stream_data.pop(stream_id)
@@ -197,6 +199,11 @@ class EventHandler:
         future = self.flow_control_futures.pop(stream_id, None)
         if future and not future.done():
             future.cancel()
+        
+        # Cancel any tasks if any
+        task = self.async_tasks.pop(stream_id, None)
+        if task and not task.done():
+            task.cancel()
 
     def on_window_updated(self, stream_id, delta):
         """
@@ -224,7 +231,13 @@ class EventHandler:
         """
         for future in self.flow_control_futures.values():
             future.cancel()
+        
+        # Cancel any tasks if any
+        for task in self.async_tasks.values():
+            task.cancel()
+        
         self.flow_control_futures = {}
+        self.async_tasks = {}
         self.protocol.connection_lost()
         
     async def wait_for_flow_control(self, stream_id: int):
@@ -251,7 +264,8 @@ class EventHandler:
                     if iscoroutinefunction(handler):
                         if isinstance(event, (RequestReceived, StreamEnded, DataReceived)):
                             # This event need to be executed in background
-                            create_task(handler(event))
+                            task = create_task(handler(event))
+                            self.async_tasks[event.stream_id] = task
                         else:
                             await handler(event)
                     else:
@@ -260,5 +274,6 @@ class EventHandler:
                 # For every event failure, just log the exception and
                 # continue with other events as not doing so may stall the connection
                 logger.log_exception(e)
- 
+            
+            # Send any pending data.
             await self.protocol.async_send_pending_data()

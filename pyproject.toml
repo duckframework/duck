@@ -39,6 +39,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: ASGI :: Server",
     "Topic :: Internet :: WWW/HTTP :: WSGI :: Server",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
     "Operating System :: OS Independent"
@@ -67,10 +68,11 @@ keywords = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/duckframework/duck"
-Repository = "https://github.com/duckframework/duck"
+Homepage = "https://duckframework.xyz"
+Source = "https://github.com/duckframework/duck"
 Issues = "https://github.com/duckframework/duck/issues"
 Documentation = "https://duckframework.xyz/documentation"
+Funding = "https://duckframework.xyz/contribute"
 
 [project.entry-points.console_scripts]
 duck = "duck.__main__:cli"

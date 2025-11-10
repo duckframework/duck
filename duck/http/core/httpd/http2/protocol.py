@@ -34,7 +34,7 @@ from duck.http.core.handler import (
 from duck.http.core.httpd.http2.event_handler import EventHandler
 from duck.logging import logger
 from duck.contrib.sync import iscoroutinefunction
-from duck.utils.xsocket import xsocket
+from duck.utils.xsocket import xsocket, ssl_xsocket
 from duck.utils.xsocket.io import SocketIO
 from duck.utils.asyncio.eventloop import (
     SyncFuture,
@@ -110,7 +110,7 @@ class H2Protocol:
         async def async_read_and_handle_data():
             """
             Receive and handle data asynchrously.
-            """
+            """          
             data = await SocketIO.async_receive(self.sock, timeout=.5)
             
             if data:
@@ -137,7 +137,6 @@ class H2Protocol:
             except (
                 ConnectionError,
                 ConnectionResetError,
-                OSError,
                 BrokenPipeError,
             ): # Connection errors
                 self.closing = True
@@ -148,12 +147,18 @@ class H2Protocol:
                 
                 if SETTINGS['DEBUG']:
                     logger.log_exception(e)
+                
+                # Break H2 loop
+                break
                     
             except Exception as e:
                 logger.log(f"HTTP/2 Error: {e}", level=logger.WARNING)
                 
                 if SETTINGS['DEBUG']:
                     logger.log_exception(e)
+                
+                # Break H2 loop
+                break
                     
         # Connection closed
         SocketIO.close(self.sock) # ensure socket is closed.
@@ -556,3 +561,6 @@ class H2Protocol:
         
         # Send pending data added to H2Connection.
         await self.async_send_pending_data()
+        
+        # Remove task from task list (if available in list).
+        self.event_handler.async_tasks.pop(stream_id, None)

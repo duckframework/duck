@@ -6,6 +6,7 @@ import time
 import socket
 import select
 import asyncio
+import threading
 
 from typing import (
   Any,
@@ -426,6 +427,8 @@ class ssl_xsocket(xsocket):
     ):
         super().__init__(raw_socket)
         self._handshake_done = False
+        self._asyncio_lock = asyncio.Lock()
+        self._threading_lock = threading.Lock()
         self.server_side = server_side
         self.ssl_inbio = ssl.MemoryBIO() # write to this
         self.ssl_outbio = ssl.MemoryBIO() # read from this
@@ -439,6 +442,8 @@ class ssl_xsocket(xsocket):
         # Record some attributes, they belong to this class explicitly rather than raw_socket.
         self._cls_attrs.update({
             "_handshake_done",
+            "_asyncio_lock",
+            "_threading_lock",
             "_set_ssl_attributes",
             "server_side",
             "ssl_obj",
@@ -526,14 +531,6 @@ class ssl_xsocket(xsocket):
         return wrapper
         
     @handle_sock_close
-    def data_to_send(self) -> bytes:
-        """
-        Return all currently buffered encrypted bytes from the outbio.
-        """
-        # MemoryBIO.read() consumes and returns available data
-        return self.ssl_outbio.read()
-    
-    @handle_sock_close
     def send_pending_data(self, timeout: Optional[float] = None) -> int:
         """
         Blocking send to flush outbio. Will loop until outbio is drained or socket stops accepting.
@@ -542,7 +539,11 @@ class ssl_xsocket(xsocket):
         self.raise_if_in_async_context("This method is blocking, use `async_send_pending_data` instead.")
         total = 0
         while True:
-            data = self.ssl_outbio.read()
+            if not self.is_handshake_done():
+                with self._threading_lock: # Avoid corrupting SSLObject if handshake is not done yet
+                    data = self.ssl_outbio.read() # data to send
+            else:
+                data = self.ssl_outbio.read() # data to send
             if not data:
                 break
             sent = super().send(data, timeout=timeout) or 0
@@ -570,7 +571,11 @@ class ssl_xsocket(xsocket):
             # MemoryBIO has no explicit write_eof; writing empty bytes won't help.
             # Best to raise so the caller can handle.
             raise ConnectionResetError("Underlying transport closed (EOF) while expecting encrypted data")
-        self.ssl_inbio.write(data)
+        if not self.is_handshake_done():
+            with self._threading_lock: # Avoid corrupting SSLObject if handshake is not done yet
+                self.ssl_inbio.write(data) # data to write
+        else:
+            self.ssl_inbio.write(data) # data to write
         return len(data)
     
     def transport_readable(self, timeout: Optional[float]) -> bool:
@@ -592,41 +597,9 @@ class ssl_xsocket(xsocket):
         
     def is_handshake_done(self) -> bool:
         """
-        Checks if handshake is complete directly from `ssl_obj`.  
-        
-        This function accesses the low-level OpenSSL object to check the handshake status flags.
+        Returns whether the handshake is complete.
         """
-        try:
-            # Check OpenSSL's internal flags for SSL_CB_HANDSHAKE_DONE (0x20)
-            # The info_callback function is used here to monitor the state.
-            # As a direct check, we can leverage the internal state representation.
-            
-            # A more reliable way is often to simply try a method that would fail if not done.
-            # However, if you need a non-blocking check:
-            
-            # The standard library doesn't expose a direct 'handshake_done' property.
-            # The common approach in libraries that need this is to use a try-except block
-            # on a function like getpeercert().
-            
-            # An alternative is to use a callback mechanism as suggested in Stack Overflow, 
-            # but that requires setting up the context beforehand.
-            
-            # Let's use the standard method of attempting to get the peer certificate, 
-            # which will raise an exception if the handshake is not complete.
-            self.getpeercert()
-            return True
-        except ssl.SSLError as e:
-            # This will catch errors like 'ssl handshake failure' if the handshake 
-            # hasn't occurred or has failed.
-            # This approach assumes you want to know if the handshake *can* be done.
-            # A better, more direct way is unavailable in stock Python < 3.10.
-            return False
-        except ValueError:
-            # Handshake not complete
-            return False
-        except Exception:
-            # Other potential errors during the check
-            return False
+        return self._handshake_done
         
     @handle_sock_close
     def do_handshake(self, timeout: Optional[float] = None):
@@ -642,26 +615,28 @@ class ssl_xsocket(xsocket):
                 # Flush any data remaining in outbio
                 self.send_pending_data(timeout=timeout)
                 self._handshake_done = True
-                return
+                break
                 
             except ssl.SSLWantReadError:
                 # Flush any sendable data, then attempt to read more encrypted bytes
                 self.send_pending_data(timeout=timeout)
                 
                 # The following statement may stall if the handshake is done already.
-                if not self.is_handshake_done():
-                    # Only receive data if data already available
-                    if self.transport_readable(.01):
-                        # If recv returns EOF -> will raise ConnectionResetError
-                        self.recv_more_encrypted_data(timeout=timeout)
+                # Only receive data if data already available
+                if self.transport_readable(.01):
+                    # If recv returns EOF -> will raise ConnectionResetError
+                    self.recv_more_encrypted_data(timeout=timeout)
                 else:
                     self._handshake_done = True
-                    return
+                    break
                     
             except ssl.SSLWantWriteError:
                 # We need to flush outbio — then retry
                 self.send_pending_data(timeout=timeout)
-    
+        
+        # Set handshake done just in case.        
+        self._handshake_done = True
+        
     @handle_sock_close
     def send(self, data: bytes, timeout: float = None) -> int:
         """
@@ -744,7 +719,11 @@ class ssl_xsocket(xsocket):
         
         total = 0
         while True:
-            data = self.ssl_outbio.read()
+            if not self.is_handshake_done():
+                async with self._asyncio_lock: # Avoid corrupting SSLObject if handshake is not done yet
+                    data = self.ssl_outbio.read() # data to send
+            else:
+                data = self.ssl_outbio.read() # data to send
             if not data:
                 break
             sent = await super().async_send(data, timeout=timeout) or 0
@@ -772,7 +751,12 @@ class ssl_xsocket(xsocket):
             # MemoryBIO has no explicit write_eof; writing empty bytes won't help.
             # Best to raise so the caller can handle.
             raise ConnectionResetError("Underlying transport closed (EOF) while expecting encrypted data")
-        self.ssl_inbio.write(data)
+        
+        if not self.is_handshake_done():
+            async with self._asyncio_lock: # Avoid corrupting SSLObject if handshake is not done yet
+                self.ssl_inbio.write(data) # data to write
+        else:
+            self.ssl_inbio.write(data) # data to write
         return len(data)
         
     @handle_sock_close
@@ -789,26 +773,28 @@ class ssl_xsocket(xsocket):
                 # Flush any data remaining in outbio
                 await self.async_send_pending_data(timeout=timeout)
                 self._handshake_done = True
-                return
+                break
             
             except ssl.SSLWantReadError:
                 # Flush any sendable data, then attempt to read more encrypted bytes
                 await self.async_send_pending_data(timeout=timeout)
                 
                 # The following statement may stall if the handshake is done already.
-                if not self.is_handshake_done():
-                    # Only receive data if data already available
-                    if self.transport_readable(.01):
-                        # if recv returns EOF -> will raise ConnectionResetError
-                        await self.async_recv_more_encrypted_data(timeout=timeout)
+                # Only receive data if data already available
+                if self.transport_readable(.01):
+                    # if recv returns EOF -> will raise ConnectionResetError
+                    await self.async_recv_more_encrypted_data(timeout=timeout)
                 else:
-                    self._hanshake_done = True
-                    return
+                    self._handshake_done = True
+                    break
                     
             except ssl.SSLWantWriteError:
                 # We need to flush outbio — then retry
                 await self.async_send_pending_data(timeout=timeout)
-                
+        
+        # Set handshake done just in case.        
+        self._handshake_done = True
+        
     @handle_sock_close
     async def async_send(self, data: bytes, timeout: float = None) -> int:
         """
