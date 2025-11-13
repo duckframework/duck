@@ -49,7 +49,7 @@ class EventHandler:
         self.server = server
         self.stream_data = InMemoryCache()
         self.flow_control_futures = {}
-        self.async_tasks = {}
+        self.async_tasks = {} # {stream_id: [asyncio.Task, ...]}
         self.event_map = {
             RequestReceived: self.on_new_request,
             DataReceived: self.on_request_body,
@@ -200,9 +200,10 @@ class EventHandler:
             future.cancel()
         
         # Cancel any tasks if any
-        task = self.async_tasks.pop(stream_id, None)
-        if task and not task.done():
-            task.cancel()
+        tasks = self.async_tasks.pop(stream_id, [])
+        for task in tasks:
+            if task and not task.done():
+                task.cancel()
 
     def on_window_updated(self, stream_id, delta):
         """
@@ -232,8 +233,9 @@ class EventHandler:
             future.cancel()
         
         # Cancel any tasks if any
-        for task in self.async_tasks.values():
-            task.cancel()
+        for tasks in self.async_tasks.values():
+            for task in tasks:
+                task.cancel()
         
         self.flow_control_futures = {}
         self.async_tasks = {}
@@ -261,10 +263,17 @@ class EventHandler:
             try:
                 if handler:
                     if iscoroutinefunction(handler):
-                        if isinstance(event, (RequestReceived, StreamEnded)):
+                        # Do not run StreamEnded event handler in a task, doing that is causing SSLErrors somehow on verified SSL certificates
+                        if isinstance(event, (RequestReceived, DataReceived)):
                             # This event need to be executed in background
                             task = create_task(handler(event))
-                            self.async_tasks[event.stream_id] = task
+                            if isinstance(event, RequestReceived):
+                                self.async_tasks[event.stream_id] = [task]
+                            else:
+                                tasks = self.async_tasks.get(event.stream_id, [])
+                                if task not in tasks:
+                                    tasks.append(task)
+                                self.async_tasks[event.stream_id] = tasks
                         else:
                             await handler(event)
                     else:

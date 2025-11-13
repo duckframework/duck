@@ -664,7 +664,7 @@ class ssl_xsocket(xsocket):
     @handle_sock_close
     def send(self, data: bytes, timeout: float = None) -> int:
         """
-        Encrypts and sends application data over the network.
+        Encrypts and synchronously sends application data over the network.
         
         Returns:
             int: Total bytes sent.
@@ -676,8 +676,14 @@ class ssl_xsocket(xsocket):
         
         while total_written < len(data):
             try:
-                written = self.ssl_obj.write(view[total_written:])
-                
+                if self.ssl_state != SSLObjectReadOrWrite.READING:
+                    self.ssl_state = SSLObjectReadOrWrite.READING
+                    written = self.ssl_obj.write(view[total_written:])
+                    self.ssl_state = SSLObjectReadOrWrite.NOTHING
+                else:
+                    time.sleep(0.0001)
+                    continue
+                    
                 # Written is number of application bytes accepted by SSLObject
                 total_written += written
                 
@@ -692,28 +698,31 @@ class ssl_xsocket(xsocket):
                 # SSL needs more encrypted input (e.g. renegotiation)
                 # read and feed more encrypted data
                 self.recv_more_encrypted_data(timeout=timeout)
-        
+            
+            finally:
+                if not self.ssl_state != SSLObjectReadOrWrite.READING:
+                    self.ssl_state = SSLObjectReadOrWrite.NOTHING
+                    
         # Final flush attempt to ensure no bytes stuck in outbio
         self.send_pending_data(timeout=timeout)
         return total_written
-    
+        
     @handle_sock_close
     def recv(self, n: int = DEFAULT_BUFSIZE, timeout: float = None) -> bytes:
         """
-        Receives encrypted data from the socket, decrypts and returns it.
+        Synchronously receives encrypted data from the socket, decrypts and returns it.
         """
         self.raise_if_in_async_context("This method is blocking, use `async_recv` instead.")
         
         while True:
             try:
-                data = self.ssl_obj.read(n)
-                # After reading decrypted data, there might be pending bytes to send (handshakes/renegotiation) —
-                # flush them to the wire.
-                try:
-                    self.send_pending_data(timeout=timeout)
-                except Exception:
-                    # non-fatal flushing failure — propagate only if necessary
-                    pass
+                if self.ssl_state != SSLObjectReadOrWrite.WRITING:
+                    self.ssl_state = SSLObjectReadOrWrite.READING
+                    data = self.ssl_obj.read(n)
+                    self.ssl_state = SSLObjectReadOrWrite.NOTHING
+                else:
+                    time.sleep(0.0001)
+                    continue
                 return data
             
             except ssl.SSLWantReadError:
@@ -730,7 +739,11 @@ class ssl_xsocket(xsocket):
             
             except ssl.SSLError as e:
                 raise # Reraise SSLError
-                
+            
+            finally:
+                if not self.ssl_state != SSLObjectReadOrWrite.WRITING:
+                    self.ssl_state = SSLObjectReadOrWrite.NOTHING
+                    
     # ASYNCHRONOUS IMPLEMENTATIONS
     
     @handle_sock_close
@@ -743,7 +756,6 @@ class ssl_xsocket(xsocket):
         
         total = 0
         while True:
-            await asyncio.sleep(0) # Yield control to eventloop
             if not self.is_handshake_done():
                 async with self._asyncio_lock: # Avoid corrupting SSLObject if handshake is not done yet
                     data = self.ssl_outbio.read() # data to send
@@ -770,7 +782,6 @@ class ssl_xsocket(xsocket):
         Raises ConnectionResetError on EOF.
         """
         self.raise_if_blocking()
-        await asyncio.sleep(0) # Yield control to eventloop
         
         data = await super().async_recv(n, timeout)
         
@@ -905,4 +916,3 @@ class ssl_xsocket(xsocket):
             finally:
                 if not self.ssl_state != SSLObjectReadOrWrite.WRITING:
                     self.ssl_state = SSLObjectReadOrWrite.NOTHING
-            
