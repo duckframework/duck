@@ -843,7 +843,7 @@ class ssl_xsocket(xsocket):
                     written = self.ssl_obj.write(view[total_written:])
                     self.ssl_state = SSLObjectReadOrWrite.NOTHING
                 else:
-                    await asyncio.sleep(0)
+                    await asyncio.sleep(0.0001)
                     continue
                     
                 # Written is number of application bytes accepted by SSLObject
@@ -877,23 +877,14 @@ class ssl_xsocket(xsocket):
         self.raise_if_blocking()
         
         while True:
-            await self.async_send_pending_data()
             try:
                 if self.ssl_state != SSLObjectReadOrWrite.WRITING:
                     self.ssl_state = SSLObjectReadOrWrite.READING
                     data = self.ssl_obj.read(n)
                     self.ssl_state = SSLObjectReadOrWrite.NOTHING
                 else:
-                    await asyncio.sleep(0)
+                    await asyncio.sleep(0.0001)
                     continue
-                    
-                # After reading decrypted data, there might be pending bytes to send (handshakes/renegotiation) —
-                # flush them to the wire.
-                try:
-                    await self.async_send_pending_data(timeout=timeout)
-                except Exception:
-                    # non-fatal flushing failure — propagate only if necessary
-                    pass
                 return data
             
             except ssl.SSLWantReadError:

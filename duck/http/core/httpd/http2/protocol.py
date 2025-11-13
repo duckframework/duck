@@ -118,9 +118,6 @@ class H2Protocol:
                 
         # Read and handle H2 frames.
         while not self.closing:  
-            # Yield control to the eventloop
-            await asyncio.sleep(0)
-            
             try:
                 # Read & handle H2 frames
                 await async_read_and_handle_data() 
@@ -159,7 +156,10 @@ class H2Protocol:
                 
                 # Break H2 loop
                 break
-                    
+            
+            # Yield control to the eventloop
+            await asyncio.sleep(0.1)
+            
         # Connection closed
         SocketIO.close(self.sock) # ensure socket is closed.
         

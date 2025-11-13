@@ -190,7 +190,6 @@ class EventHandler:
         Args:
             stream_id (int): The HTTP/2 stream ID that was reset.
         """
-        print("Reset", stream_id)
         # Remove stream request data if exists
         if self.stream_data.has(stream_id):
             self.stream_data.pop(stream_id)
@@ -262,7 +261,7 @@ class EventHandler:
             try:
                 if handler:
                     if iscoroutinefunction(handler):
-                        if isinstance(event, (RequestReceived, StreamEnded, DataReceived)):
+                        if isinstance(event, (RequestReceived, StreamEnded)):
                             # This event need to be executed in background
                             task = create_task(handler(event))
                             self.async_tasks[event.stream_id] = task
