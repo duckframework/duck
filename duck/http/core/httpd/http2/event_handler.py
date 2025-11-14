@@ -260,12 +260,16 @@ class EventHandler:
         
         for event in events:
             handler = self.event_map.get(type(event))
+            
             try:
                 if handler:
                     if iscoroutinefunction(handler):
                         # Do not run StreamEnded event handler in a task, doing that is causing SSLErrors somehow on verified SSL certificates
-                        if isinstance(event, (RequestReceived, DataReceived)):
+                        if isinstance(event, (StreamEnded)) and False: # The following block is never going to run
                             # This event need to be executed in background
+                            # TODO: Find a way to use tasks because somehow they are messing up the data/request when used to handle
+                            # StreamEnded, RequestReceived & DataReceived events
+                            # This is a safety measure because using tasks is also periodically causing SSL errors.
                             task = create_task(handler(event))
                             if isinstance(event, RequestReceived):
                                 self.async_tasks[event.stream_id] = [task]

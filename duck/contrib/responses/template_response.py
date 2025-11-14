@@ -55,7 +55,8 @@ def template_response(
     
     if icon_link and not icon_type:
         raise TypeError("The icon type must be provided when an icon link is provided.")
-
+        
+    old_body = response._body
     response = internal_render(
         request=None,
         template="base_response.html",
@@ -63,4 +64,5 @@ def template_response(
         content_type="text/html",
         status_code=response.status_code,
     )
+    response._body = old_body
     return response

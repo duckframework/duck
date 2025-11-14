@@ -277,7 +277,6 @@ class H2Protocol:
                 for flow control window updates before giving up. Defaults to 30.0s.
     
         Raises:
-            asyncio.TimeoutError: If flow control window isn't updated within timeout.
             asyncio.CancelledError: If task is cancelled during sending.
         """
     
@@ -286,25 +285,38 @@ class H2Protocol:
     
         original_data = data
         view = memoryview(data)
-    
+        time_left = flow_control_timeout
+        interval_timeout = .01
+        
         # Continue sending until all data is transmitted
         while view:
-            # Wait for enough flow control window space
+            # Wait for enough flow control window space but keep on receiving data
             while self.conn.local_flow_control_window(stream_id) < 1:
-                try:
-                    await asyncio.wait_for(
-                        self.event_handler.wait_for_flow_control(stream_id),
-                        timeout=flow_control_timeout,
-                    )
-                except asyncio.TimeoutError:
+                if time_left <= 0:
+                    # Timeout reached
                     if SETTINGS['DEBUG']:
                         logger.log(
                             f"Flow control timeout on stream {stream_id} "
                             f"after {flow_control_timeout:.1f}s",
                             level=logger.WARNING,
                         )
-                    return
-                
+                    raise asyncio.TimeoutError(f"Flow control timeout on stream {stream_id}")
+                try:
+                    await asyncio.wait_for(
+                        self.event_handler.wait_for_flow_control(stream_id),
+                        timeout=interval_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    # Keep receiving data and handle the data
+                    start_time = time.time()
+                    data = await SocketIO.async_receive(self.sock, timeout=interval_time)
+                    if data:
+                        await self.event_handler.entry(data)
+                    end_time = time.time()
+                    time_left -= end_time - start_time
+                    time_left -= interval_timeout
+                    continue
+                    
                 except asyncio.CancelledError:
                     return
     
@@ -407,7 +419,7 @@ class H2Protocol:
                 await ResponseHandler.async_close_streaming_response(response)
             finally:
                 log_response(response, request)
-                    
+                
         if self.conn.state_machine.state == ConnectionState.CLOSED:
             # Call close_streaming_response if not called.
             await ResponseHandler.async_close_streaming_response(response)

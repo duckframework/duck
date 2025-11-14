@@ -2,6 +2,7 @@
 Module containing proxy handler class.
 """
 import ssl
+import asyncio
 import socket
 
 from http.cookies import SimpleCookie
@@ -507,14 +508,12 @@ class AsyncHttpProxyHandler(HttpProxyHandler):
         """
         # Connect to the target server
         target_socket = await self.connect_to_target()
-        
         try:
             # Forward the client's request to the target server
             await self.forward_request_to_target(request, client_socket, target_socket)
             
             # Receive partial response
             payload, partial_content = await self.fetch_response_payload(target_socket)
-            
             content_length_header = payload.get_header("content-length")
             chunk_size = None
             
