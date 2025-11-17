@@ -93,6 +93,7 @@ from duck.utils.path import url_normalize
 from duck.utils.port_recorder import PortRecorder
 from duck.utils.lazy import Lazy
 from duck.utils.asyncio.eventloop import AsyncioLoopManager
+from duck.utils.threading.threadpool import ThreadPoolManager
 
 
 if SETTINGS['USE_DJANGO']:
@@ -148,6 +149,8 @@ class App:
         enable_force_https_logs: bool = False,
         start_bg_event_loop_if_wsgi: bool = True,
         process_name: str = "duck-server",
+        workers: Optional[int] = None,
+        force_https_workers: Optional[int] = None, 
     ):
         """
         Initializes the main Duck application instance.
@@ -170,6 +173,8 @@ class App:
             start_bg_event_loop_if_wsgi (bool): If True, it starts an event loop in background thread for offloading coroutines in `WSGI` environment.
                 This is useful for running asynchronous protocols like `HTTP/2` and `WebSockets` even in `WSGI` environment.
             process_name (str): The name of the process for this application. Defaults to "duck-server".
+            workers (Optional[int]): Number of workers to use. None will disable workers.
+            force_https_workers (Optional[int]): Number of workers to use for HTTPS redirects. None will disable workers.
             
         Raises:
             ApplicationError: If the provided address is invalid or if multiple main application
@@ -226,6 +231,8 @@ class App:
         self.skip_setup = skip_setup
         self.start_bg_event_loop_if_wsgi = start_bg_event_loop_if_wsgi
         self.process_name = process_name or "duck-server"
+        self.workers = workers
+        self.force_https_workers = force_https_workers
         
         # Initialize some attributes
         self.automations_dispatcher = None
@@ -245,6 +252,8 @@ class App:
             future.add_done_callback(on_task_done)
             return future
             
+        # 
+        
         # Modify default thread pool executor submit method
         self.thread_pool_executor = ThreadPoolExecutor()
         self.thread_pool_executor._super_submit = self.thread_pool_executor.submit
@@ -281,6 +290,7 @@ class App:
                 uses_ipv6=uses_ipv6,
                 enable_https=False,
                 no_logs=not enable_force_https_logs,
+                workers=force_https_workers,
             )  # Create https redirect mivro application.
         
         # Create a server object.
@@ -291,6 +301,7 @@ class App:
             uses_ipv6=uses_ipv6,
             enable_ssl=self.enable_https,
             no_logs=False,
+            workers=workers,
         )
         
         # Set process title
@@ -934,7 +945,15 @@ class App:
         
         # Start WSGI background event loop if needed
         if not SETTINGS['ASYNC_HANDLING']:
+            # Start threadpool for handling requests.
+            ThreadPoolManager.start(
+                daemon=True,
+                thread_name_prefix="request-handler",
+                task_type="request-handling",
+            )
+            
             if self.start_bg_event_loop_if_wsgi:
+                # Start asyncio loop in background
                 AsyncioLoopManager.start()
                 logger.log(
                     "Background event loop started",
@@ -946,7 +965,10 @@ class App:
                     "This may prevent protocols like `HTTP/2` or `WebSockets` from working correctly\n",
                     level=logger.WARNING,
                 )
-                
+        else:
+            # Start asyncio loop in background
+            AsyncioLoopManager.start()
+                        
         if SETTINGS['ENABLE_COMPONENT_SYSTEM']:
             # Components are enabled
             logger.log(

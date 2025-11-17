@@ -6,10 +6,10 @@ with intelligent handling of transactional/atomic operations.
 - Runs regular sync code on any available thread for maximal concurrency.
 - Routes transactional/atomic database operations to a pool of specialized threads.
 - Ensures thread (and connection) affinity for sync-to-async calls within a transaction context.
-- Automatically tunes thread pool size for optimal performance based on CPU and DB resource limits.
+- Dynamically scales up transactional threads as needed, up to max_threads.
 - Reliable queueing and error handling; safe for production usage.
 
-**Usage Exanple:**
+**Usage Example:**
 ```py
 import time
 import asyncio
@@ -30,9 +30,8 @@ async def atomic_func(num_times):
         
     with transaction_context():
         for i in range(num_times):
-            await smart_sync_to_async(atomic_func)()
+            await smart_sync_to_async(some_db_func)()
     return results
-    
 
 async def main():
     print("Regular ops concurrently:")
@@ -41,22 +40,16 @@ async def main():
         *(smart_sync_to_async(regular_func)(i) for i in range(8))
     )
     print(results)
-    print(f"Total time is: {time.time() - st_time: .2f} seconds each with a break of 1s")
-        
+
     st_time = time.time()
     print("\nAtomic ops sequentially (single transaction context):")
     atomic_results = await atomic_func(8)
     print(atomic_results)
-    print(f"Total time is: {time.time() - st_time: .2f} seconds each with a break of 1s")
 
 asyncio.run(main())
 ```
-
-**Notes:**
-- Atomic/transactional tasks run in the same thread context sequentially, depending on the atomic context block.
-- Regular tasks run concurrently across threads.
-- Context managers `transaction_context` & `disable_transaction_context` can be used to enable/disable transactional task processing.
 """
+
 import os
 import uuid
 import queue
@@ -66,8 +59,7 @@ import threading
 import contextvars
 
 from functools import wraps
-from typing import Any, Callable, TypeVar, Optional, List
-
+from typing import Any, Callable, TypeVar, Optional, Dict
 
 T = TypeVar("T")
 
@@ -77,9 +69,8 @@ def get_optimal_thread_count() -> int:
     Determine optimal thread pool size based on CPU count and environment.
     For DB ops, you may want to tune based on DB max connections.
     """
-    from duck.utils.threading import get_max_workers
-    return get_max_workers()
-    
+    return min(os.cpu_count(), 4) or 4
+
 
 class TransactionThread(threading.Thread):
     """
@@ -87,14 +78,18 @@ class TransactionThread(threading.Thread):
     Each thread maintains its own DB connection context.
     All tasks submitted are executed serially, preserving transaction context.
     """
-    def __init__(self):
+    def __init__(self, context_id=None):
         super().__init__(daemon=True)
+        self.context_id = context_id
         self.task_queue = queue.Queue()
         self.start()
 
     def run(self):
         while True:
-            func, args, kwargs, future, loop = self.task_queue.get()
+            item = self.task_queue.get()
+            if item is None:  # shutdown sentinel
+                break
+            func, args, kwargs, future, loop = item
             try:
                 result = func(*args, **kwargs)
                 loop.call_soon_threadsafe(future.set_result, result)
@@ -104,51 +99,80 @@ class TransactionThread(threading.Thread):
                 self.task_queue.task_done()
 
     def submit(self, func: Callable[..., T], *args, **kwargs) -> asyncio.Future:
-        """
-        Submit a function to this thread and return an asyncio.Future for its result.
-        """
         loop = asyncio.get_event_loop()
         future: asyncio.Future = loop.create_future()
         self.task_queue.put((func, args, kwargs, future, loop))
         return future
 
+    def shutdown(self):
+        self.task_queue.put(None)
+
 
 class TransactionThreadPool:
     """
-    A pool of transaction threads for concurrent atomic operations.
+    Dynamically scalable pool of transaction threads for concurrent atomic operations.
     Ensures thread affinity for transaction contexts.
+    Scales up to max_threads as needed.
     """
-    def __init__(self, num_threads: Optional[int] = None):
-        if num_threads is None:
-            num_threads = get_optimal_thread_count()
-        self.threads: List[TransactionThread] = [TransactionThread() for _ in range(num_threads)]
-        self.counter = 0
+    def __init__(self, max_threads: Optional[int] = None):
+        self.max_threads = max_threads or get_optimal_thread_count()
+        self.threads: Dict[str, TransactionThread] = {}  # context_id -> thread
+        self.general_threads: list = []                  # threads for non-context tasks
         self.lock = threading.Lock()
+        self.counter = 0
 
     def get_thread(self, context_id=None):
-        """
-        Get a thread for a given transaction context.
-        If context_id is set, use it to always select the same thread for the context.
-        """
-        if context_id is not None:
-            idx = hash(context_id) % len(self.threads)
-            return self.threads[idx]
         with self.lock:
-            thread = self.threads[self.counter % len(self.threads)]
+            if context_id:
+                thread = self.threads.get(context_id)
+                if thread and thread.is_alive():
+                    return thread
+                
+                # Remove dead thread if necessary
+                if thread and not thread.is_alive():
+                    del self.threads[context_id]
+                
+                # Create new thread for context_id if under max_threads
+                if len(self.threads) < self.max_threads:
+                    thread = TransactionThread(context_id)
+                    self.threads[context_id] = thread
+                    return thread
+                
+                # Fall back: pick existing thread round robin
+                rr_idx = hash(context_id) % len(self.threads)
+                reused_context = list(self.threads.values())[rr_idx]
+                return reused_context
+            
+            # Non-context: use/reuse thread (max max_threads for fairness)
+            if len(self.general_threads) < self.max_threads:
+                thread = TransactionThread()
+                self.general_threads.append(thread)
+                return thread
+            
+            # Round robin over available general threads
+            thread = self.general_threads[self.counter % len(self.general_threads)]
             self.counter += 1
-        return thread
+            return thread
 
     def submit(self, func: Callable[..., T], *args, context_id=None, **kwargs) -> asyncio.Future:
         thread = self.get_thread(context_id)
         return thread.submit(func, *args, **kwargs)
 
+    def shutdown(self, wait=True):
+        # Cleanly stop all threads (poison pill)
+        for t in list(self.threads.values()) + self.general_threads:
+            t.shutdown()
+        if wait:
+            for t in list(self.threads.values()) + self.general_threads:
+                t.join()
+        self.threads.clear()
+        self.general_threads.clear()
+
 
 class BasicThreadPool:
     """
-    A pool of ordinary threads for non-transactional concurrent operations.
-    
-    **Notes:**
-    - Uses `asyncio.to_thread` for simplicity.
+    Basic pool for non-transactional, concurrent operations.
+    Uses `asyncio.to_thread` for simplicity.
     """
     @staticmethod
     async def submit(func: Callable[..., T], *args, **kwargs) -> T:
@@ -246,8 +270,8 @@ class transaction_context:
 class disable_transaction_context:
     """
     Context manager that temporarily disables any active transaction context.
-    While inside this block, in_transaction_context() returns None.
-
+    While inside this block, in_transaction_context() returns None.  
+    
     Usage:
     ```py
     with transaction_context():

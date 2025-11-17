@@ -2,6 +2,7 @@
 Module containing RequestProcessor class for processing requests.
 """
 import re
+import os
 import time
 
 from typing import (
@@ -39,11 +40,12 @@ from duck.http.core.proxyhandler import (
 )
 from duck.http.middlewares import BaseMiddleware
 from duck.http.request import HttpRequest
-from duck.http.response import HttpResponse
+from duck.http.response import HttpResponse, FileResponse
 from duck.routes import RouteRegistry
-from duck.shortcuts import to_response        
+from duck.shortcuts import to_response, not_found404      
 from duck.logging import logger
 from duck.meta import Meta
+from duck.utils.path import normalize_url_path, joinpaths
 from duck.utils.threading import SyncFuture
 from duck.utils.asyncio.eventloop import AsyncioLoopManager
 
@@ -53,29 +55,39 @@ DUCK_EXPLICIT_PATTERNS = [re.compile(p) for p in SETTINGS["DUCK_EXPLICIT_URLS"] 
 
 
 @lru_cache(maxsize=256)
-def is_django_side_url(url: str) -> bool:
-    """
-    Returns whether the request URL is in DJANGO_SIDE_URLS in settings.py,
-    this means that the request is meant to be handled by Django directly, and Duck doesn't
-    know anything about the urlpattern resolving to this request url.
-    """
-    return any(p.fullmatch(url) for p in DJANGO_SIDE_PATTERNS)
-
-
-@lru_cache(maxsize=256)
-def is_duck_explicit_url(url: str) -> bool:
+def is_duck_explicit_url(url: str) -> Optional[re.Pattern]:
     """
     Returns whether the request URL is in DUCK_EXPLICIT_URLS meaning,
     The request with the url doesn't need to be parsed to Django server first to produce a
     response, but rather to be handled by Duck directly.
-        
+    
+    Returns:
+        Optional[re.Pattern]: The matched pattern or None.
+          
     Notes:
     - This is only useful when USE_DJANGO=True as all requests all proxied to Django server to
       generate the http response.
     """
     # Duck explicit URLs are urls not to be proxied to Django even if USE_DJANGO=True.
     # They are handled directly by within Duck.
-    return any(p.fullmatch(url) for p in DUCK_EXPLICIT_PATTERNS)
+    for p in DUCK_EXPLICIT_PATTERNS:
+        if p.fullmatch(url):
+            return p
+
+
+@lru_cache(maxsize=256)
+def is_django_side_url(url: str) -> Optional[re.Pattern]:
+    """
+    Returns whether the request URL is in DJANGO_SIDE_URLS in settings.py,
+    this means that the request is meant to be handled by Django directly, and Duck doesn't
+    know anything about the urlpattern resolving to this request url.
+    
+    Returns:
+        Optional[re.Pattern]: The matched pattern or None.
+    """
+    for p in DJANGO_SIDE_PATTERNS:
+        if p.fullmatch(url):
+            return p
 
 
 class RequestProcessor:
@@ -265,7 +277,7 @@ class RequestProcessor:
             # The data received from the view cannot be converted to http response.
             raise TypeError(f"Invalid data received from response view for URL '{url}'") from e
         return response
-
+        
     def get_django_response(self) -> HttpProxyResponse:
         """
         Returns the streaming http response fetched from django server.
@@ -382,10 +394,10 @@ class RequestProcessor:
         # like RequestSyntaxError, RequestUnsupportedVersionError, etc.
         
         django_side_urls_skip_middlewares = SETTINGS["DJANGO_SIDE_URLS_SKIP_MIDDLEWARES"] # skip middlewares for urls registered in Django.
-        django_side_url = is_django_side_url(self.request.path)
-        duck_explicit_url = is_duck_explicit_url(self.request.path)
+        django_side_url_matched_pattern = is_django_side_url(self.request.path)
+        duck_explicit_url_matched_pattern = is_duck_explicit_url(self.request.path)
         
-        if django_side_url:
+        if django_side_url_matched_pattern:
             # Request is meant to be handled straight by django,
             # Url pattern for this request is only known by Django.
             if not django_side_urls_skip_middlewares:
@@ -403,14 +415,91 @@ class RequestProcessor:
                 if state == "bad":
                          return self.get_middleware_error_response(middleware)
         
-        if duck_explicit_url:
+        if duck_explicit_url_matched_pattern:
             # USE_DJANGO=True but this request is to be handled directly by Duck
             # Request's urlpattern is also known to Django but prefer Duck to handle the request,
             # don't proxy the request to Django server. (only if url is not also django side url)
-            if not django_side_url:
+            if not django_side_url_matched_pattern:
                 return self.get_view_response()
             
         # Return the appropriate response by proxying request to Django server first
+        # Only proxy it to Django if its not a staticfile or media file in production coz Django
+        # Doesn't serve staticfiles/mediafiles in production.
+        
+        def is_django_side_static_url(url: str, matched_pattern: re.Pattern):
+            """
+            Returns whether the URL is a Django side static URL.
+            """
+            from django.conf import settings    
+            static_url = settings.STATIC_URL
+            return matched_pattern.fullmatch(static_url)
+        
+        def is_django_side_media_url(url: str, matched_pattern: re.Pattern):
+            """
+            Returns whether the URL is a Django side static URL.
+            """
+            from django.conf import settings    
+            media_url = settings.MEDIA_URL
+            return matched_pattern.fullmatch(media_url)
+        
+        def serve_django_staticfile(request):
+            """
+            Serves Django staticfile.
+            """
+            from django.conf import settings
+            
+            static_root = settings.STATIC_ROOT
+            static_url = normalize_url_path(settings.STATIC_URL)
+            staticfile = request.path.split(static_url, 1)[-1]
+            
+            # Lookup for staticfile.
+            staticfile = joinpaths(static_root, staticfile)
+            
+            if not os.path.isfile(staticfile):
+                response = not_found404(
+                    body=(
+                        f"<p>Nothing matches the provided URI: {request.path}</p>"
+                    ),
+                )
+            else:
+                response = FileResponse(staticfile)
+            
+            # Return response
+            return response
+        
+        def serve_django_mediafile(request):
+            """
+            Serves Django mediafile.
+            """
+            from django.conf import settings
+            
+            media_root = settings.MEDIA_ROOT
+            media_url = normalize_url_path(settings.MEDIA_URL)
+            mediafile = request.path.split(media_url, 1)[-1]
+            
+            # Lookup for staticfile.
+            mediafile = joinpaths(media_root, mediafile)
+            
+            if not os.path.isfile(mediafile):
+                response = not_found404(
+                    body=(
+                        f"<p>Nothing matches the provided URI: {request.path}</p>"
+                    ),
+                )
+            else:
+                response = FileResponse(mediafile)
+            
+            # Return response
+            return response
+            
+        if not SETTINGS['DEBUG'] and django_side_url_matched_pattern:
+            if is_django_side_static_url(self.request.path, django_side_url_matched_pattern):
+                return serve_django_staticfile(self.request)
+            
+            elif is_django_side_media_url(self.request.path, django_side_url_matched_pattern):
+                return serve_django_mediafile(self.request)
+                
+        # Return a Django proxy response.        
         return self.get_django_response()
 
 
@@ -630,10 +719,10 @@ class AsyncRequestProcessor(RequestProcessor):
         # like RequestSyntaxError, RequestUnsupportedVersionError, etc.
         
         django_side_urls_skip_middlewares = SETTINGS["DJANGO_SIDE_URLS_SKIP_MIDDLEWARES"] # skip middlewares for urls registered in Django.
-        django_side_url = is_django_side_url(self.request.path)
-        duck_explicit_url = is_duck_explicit_url(self.request.path)
+        django_side_url_matched_pattern = is_django_side_url(self.request.path)
+        duck_explicit_url_matched_pattern = is_duck_explicit_url(self.request.path)
         
-        if django_side_url:
+        if django_side_url_matched_pattern:
             # Request is meant to be handled straight by django,
             # Url pattern for this request is only known by Django.
             if not django_side_urls_skip_middlewares:
@@ -651,12 +740,90 @@ class AsyncRequestProcessor(RequestProcessor):
                 if state == "bad":
                          return await self.get_middleware_error_response(middleware)
         
-        if duck_explicit_url:
+        if duck_explicit_url_matched_pattern:
             # USE_DJANGO=True but this request is to be handled directly by Duck
             # Request's urlpattern is also known to Django but prefer Duck to handle the request,
             # don't proxy the request to Django server. (only if url is not also django side url)
-            if not django_side_url:
+            if not django_side_url_matched_pattern:
                 return await self.get_view_response()
         
+            
+        # Return the appropriate response by proxying request to Django server first
+        # Only proxy it to Django if its not a staticfile or media file in production coz Django
+        # Doesn't serve staticfiles/mediafiles in production.
+        
+        def is_django_side_static_url(url: str, matched_pattern: re.Pattern):
+            """
+            Returns whether the URL is a Django side static URL.
+            """
+            from django.conf import settings    
+            static_url = settings.STATIC_URL
+            return matched_pattern.fullmatch(static_url)
+        
+        def is_django_side_media_url(url: str, matched_pattern: re.Pattern):
+            """
+            Returns whether the URL is a Django side static URL.
+            """
+            from django.conf import settings    
+            media_url = settings.MEDIA_URL
+            return matched_pattern.fullmatch(media_url)
+        
+        async def serve_django_staticfile(request):
+            """
+            Serves Django staticfile.
+            """
+            from django.conf import settings
+            
+            static_root = settings.STATIC_ROOT
+            static_url = normalize_url_path(settings.STATIC_URL)
+            staticfile = request.path.split(static_url, 1)[-1]
+            
+            # Lookup for staticfile.
+            staticfile = joinpaths(static_root, staticfile)
+            
+            if not os.path.isfile(staticfile):
+                response = not_found404(
+                    body=(
+                        f"<p>Nothing matches the provided URI: {request.path}</p>"
+                    ),
+                )
+            else:
+                response = FileResponse(staticfile)
+            
+            # Return response
+            return response
+        
+        async def serve_django_mediafile(request):
+            """
+            Serves Django mediafile.
+            """
+            from django.conf import settings
+            
+            media_root = settings.MEDIA_ROOT
+            media_url = normalize_url_path(settings.MEDIA_URL)
+            mediafile = request.path.split(media_url, 1)[-1]
+            
+            # Lookup for staticfile.
+            mediafile = joinpaths(media_root, mediafile)
+            
+            if not os.path.isfile(mediafile):
+                response = not_found404(
+                    body=(
+                        f"<p>Nothing matches the provided URI: {request.path}</p>"
+                    ),
+                )
+            else:
+                response = FileResponse(mediafile)
+            
+            # Return response
+            return response
+            
+        if not SETTINGS['DEBUG'] and django_side_url_matched_pattern:
+            if is_django_side_static_url(self.request.path, django_side_url_matched_pattern):
+                return await serve_django_staticfile(self.request)
+            
+            elif is_django_side_media_url(self.request.path, django_side_url_matched_pattern):
+                return await serve_django_mediafile(self.request)
+                
         # Return the appropriate response by proxying request to Django server first
         return await self.get_django_response()

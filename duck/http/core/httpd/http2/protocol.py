@@ -286,7 +286,7 @@ class H2Protocol:
         original_data = data
         view = memoryview(data)
         time_left = flow_control_timeout
-        interval_timeout = .01
+        interval_timeout = .1
         
         # Continue sending until all data is transmitted
         while view:
@@ -307,13 +307,6 @@ class H2Protocol:
                         timeout=interval_timeout,
                     )
                 except asyncio.TimeoutError:
-                    # Keep receiving data and handle the data
-                    start_time = time.time()
-                    data = await SocketIO.async_receive(self.sock, timeout=interval_time)
-                    if data:
-                        await self.event_handler.entry(data)
-                    end_time = time.time()
-                    time_left -= end_time - start_time
                     time_left -= interval_timeout
                     continue
                     
@@ -575,4 +568,4 @@ class H2Protocol:
         await self.async_send_pending_data()
         
         # Remove task from task list (if available in list).
-        self.event_handler.async_tasks.pop(stream_id, None)
+        self.event_handler.stream_tasks.pop(stream_id, None)

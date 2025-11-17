@@ -458,5 +458,6 @@ if not os.path.isdir(LOGGING_DIR):
     if not is_testing_environment():
         os.makedirs(LOGGING_DIR, exist_ok=True)
 
+
 # Register some callback at exit (just in case the file is not yet closed)
 atexit.register(Logger.close_logfile)

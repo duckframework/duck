@@ -28,6 +28,7 @@ class RunserverCommand:
         mainfile: Optional[str] = None,
         uses_ipv6: bool = False,
         is_reload: bool = False,
+        workers: Optional[int] = None,
     ):
         # Runserver
         cls.setup(settings_module)
@@ -38,6 +39,7 @@ class RunserverCommand:
             mainfile=mainfile,
             uses_ipv6=uses_ipv6,
             is_reload=is_reload,
+            workers=workers,
         )
     
     @classmethod
@@ -49,6 +51,7 @@ class RunserverCommand:
          mainfile: Optional[str] = None,
          uses_ipv6: bool = False,
          is_reload: bool = False,
+         workers: Optional[int] = None,
      ):
         from duck.app import App
         from duck.settings import SETTINGS
@@ -77,6 +80,7 @@ class RunserverCommand:
                 addr=address,
                 port=port,
                 domain=domain,
-                uses_ipv6=uses_ipv6
+                uses_ipv6=uses_ipv6,
+                workers=workers,
             )
             application.run()  

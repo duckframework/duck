@@ -67,13 +67,15 @@ def in_async_context() -> bool:
               False otherwise.
 
     Example:
-        >>> in_async_context()
-        False
+    ```
+    >>> in_async_context()
+    False
 
-        >>> async def main():
-        ...     print(in_async_context())
-        >>> asyncio.run(main())
-        True
+    >>> async def main():
+    ...     print(in_async_context())
+    >>> asyncio.run(main())
+    True
+    ```
     """
     try:
         asyncio.get_running_loop()

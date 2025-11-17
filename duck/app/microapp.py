@@ -8,7 +8,7 @@ Notes:
 """
 import threading
 
-from typing import Union
+from typing import Union, Optional
 
 from duck.settings import SETTINGS
 from duck.http.core.httpd.servers import MicroHTTPServer
@@ -39,15 +39,10 @@ class MicroApp:
     
     **Notes:**
     - MicroApp should be used when you want to create a new server with its own address and port.
-    - Every request to the micro app will be handled by the `view` method, no request will be passed to WSGI.
-    - Everything is to be handled manually in the view method and none of all available middlewares will be applied.
+    - Every request to the micro app will be handled by the `view` or `async_view` method, no request will be passed to WSGI/ASGI.
+    - Everything is to be handled manually in the view/async_view method and none of all available middlewares will be applied.
     """
-
-    all_threads: list = []
-    """
-    List of all threads created by initializing micro-application instances.
-    """
-
+    
     def __init__(
         self,
         addr: str = "localhost",
@@ -57,6 +52,7 @@ class MicroApp:
         uses_ipv6: bool = False,
         enable_https: bool = False,
         no_logs: bool = True,
+        workers: Optional[int] = None,
     ):
         """
         Initialize the MicroApp class.
@@ -69,6 +65,7 @@ class MicroApp:
             uses_ipv6 (bool): Whether to use `IPV6`. Defaults to False.
             enable_https (bool): Whether to enable `https`. Defaults to False.
             no_logs (bool): Whether to log anything to console.
+            workers (Optional[int]): Number of workers to use. None will disable workers.
         """
         self.addr = addr
         self.port = port
@@ -76,6 +73,7 @@ class MicroApp:
         self.uses_ipv6 = uses_ipv6
         self.enable_https = enable_https
         self.no_logs = no_logs
+        self.workers = workers
         
         # Set appropriate domain
         self.domain = domain or addr if not uses_ipv6 else f"[{addr}]"
@@ -94,14 +92,12 @@ class MicroApp:
             uses_ipv6=uses_ipv6,
             enable_ssl=self.enable_https,
             no_logs=no_logs,
+            workers=workers,
         )
         
-        # creating vital threads without running them
-        self.duck_server_thread = threading.Thread(
-            target=self.server.start_server,
-        )
-        type(self).all_threads.append(self.duck_server_thread)
-
+        # Create thread that will be run method
+        self.duck_server_thread = threading.Thread(target=self.server.start_server)
+        
     @property
     def absolute_uri(self) -> str:
         """
@@ -148,7 +144,7 @@ class MicroApp:
 
         Args:
             request (HttpRequest): The http request object.
-            processor (Union[AsyncRequestProcessor, RequestProcessor]): Default request processor which you may use to process request.
+            processor (RequestProcessor]): Default request processor which you may use to process request.
         
         Notes:
         - Middlewares will not be applied on microapps, you are responsible for applying and handling middlewares.
@@ -156,7 +152,23 @@ class MicroApp:
           after request if needed.
         - But, the view response will be finalized automatically, meaning necessary headers will be set and response will be
           compressed if necessary.
-        - When using `Asynchronous` mode, this method can be defined using `async def`. Duck will know how to deal with this.
+        """
+        raise NotImplementedError("Implement this method to return HttpResponse or any data as response.")
+    
+    async def async_view(self, request: HttpRequest, processor: AsyncRequestProcessor) -> HttpResponse:
+        """
+        Asynchronous entry method to response generation.
+
+        Args:
+            request (HttpRequest): The http request object.
+            processor (AsyncRequestProcessor): Default request processor which you may use to process request.
+        
+        Notes:
+        - Middlewares will not be applied on microapps, you are responsible for applying and handling middlewares.
+        - On microapps, you are almost responsible for everything including managing database connections before and
+          after request if needed.
+        - But, the view response will be finalized automatically, meaning necessary headers will be set and response will be
+          compressed if necessary.
         """
         raise NotImplementedError("Implement this method to return HttpResponse or any data as response.")
 
@@ -182,7 +194,7 @@ class MicroApp:
             processor (AsyncRequestProcessor): Default asynchronous request processor which may be used to process request.
         """
         from duck.settings.loaded import SettingsLoaded
-        response = await convert_to_async_if_needed(self.view)(request, processor)
+        response = await convert_to_async_if_needed(self.async_view)(request, processor)
         await SettingsLoaded.ASGI.finalize_response(response, request)  # finalize response
         return response
 
@@ -221,7 +233,7 @@ class HttpsRedirectMicroApp(MicroApp):
         # Return response
         return redirect
 
-    async def async_view(self, request: HttpRequest, request_processor: RequestProcessor) -> HttpResponse:
+    async def async_view(self, request: HttpRequest, request_processor: AsyncRequestProcessor) -> HttpResponse:
         """
         Returns an http redirect response.
         """

@@ -123,7 +123,11 @@ class BaseCertbotAutoSSL(Automation):
         microapp.async_view = async_wrapped_view
         
     def on_start(self):
-        if SETTINGS["ENABLE_HTTPS"] and not SETTINGS["FORCE_HTTPS"]:
+        if not SETTINGS["ENABLE_HTTPS"]:
+            logger.log("CertbotAutoSSL: 'ENABLE_HTTPS' disabled in settings", level=logger.WARNING)
+            self.disable_execution = True
+        
+        elif SETTINGS["ENABLE_HTTPS"] and not SETTINGS["FORCE_HTTPS"]:
             logger.log("CertbotAutoSSL: 'FORCE_HTTPS' disabled in settings", level=logger.WARNING)
             self.disable_execution = True
             
@@ -239,10 +243,13 @@ class BaseCertbotAutoSSL(Automation):
                  if reloaded:
                      logger.log("CertbotAutoSSL: Reloaded server SSL context", level=logger.DEBUG)
              except Exception as e:
-                 logger.log("Failed to reload server SSL context: {e}", level=logger.WARNING)
+                 logger.log("CertbotAutoSSL: Failed to reload server SSL context: {e}", level=logger.WARNING)
                  if SETTINGS['DEBUG']:
                      logger.log_exception(e)   
-        
+        else:
+            if not SETTINGS['DEBUG']:
+                logger.log("CertbotAutoSSL: No update has been performed", level=logger.DEBUG)
+                    
     def execute(self):
         certbot_root = SETTINGS["CERTBOT_ROOT"]
         certbot_email = SETTINGS["CERTBOT_EMAIL"]
@@ -341,7 +348,6 @@ class BaseCertbotAutoSSL(Automation):
         except Exception as e:
             self.disable_execution = True
             logger.log(f"CertbotAutoSSL: Unexpected error: {str(e)}\n", level=logger.WARNING)
-
 
 # Instantiate the automation
 CertbotAutoSSL = BaseCertbotAutoSSL(

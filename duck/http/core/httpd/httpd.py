@@ -12,6 +12,7 @@ import socket
 import asyncio
 import threading
 import platform
+import multiprocessing
 
 from functools import partial
 from typing import (
@@ -60,7 +61,7 @@ CONNECTION_MODE = SETTINGS["CONNECTION_MODE"]
 SSL_HANDSHAKE_TIMEOUT = 0.3 # in seconds
 
 
-def call_request_handling_executor(task: Union[threading.Thread, Coroutine]):
+def call_request_handling_executor(task: Union[Callable, Coroutine]):
     """
     This calls the request handling executor with the provided task (thread or coroutine) and the 
     request handling executor keyword arguments set in settings.py.
@@ -94,6 +95,7 @@ class BaseServer:
         enable_ssl: bool = False,
         ssl_params: Optional[Dict] = None,
         no_logs: bool = False,
+        workers: Optional[int] = None,
     ):
         """
         Initialise the server instance.
@@ -106,6 +108,7 @@ class BaseServer:
             enable_ssl (bool): Whether to enable `HTTPS`.
             ssl_params (Optional[Dict]): Dictionary containing ssl parameters to parse to SSLSocket. If None, default ones will be used.
             no_logs (bool): Whether to disable logging.
+            workers (Optional[int]): Number of workers to use. None will disable workers.
         """
         from duck.app.app import App
         from duck.app.microapp import MicroApp
@@ -130,8 +133,10 @@ class BaseServer:
         self.enable_ssl = enable_ssl
         self.ssl_params = ssl_params or SSL_DEFAULTS
         self.no_logs = no_logs
+        self.workers = workers
         self.running: bool = False
-    
+        self.worker_processes: List[multiprocessing.Process] = [] # Will be appended on process creation
+        
     @property
     def sock(self):
         return self.__sock
@@ -166,6 +171,10 @@ class BaseServer:
         # Close server socket.
         SocketIO.close(self.sock, shutdown=False) # Avoid shutting down server socket, this may raise an error.
         
+        for p in self.worker_processes:
+            if p.is_alive():
+                p.terminate()
+                
         if log_to_console: # log message indicating server stopped.
             logger.log(
                 f"{bold_start}Duck server stopped!{bold_end}",
@@ -175,13 +184,19 @@ class BaseServer:
             
     def start_server(self):
         """
-        Starts the `HTTP(S)` server.
+        Starts the `HTTP(S)` server and begins handling requests.
         """
         host, port = self.addr
         
         if SETTINGS["DEBUG"]:
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            
+            if hasattr(socket, "SO_REUSEPORT"):
+                try:
+                    self.sock.setsockopt(socket.SO_REUSEPORT, socket.SO_REUSEPORT, 1)
+                except OSError:
+                    pass
+                    
+        # Bind and listen        
         self.sock.bind(self.addr)  # bind socket to (address, port)
         self.sock.listen(SETTINGS["REQUESTS_BACKLOG"]) # 200 by default
         
@@ -213,6 +228,74 @@ class BaseServer:
         # Set server socket to non-blocking mode
         self.sock.setblocking(False)
         
+        def start_server_loop_in_worker():
+            """
+            Starts server loop in a worker.
+            """
+            from duck.utils.asyncio.eventloop import AsyncioLoopManager
+            from duck.utils.threading.threadpool import ThreadPoolManager
+            
+            # Reinitialize asyncio/threadpool manager
+            if SETTINGS['ASYNC_HANDLING']:
+                AsyncioLoopManager._thread = None
+                AsyncioLoopManager._loop = None
+                AsyncioLoopManager.start()
+                
+            else:
+                bg_event_loop = getattr(self.application, "start_bg_event_loop_if_wsgi", True)
+                
+                # Reinitialize threadpool manager
+                ThreadPoolManager._pool = None # Reset pool avoid RuntimeError if _pool is forked.
+                ThreadPoolManager.start(
+                    daemon=True,
+                    thread_name_prefix="request-handler",
+                    task_type="request-handling",
+                )
+                
+                if bg_event_loop:
+                    AsyncioLoopManager._thread = None
+                    AsyncioLoopManager._loop = None
+                    AsyncioLoopManager.start()
+                    
+            # Now start server loop
+            self.start_server_loop()
+            
+        # Start server loop
+        if not self.workers:
+            if not SETTINGS['DEBUG']:
+                logger.log(
+                    "No worker processes in use"
+                    f"\n  └── Consider providing workers argument to the App ",
+                    level=logger.WARNING,
+                )
+                
+            # Start server loop in main process
+            self.start_server_loop()
+            
+        else:
+            # Start server loop in worker processes
+            for i in range(self.workers):
+                process = multiprocessing.Process(target=start_server_loop_in_worker, name=f"duck-worker-{i}")
+                process.start()
+                self.worker_processes.append(process)
+            
+            if not self.no_logs:
+                logger.log(f"Spawned {self.workers} worker processes", level=logger.DEBUG)
+            
+            # Monitor processes
+            while self.running:
+                for p in self.worker_processes:
+                    pass
+            
+    def start_server_loop(self):
+        """
+        Listen and accept connections.
+        
+        Notes:
+        - `self.running` must be True.
+        """
+        sock = None
+        
         # Listen and accept incoming connections
         while self.running:
             try:
@@ -221,25 +304,31 @@ class BaseServer:
                 server = self.sock
                 
                 # Wait until the server socket is ready (timeout = 1s)
-                ready, _, _ = select.select([server], [], [], 1.0)
+                ready, _, _ = select.select([server], [], [], SETTINGS['SERVER_POLL'])
                 
                 if server in ready:
                     sock = self.accept_and_handle()
-                
-            except ConnectionResetError:
+                    
+            except (ConnectionResetError, BlockingIOError):
                 pass
         
+            except KeyboardInterrupt:
+                pass
+                
             except Exception as e:
                 # Close socket immediately.
                 if sock:
                     SocketIO.close(sock, ignore_xsocket_error=True)
                     
                 # Log the exception if logging allowed.
-                if not self.no_logs and SETTINGS['DEBUG']:
+                if not self.no_logs:
                     if self.running:
                         # Explicitly log if server still in running state
-                        logger.log_exception(e)
-                    
+                        if SETTINGS['DEBUG'] or (not SETTINGS['DEBUG'] and SETTINGS['VERBOSE_LOGGING']):
+                            logger.log_exception(e)
+                        else:
+                            logger.log(f"Error in server loop: {e}", level=logger.WARNING)
+                            
     def accept_and_handle(self) -> socket.socket:
         """
         Accepts and handle IPV4/IPV6 connection.
@@ -880,3 +969,8 @@ class BaseMicroServer(BaseServer):
             if not self.microapp.no_logs:
                 # If logs are not disabled for the micro application, log error immediately
                 logger.log_exception(e)
+
+
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
+    

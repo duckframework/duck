@@ -49,6 +49,7 @@ class HTTPServer(BaseServer):
         enable_ssl: bool = False,
         ssl_params: Optional[Dict] = None,
         no_logs: bool = False,
+        workers: Optional[int] = None,
     ):
         """
         Initialise the server instance.
@@ -61,6 +62,7 @@ class HTTPServer(BaseServer):
             enable_ssl (bool): Whether to enable `HTTPS`.
             ssl_params (Optional[Dict]): Dictionary containing ssl parameters to parse to SSLSocket. If None, default ones will be used.
             no_logs (bool): Whether to disable logging.
+            workers (Optional[int]): Number of workers to use. None will disable workers.
         """
         # This is the server context, will be set on first HTTPS request.
         self._ssl_context = None
@@ -75,6 +77,7 @@ class HTTPServer(BaseServer):
             enable_ssl=enable_ssl,
             ssl_params=ssl_params,
             no_logs=no_logs,
+            workers=workers,
         )
         
         # Increment instances
@@ -142,9 +145,9 @@ class MicroHTTPServer(BaseMicroServer, HTTPServer):
         enable_ssl: bool = False,
         ssl_params: bool = None,
         no_logs: bool = True,
+        workers: Optional[int] = None,
     ):
         self.set_microapp(microapp)
-        
         super().__init__(
             addr,
             microapp,
@@ -153,4 +156,5 @@ class MicroHTTPServer(BaseMicroServer, HTTPServer):
             enable_ssl=enable_ssl,
             ssl_params=ssl_params,
             no_logs=no_logs,
+            workers=workers,
         )

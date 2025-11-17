@@ -10,6 +10,7 @@ Supports both synchronous and asynchronous execution contexts.
 """
 
 from django.core.exceptions import ImproperlyConfigured
+
 from duck.contrib.sync import (
     convert_to_async_if_needed,
     transaction_context,
@@ -26,19 +27,29 @@ def close_old_connections():
     - timed out (exceeded CONN_MAX_AGE),
     - or associated with outdated threads or processes.
 
-    Should be called at the start and end of a request or task, mimicking
-    Django's `request_started` and `request_finished` behavior.
+    Should be called at the end of a request or task, mimicking what Django does.
     """
     try:
-        from django.db import connections
-    
-        for conn in connections.all(initialized_only=True):
-            conn.close_if_unusable_or_obsolete()
+        from django.db import close_old_connections as _close_old_connections
+        _close_old_connections()
     except (ImproperlyConfigured, KeyError, ImportError):
         # User not using Django DB models, keyerror is raised when importing Django settings
         # Importing Django settings module failed, partially means the Django DB is not being used by the user    
         pass
 
+
+def close_current_connection():
+    """
+    Closes current DB connection if available.
+    """
+    try:
+        from django.db import connection
+        connection.close()
+    except (ImproperlyConfigured, KeyError, ImportError):
+        # User not using Django DB models, keyerror is raised when importing Django settings
+        # Importing Django settings module failed, partially means the Django DB is not being used by the user    
+        pass
+    
 
 def view_wrapper(handler):
     """
@@ -53,13 +64,13 @@ def view_wrapper(handler):
     Returns:
         Callable: A wrapped view that handles DB connection cleanup.
     """
-    def wrapped(*args, **kwargs):
-        close_old_connections()  # Before request    
+    def wrapped_db_hook(*args, **kwargs):
         try:
+            close_old_connections() # Before request hook
             return handler(*args, **kwargs)
         finally:
-            close_old_connections()  # After request
-    return wrapped
+            close_current_connection()  # After request hook
+    return wrapped_db_hook
 
 
 def async_view_wrapper(handler):
@@ -76,18 +87,19 @@ def async_view_wrapper(handler):
     Returns:
         Awaitable: A wrapped coroutine with DB connection cleanup.
     """
-    close = convert_to_async_if_needed(close_old_connections)
-
-    async def wrapped(*args, **kwargs):
-        # This wrapper only close db connections for current thread but this
+    async def wrapped_db_hook(*args, **kwargs):
+        # This wrapper only close db connections for any thread the sync_to_async code.
         # doesn't mean the handler will use the current thread connection. As threads 
         # are reused, the thread's connection may be used by another sync_to_async db function.
         # This mean the reused threads' connections get a chance for cleanup at different intervals.
-        with transaction_context():
-            await close()  # Before request
-            try:
-                with disable_transaction_context():
-                    return await handler(*args, **kwargs)
-            finally:
-                await close()  # After request
-    return wrapped
+        try:
+            await async_close_old_connections() # Before request hook
+            return await handler(*args, **kwargs)
+        finally:
+            await async_close_current_connection()  # After request hook
+    return wrapped_db_hook
+
+
+# Define some async functions
+async_close_old_connections = convert_to_async_if_needed(close_old_connections)
+async_close_current_connection = convert_to_async_if_needed(close_current_connection)

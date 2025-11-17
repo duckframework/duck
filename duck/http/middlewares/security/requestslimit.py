@@ -23,13 +23,19 @@ class RequestsLimitMiddleware(BaseMiddleware):
     """
 
     _clients: dict[str, list[float]] = {}
-    """In-memory store of request timestamps per client IP."""
+    """
+    In-memory store of request timestamps per client IP.
+    """
 
     requests_delay: float = 60
-    """Duration in seconds defining the time window for request counting."""
+    """
+    Duration in seconds defining the time window for request counting.
+    """
 
     max_requests: int = 200
-    """Maximum number of allowed requests within the `requests_delay` window."""
+    """
+    Maximum number of allowed requests within the `requests_delay` window.
+    """
     
     debug_message: str = "RequestsLimitMiddleware: Too many requests"
     
@@ -103,14 +109,14 @@ class RequestsLimitMiddleware(BaseMiddleware):
         Returns:
             HttpResponse: A 429 (Too Many Requests) response.
         """
+        body = (
+            "<h4>Too Many Requests!</h4>"
+            f"<p>Rate limit for {cls.__name__}: {cls.get_readable_limit()}.</p>"
+            f"<p>Received more than {cls.max_requests} requests within the last {cls.requests_delay} seconds.</p>"
+        )
         if SETTINGS["DEBUG"]:
-            body = (
-                "<h4>Too Many Requests!</h4>"
-                f"<p>Rate limit for {cls.__name__}: {cls.get_readable_limit()}.</p>"
-                f"<p>Received more than {cls.max_requests} requests within the last {cls.requests_delay} seconds.</p>"
-            )
             return template_response(HttpTooManyRequestsResponse, body=body)
-        return simple_response(HttpTooManyRequestsResponse)
+        return simple_response(HttpTooManyRequestsResponse, body=body)
 
     @classmethod
     def process_request(cls, request):

@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import pathlib
+import socket
 
 from duck.html.components.utils.include import (
     BUILTIN_COMPONENTS,
@@ -345,6 +346,10 @@ REQUEST_HANDLING_TASK_EXECUTOR: str = "duck.http.core.httpd.task_executor.Reques
 SERVER_BUFFER: int = 65535
 
 
+# Server Poll Interval
+SERVER_POLL: int | float = 0.5
+
+
 # Mode for connection
 # If keep-alive, the client requests will be handled using keep-alive if Header connection is set to the respective connection mode.
 CONNECTION_MODE: str = "close"
@@ -371,7 +376,7 @@ REQUEST_STREAM_TIMEOUT: int | float = 0.001  # Ideal for instant streaming on fa
 
 # Requests Backlog
 # The maximum number of pending requests allowed in the backlog.
-REQUESTS_BACKLOG: int = 200
+REQUESTS_BACKLOG: int = getattr(socket, "SOMAXCONN", 10)
 
 
 # Specifies the max time (in seconds) for sending something over the net.

@@ -82,9 +82,9 @@ class ASGI:
         Construct a Request object from the data received from the client
 
         Args:
-                client_socket (xsocket): The client xsocket object.
-                client_address (tuple): The client address tuple.
-                request_data (RequestData): The request data object
+            client_socket (xsocket): The client xsocket object.
+            client_address (tuple): The client address tuple.
+            request_data (RequestData): The request data object
                      
         Returns:
             HttpRequest: The request object
@@ -103,9 +103,8 @@ class ASGI:
             client_address=client_address,
         )
         
-        # Parse request data
-        request.parse(request_data)
-        
+        # Parse request data and return request.
+        await convert_to_async_if_needed(request.parse)(request_data)
         return request
 
     async def finalize_response(

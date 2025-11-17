@@ -125,7 +125,8 @@ def django(args):
 @click.option("--ipv6", is_flag=True, default=False, help="Run application using IPV6 (optional)")
 @click.option("-dj", "--use-django", is_flag=True, default=False, help="Run application along with Django server. This overrides setting USE_DJANGO in settings.py (optional)")
 @click.option("--is-reload", is_flag=True, default=False, help="Flag the application to be in a reload state. Usually set by DuckSightReloader.")
-def runserver(address, port, domain, settings, ipv6, file, use_django, is_reload):
+@click.option("--workers", default=None, help="Number of workers to use. Parse 'auto' for optimum workers.")
+def runserver(address, port, domain, settings, ipv6, file, use_django, is_reload, workers):
     """
     Run the development or production server.
     """
@@ -142,6 +143,7 @@ def runserver(address, port, domain, settings, ipv6, file, use_django, is_reload
         mainfile=file,
         uses_ipv6=ipv6,
         is_reload=is_reload,
+        workers=(os.cpu_count() or 4) if workers == "auto" else workers,
     )
 
 

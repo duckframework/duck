@@ -10,6 +10,7 @@ The utility functions ensure compatibility with both synchronous and asynchronou
 - get_available_event_loop: Retrieves an appropriate event loop depending on the application's context.
 """
 import asyncio
+
 from typing import Coroutine, Union
 
 from duck.utils.asyncio.eventloop import AsyncioLoopManager, SyncFuture
@@ -72,8 +73,7 @@ def get_available_event_loop() -> asyncio.AbstractEventLoop:
 
     This function determines the appropriate asyncio event loop to use based on the application's
     configuration. For example:
-        - In an ASGI context, it retrieves the default event loop from the `REQUEST_HANDLING_EXECUTOR`.
-        - In a WSGI context, it retrieves a background event from `AsyncioLoopManager`.
+        - In an ASGI or WSGI context, it retrieves a background event from `AsyncioLoopManager`.
 
     Returns:
         asyncio.AbstractEventLoop: The available asyncio event loop.
@@ -84,15 +84,6 @@ def get_available_event_loop() -> asyncio.AbstractEventLoop:
     Example:
         >>> loop = get_available_event_loop()
         >>> print(loop.is_running())  # Check if the event loop is running
-    """
-    from duck.settings.loaded import SETTINGS, SettingsLoaded
-    
-    if SETTINGS['ASYNC_HANDLING']:
-        # Retrieve the event loop from the request handling executor in ASGI
-        event_loop = SettingsLoaded.REQUEST_HANDLING_TASK_EXECUTOR._loop
-    else:
-        # Retrieve the loop from the AsyncioLoopManager in non-async contexts
-        event_loop = AsyncioLoopManager._loop
-    if not event_loop:
-        raise RuntimeError("Event loop is None or not running.")
-    return event_loop
+    """    
+    # Retrieve the loop from the AsyncioLoopManager in non-async contexts
+    return AsyncioLoopManager.get_event_loop()

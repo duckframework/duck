@@ -172,7 +172,3 @@ def setup(make_app_dirs: bool = True, use_threads_for_heavy_work: bool = True):
     if base_dir not in sys.path:
         # Add project directory to path
         sys.path.insert(-1, base_dir)
-    
-    # Initialize the RequestHandlingExecutor lazily after prepare_django as this line will
-    # make the whole setup very slow.
-    SettingsLoaded.REQUEST_HANDLING_TASK_EXECUTOR()
