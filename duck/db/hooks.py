@@ -96,7 +96,10 @@ def async_view_wrapper(handler):
             await async_close_old_connections() # Before request hook
             return await handler(*args, **kwargs)
         finally:
-            await async_close_current_connection()  # After request hook
+            # Ignore the next line as it may close important connections as the func
+            # is run in any thread
+            pass
+            #await async_close_current_connection()  # After request hook
     return wrapped_db_hook
 
 

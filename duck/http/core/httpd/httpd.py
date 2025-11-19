@@ -22,6 +22,7 @@ from typing import (
     Union,
     Callable,
     Dict,
+    List,
 )
 from duck.contrib.responses import (
     simple_response,
@@ -53,6 +54,7 @@ from duck.contrib.responses.errors import get_timeout_error_response
 from duck.utils.ssl import is_ssl_data
 from duck.utils.xsocket import (xsocket, ssl_xsocket, create_xsocket)
 from duck.utils.xsocket.io import SocketIO 
+from duck.utils.multiprocessing.process_manager import WorkerProcessManager, HeartbeatHealthCheck
 
 
 KEEP_ALIVE_PATTERN = re.compile(rb"(?i)\bConnection\s*:\s*keep\s*-?\s*alive\b")
@@ -135,7 +137,7 @@ class BaseServer:
         self.no_logs = no_logs
         self.workers = workers
         self.running: bool = False
-        self.worker_processes: List[multiprocessing.Process] = [] # Will be appended on process creation
+        self.worker_process_manager: Optional[WorkerProcessManager] = None
         
     @property
     def sock(self):
@@ -155,6 +157,15 @@ class BaseServer:
     def running(self, state: bool):
         self.__running = state
 
+    @property
+    def worker_processes(self) -> List[multiprocessing.Process]:
+        """
+        Returns list of worker processes.
+        """
+        if not self.worker_process_manager:
+            return []
+        return self.worker_process_manager.worker_processes
+    
     def stop_server(self, log_to_console: bool = True):
         """
         Stops the http(s) server.
@@ -171,9 +182,14 @@ class BaseServer:
         # Close server socket.
         SocketIO.close(self.sock, shutdown=False) # Avoid shutting down server socket, this may raise an error.
         
-        for p in self.worker_processes:
-            if p.is_alive():
-                p.terminate()
+        # Terminate worker processes
+        if self.worker_process_manager:
+            self.worker_process_manager.running = False # This attempts to stop running loops
+            try:
+                self.worker_process_manager.stop() # Terminate process manager for real
+            except AssertionError:
+                # This func is being called from wrong process.
+                return
                 
         if log_to_console: # log message indicating server stopped.
             logger.log(
@@ -228,12 +244,16 @@ class BaseServer:
         # Set server socket to non-blocking mode
         self.sock.setblocking(False)
         
-        def start_server_loop_in_worker():
+        def start_server_loop_in_worker(idx: int, healthcheck_obj: HeartbeatHealthCheck, process_safe_lively_registry: "ProcessSafeLRUCache"):
             """
             Starts server loop in a worker.
             """
             from duck.utils.asyncio.eventloop import AsyncioLoopManager
             from duck.utils.threading.threadpool import ThreadPoolManager
+            from duck.html.components.core.system import LivelyComponentSystem
+            
+            # Modify registry if reimported e.g. on Windows
+            LivelyComponentSystem.registry = process_safe_lively_registry
             
             # Reinitialize asyncio/threadpool manager
             if SETTINGS['ASYNC_HANDLING']:
@@ -258,7 +278,7 @@ class BaseServer:
                     AsyncioLoopManager.start()
                     
             # Now start server loop
-            self.start_server_loop()
+            self.start_server_loop(interval_fn=lambda: healthcheck_obj.update_heartbeat(idx))
             
         # Start server loop
         if not self.workers:
@@ -274,23 +294,39 @@ class BaseServer:
             
         else:
             # Start server loop in worker processes
-            for i in range(self.workers):
-                process = multiprocessing.Process(target=start_server_loop_in_worker, name=f"duck-worker-{i}")
-                process.start()
-                self.worker_processes.append(process)
+            from duck.utils.multiprocessing import ProcessSafeLRUCache
+            from duck.html.components.core.system import LivelyComponentSystem
             
-            if not self.no_logs:
-                logger.log(f"Spawned {self.workers} worker processes", level=logger.DEBUG)
+            # Modify lively component system to use process safe lru_cache
+            LivelyComponentSystem.registry = ProcessSafeLRUCache(maxkeys=LivelyComponentSystem.registry.maxkeys)
             
-            # Monitor processes
-            while self.running:
-                for p in self.worker_processes:
-                    pass
+            # Create heartbeat health check object
+            healthcheck_obj = HeartbeatHealthCheck(heartbeat_timeout=SETTINGS['SERVER_POLL'] + 3)
             
-    def start_server_loop(self):
+            # Assign worker process manager
+            self.worker_process_manager = WorkerProcessManager(
+                worker_fn=start_server_loop_in_worker,
+                num_workers=self.workers,
+                args_fn=lambda _: (LivelyComponentSystem.registry),
+                worker_name_fn=lambda idx: f"duck-worker-{idx}",
+                health_check_fn=healthcheck_obj,
+                restart_timeout=2,
+                enable_logs=(not self.no_logs),
+                verbose_logs=SETTINGS['DEBUG'] or (SETTINGS['VERBOSE_LOGGING']),
+                enable_monitoring=True,
+                process_stop_timeout=3,
+            )
+            
+            # Start worker processes
+            self.worker_process_manager.start()
+            
+    def start_server_loop(self, interval_fn: Optional[Callable] = None):
         """
         Listen and accept connections.
         
+        Args:
+            interval_fn (Optional[Callable]): Function to call before each cycle in the loop.
+            
         Notes:
         - `self.running` must be True.
         """
@@ -299,6 +335,9 @@ class BaseServer:
         # Listen and accept incoming connections
         while self.running:
             try:
+                if interval_fn:
+                    interval_fn()
+                
                 # Accept incoming connections
                 sock = None
                 server = self.sock

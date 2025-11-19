@@ -498,10 +498,10 @@ class HtmlComponent:
         # Add public attributes
         self.element = element
         self.accept_inner_html = accept_inner_html
-        self.add_to_registry = True
+        self.add_to_registry = kwargs.get('add_to_registry', True)
         self.kwargs = kwargs
-        self.escape_on_text = True # Whether to escape if modifying component text prop
-        self.disable_lively = False # Whether to disable lively for this component
+        self.escape_on_text = kwargs.get('escape_on_text', True) # Whether to escape if modifying component text prop
+        self.disable_lively = kwargs.get('disable_lively', False) # Whether to disable lively for this component
         
         # Make some updates and assertions.
         properties = properties or {}
@@ -530,10 +530,10 @@ class HtmlComponent:
         self.on_create() # If super().on_create() is called then _on_create_check_passed will be True.
         
         if not self._on_create_check_passed:
-          raise InitializationError(
-            f"Method `on_create` of component {repr(self)} was overridden somehow but `super().on_create()` was not called. "
-            "This may result in some component extensions not being properly applied or inconsistences within the component."
-          )
+            raise InitializationError(
+                f"Method `on_create` of component {repr(self)} was overridden somehow but `super().on_create()` was not called. "
+                "This may result in some component extensions not being properly applied or inconsistences within the component."
+              )
           
     @property
     def properties(self):

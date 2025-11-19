@@ -144,7 +144,7 @@ class Page(InnerComponent):
         self.disable_lively = disable_lively
         self.fullpage_reload = False # Set this to enable full page reload.
         self.fullpage_reload_headers = ["set-cookie"] # Headers that requires fullpage reload.
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, disable_lively=disable_lively, **kwargs)
 
     @property
     def request(self) -> "HttpRequest":
@@ -319,8 +319,8 @@ class Page(InnerComponent):
         
     def on_create(self):
         from duck.html.components.core.system import LivelyComponentSystem
-        
         super().on_create()
+        
         _ = self.request  # Validate request presence
         
         # Add private attributes for storing components, etc.

@@ -756,11 +756,7 @@ class ssl_xsocket(xsocket):
         
         total = 0
         while True:
-            if not self.is_handshake_done():
-                async with self._asyncio_lock: # Avoid corrupting SSLObject if handshake is not done yet
-                    data = self.ssl_outbio.read() # data to send
-            else:
-                data = self.ssl_outbio.read() # data to send
+            data = self.ssl_outbio.read() # data to send
             if not data:
                 break
             sent = await super().async_send(data, timeout=timeout) or 0
@@ -791,11 +787,7 @@ class ssl_xsocket(xsocket):
             # Best to raise so the caller can handle.
             raise ConnectionResetError("Underlying transport closed (EOF) while expecting encrypted data")
         
-        if not self.is_handshake_done():
-            async with self._asyncio_lock: # Avoid corrupting SSLObject if handshake is not done yet
-                self.ssl_inbio.write(data) # data to write
-        else:
-            self.ssl_inbio.write(data) # data to write
+        self.ssl_inbio.write(data) # data to write
         return len(data)
         
     @handle_sock_close
