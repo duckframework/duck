@@ -134,6 +134,7 @@ class LivelyComponentSystem:
                 raise AlreadyInRegistry("Component is already registered with this UID.")
                 
         root_registry[uid] = component
+        cls.registry.set(root_uid, root_registry) # Update registry just in case.
         
     @classmethod
     def get_html_tags(cls) -> List[ComponentTag]:

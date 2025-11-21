@@ -36,7 +36,6 @@ from duck.exceptions.all import (
 )
 from duck.http.core.proxyhandler import (
     HttpProxyResponse,
-    AsyncHttpProxyResponse,
 )
 from duck.http.middlewares import BaseMiddleware
 from duck.http.request import HttpRequest
@@ -607,7 +606,7 @@ class AsyncRequestProcessor(RequestProcessor):
         
         return response
 
-    async def get_django_response(self) -> AsyncHttpProxyResponse:
+    async def get_django_response(self) -> HttpProxyResponse:
         """
         Returns the streaming http response fetched from django server.
         
@@ -698,7 +697,7 @@ class AsyncRequestProcessor(RequestProcessor):
         response = await self.get_view_response()
         return response
         
-    async def process_django_request(self) -> Union[HttpResponse, AsyncHttpProxyResponse]:
+    async def process_django_request(self) -> Union[HttpResponse, HttpProxyResponse]:
         """
         Processes the request and send it to Django proxy for 
         receiving the appropriate http response.

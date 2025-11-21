@@ -568,4 +568,4 @@ class H2Protocol:
         await self.async_send_pending_data()
         
         # Remove task from task list (if available in list).
-        self.event_handler.stream_tasks.pop(stream_id, None)
+        self.event_handler.async_tasks.pop(stream_id, None)

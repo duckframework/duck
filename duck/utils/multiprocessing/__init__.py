@@ -102,6 +102,7 @@ class ProcessSafeLRUCache:
                     self.lru_order.remove(key)
                 except ValueError:
                     pass
+            
             self.cache[key] = value
             self.lru_order.append(key)
             if expiry:

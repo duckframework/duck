@@ -53,11 +53,12 @@ finally:
     manager.stop()
 ```
 """
-
+import os
 import time
 import logging
 import threading
 import multiprocessing
+import setproctitle
 
 from typing import (
     Callable,
@@ -72,11 +73,6 @@ try:
     from duck.logging import logger
 except SettingsError:
     from duck.logging import console as logger
-
-
-# Example shared Manager dict for heartbeats
-MULTIPROCESSING_MANAGER = multiprocessing.Manager()
-WORKER_HEARTBEATS = MULTIPROCESSING_MANAGER.dict()
 
 
 class HeartbeatUpdateNeverCalled(Exception):
@@ -210,7 +206,8 @@ class WorkerProcessManager:
         enable_logs: bool = True,
         verbose_logs: bool = True,
         enable_monitoring: bool = True,
-        process_stop_timeout: float = 2.0,
+        process_stop_timeout: Optional[float] = 5.0,
+        daemon: bool = False,
     ):
         """
         Args:
@@ -224,7 +221,8 @@ class WorkerProcessManager:
             enable_logs (bool): Enable info/warning logging.
             verbose_logs (bool): Enable full exception trace logs.
             enable_monitoring (bool): Start monitor thread automatically.
-            process_stop_timeout (float): Maximum seconds to wait for worker to stop.
+            process_stop_timeout (Optional[float]): Maximum seconds to wait for worker to stop. Will be parsed to `join()` method.
+            daemon (bool): Whether to start daemon processes. Defaults to False.
         """
         self.worker_fn = worker_fn
         self.num_workers = num_workers
@@ -236,10 +234,20 @@ class WorkerProcessManager:
         self.verbose_logs = verbose_logs
         self.enable_monitoring = enable_monitoring
         self.process_stop_timeout = process_stop_timeout
+        self.daemon = daemon
         self.worker_processes = []
         self.worker_locks = [threading.Lock() for _ in range(num_workers)]
         self.running = False
         self.monitor_thread = None
+        
+        def worker_fn_wrapper(*args, **kwargs):
+            # Set process title
+            p = multiprocessing.current_process()
+            setproctitle.setproctitle(p.name)
+            self.worker_fn(*args, **kwargs)
+        
+        # Assign wrapper; will be called for starting child process
+        self.worker_fn_wrapper = worker_fn_wrapper
 
     def start(self):
         """
@@ -251,9 +259,11 @@ class WorkerProcessManager:
         for i in range(self.num_workers):
             args = self.args_fn(i)
             args = (i, *args) if isinstance(args, Iterable) else (i, args) # Always include index in args
+            
             if len(args) == 2:
                 if args[1] is None:
                     args = (i, )
+            
             if isinstance(self.health_check_fn, HeartbeatHealthCheck):
                 # Parse HeartbeatHealthCheck object in worker_fn
                 args = list(args)
@@ -262,7 +272,7 @@ class WorkerProcessManager:
             # Start the child process
             name = self.worker_name_fn(i)
             p = multiprocessing.Process(
-                target=self.worker_fn,
+                target=self.worker_fn_wrapper,
                 args=args,
                 name=name,
             )
@@ -275,20 +285,33 @@ class WorkerProcessManager:
         
         if self.enable_logs:
             logger.log(
-                f"Spawned {self.num_workers} worker processes; Monitoring: {'ON' if self.enable_monitoring else 'OFF'}",
+                f"Spawned {self.num_workers} worker {'processes' if self.num_workers != 1 else 'process'}; Monitoring: {'ON' if self.enable_monitoring else 'OFF'}",
                 level=logger.DEBUG,
             )
 
-    def stop(self, graceful: bool = True, monitor_stop_timeout: float = 0.5):
+    def stop(
+        self,
+        graceful: bool = True,
+        wait: bool = True,
+        monitor_stop_timeout: float = 0.5,
+        no_logging: bool = False,
+    ):
         """
         Stop all worker processes and monitoring thread.
         
         Args:
             graceful (bool): Use terminate() for workers (soft shutdown).
+            wait (bool): Whether to wait for processes to finish stopping. Defaults to True.
             monitor_stop_timeout (float): Timeout for waiting on monitor thread.
+            no_logging (bool): Whether to log stop message. Use this to temporarily disable logging of stop message.
         """
         self.running = False
         
+        # Stop monitoring thread first.
+        if wait and self.monitor_thread and self.monitor_thread.is_alive():
+            self.monitor_thread.join(timeout=monitor_stop_timeout)
+        
+        # Now terminate alive processes
         for i, p in enumerate(self.worker_processes):
             if p.is_alive():
                 if graceful:
@@ -299,26 +322,28 @@ class WorkerProcessManager:
                     except AttributeError:
                         p.terminate()
         
-        for i, p in enumerate(self.worker_processes):
-            p.join(timeout=self.process_stop_timeout)
-            if p.is_alive():
-                # Force kill if possible (note: kill only on Unix)
-                try:
-                    p.kill()
-                except AttributeError:
-                    p.terminate()
-
-            if self.enable_logs and p.is_alive():
-                logger.log(
-                    f"Worker process {p.name} (pid={p.pid}) did not shut down gracefully.",
-                    level=logger.WARNING,
-                )
-
-        if self.monitor_thread and self.monitor_thread.is_alive():
-            self.monitor_thread.join(timeout=monitor_stop_timeout)
+        if wait:
+            for i, p in enumerate(self.worker_processes):
+                p.join(timeout=self.process_stop_timeout)
+                if p.is_alive():
+                    # Force kill if possible (note: kill only on Unix)
+                    try:
+                        p.kill()
+                    except AttributeError:
+                        p.terminate()
+    
+                if self.enable_logs and p.is_alive() and not no_logging:
+                    logger.log(
+                        f"Worker process {p.name} (pid={p.pid}) did not shut down gracefully.",
+                        level=logger.WARNING,
+                    )
         
-        if self.enable_logs:
-            logger.log("All workers and monitor stopped.", level=logger.INFO, custom_color=logger.Fore.MAGENTA)
+        if self.enable_logs and not no_logging:
+            logger.log(
+                "All workers and monitor stopped." if wait else "Stopped worker process manager.",
+                level=logger.INFO,
+                custom_color=logger.Fore.MAGENTA,
+            )
 
     def _restart_worker(self, idx: int):
         """
@@ -345,9 +370,10 @@ class WorkerProcessManager:
             # Start the child process
             name = self.worker_name_fn(idx)
             new_p = multiprocessing.Process(
-                target=self.worker_fn,
+                target=self.worker_fn_wrapper,
                 args=args,
                 name=name,
+                daemon=self.daemon,
             )
             
             # Start and update worker process
@@ -379,15 +405,20 @@ class WorkerProcessManager:
                             healthy = False
                             
                             if self.enable_logs and heartbeat_never_called_counter > 0:
-                                # Dont log first error of this type.
+                                # Don't log first error of this type, give .
                                 logger.log(f"Exception during health_check_fn: {e}", level=logger.WARNING)
                                 if self.verbose_logs:
                                     logger.log_exception(e)
                                     
+                            # Wait for heartbeat_timeout and continue
                             heartbeat_never_called_counter += 1
-                            time.sleep(2)
+                            time.sleep(self.health_check_fn.heartbeat_timeout)
                             continue
                              
+                        except (KeyboardInterrupt, BrokenPipeError):
+                            # Process might be terminated
+                            break
+                            
                         except Exception as e:
                             healthy = False
                             if self.enable_logs:

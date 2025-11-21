@@ -176,6 +176,10 @@ class BaseServer:
         bold_start = "\033[1m"
         bold_end = "\033[0m"
         
+        if multiprocessing.parent_process() is not None:
+            # Called inside a subprocess, disallow this as it may cause errors like AssertionError
+            return
+             
         # Set running to False
         self.running = False
         
@@ -185,12 +189,8 @@ class BaseServer:
         # Terminate worker processes
         if self.worker_process_manager:
             self.worker_process_manager.running = False # This attempts to stop running loops
-            try:
-                self.worker_process_manager.stop() # Terminate process manager for real
-            except AssertionError:
-                # This func is being called from wrong process.
-                return
-                
+            self.worker_process_manager.stop(graceful=True, wait=True, no_logging=not log_to_console) # Terminate process manager for real
+            
         if log_to_console: # log message indicating server stopped.
             logger.log(
                 f"{bold_start}Duck server stopped!{bold_end}",
@@ -198,9 +198,12 @@ class BaseServer:
                 custom_color=logger.Fore.MAGENTA,
             )
             
-    def start_server(self):
+    def start_server(self, on_server_start_fn: Optional[Callable] = None):
         """
         Starts the `HTTP(S)` server and begins handling requests.
+        
+        Args:
+            on_server_start_fn (Optional[Callable]): Function or callable to execute soon after server `bind` and `listen`.
         """
         host, port = self.addr
         
@@ -244,6 +247,9 @@ class BaseServer:
         # Set server socket to non-blocking mode
         self.sock.setblocking(False)
         
+        if on_server_start_fn:
+            on_server_start_fn()
+            
         def start_server_loop_in_worker(idx: int, healthcheck_obj: HeartbeatHealthCheck, process_safe_lively_registry: "ProcessSafeLRUCache"):
             """
             Starts server loop in a worker.
@@ -253,7 +259,7 @@ class BaseServer:
             from duck.html.components.core.system import LivelyComponentSystem
             
             # Modify registry if reimported e.g. on Windows
-            LivelyComponentSystem.registry = process_safe_lively_registry
+            #LivelyComponentSystem.registry = process_safe_lively_registry
             
             # Reinitialize asyncio/threadpool manager
             if SETTINGS['ASYNC_HANDLING']:
@@ -296,9 +302,6 @@ class BaseServer:
             # Start server loop in worker processes
             from duck.utils.multiprocessing import ProcessSafeLRUCache
             from duck.html.components.core.system import LivelyComponentSystem
-            
-            # Modify lively component system to use process safe lru_cache
-            LivelyComponentSystem.registry = ProcessSafeLRUCache(maxkeys=LivelyComponentSystem.registry.maxkeys)
             
             # Create heartbeat health check object
             healthcheck_obj = HeartbeatHealthCheck(heartbeat_timeout=SETTINGS['SERVER_POLL'] + 3)
@@ -347,11 +350,15 @@ class BaseServer:
                 
                 if server in ready:
                     sock = self.accept_and_handle()
-                    
+                else:
+                    # Check if socket is closed or not.
+                    if server.fileno() < 0:
+                         break
+                           
             except (ConnectionResetError, BlockingIOError):
                 pass
         
-            except KeyboardInterrupt:
+            except (KeyboardInterrupt, BrokenPipeError):
                 pass
                 
             except Exception as e:

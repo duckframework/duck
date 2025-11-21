@@ -95,8 +95,8 @@ class MicroApp:
             workers=workers,
         )
         
-        # Create thread that will be run method
-        self.duck_server_thread = threading.Thread(target=self.server.start_server)
+        # Assign duckserver thread to None
+        self.duck_server_thread = None
         
     @property
     def absolute_uri(self) -> str:
@@ -136,8 +136,26 @@ class MicroApp:
         """
         Starts the Duck Server in a new thread.
         """
-        self.duck_server_thread.start()
+        # Create thread that will be run method
+        def start_server_wrapper(*args, **kw):
+            try:
+                self.server.start_server(*args, **kw)
+            except KeyboardInterrrupt:
+                pass
+                
+        if not self.duck_server_thread or not self.duck_server_thread.is_alive():
+            self.duck_server_thread = threading.Thread(
+                target=start_server_wrapper,
+                kwargs={'on_server_start_fn': self.on_app_start},
+            )
+            self.duck_server_thread.start()
 
+    def on_app_start(self):
+        """
+        Called on successfull app start.
+        """
+        pass
+        
     def view(self, request: HttpRequest, processor: Union[AsyncRequestProcessor, RequestProcessor]) -> HttpResponse:
         """
         Entry method to response generation.
@@ -203,7 +221,7 @@ class MicroApp:
         Runs the duck sub-application.
         """
         self.start_server()
-
+            
     def stop(self):
         """
         Stops the current running micro-application.

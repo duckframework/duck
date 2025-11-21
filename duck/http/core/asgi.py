@@ -29,7 +29,6 @@ from duck.exceptions.all import (
 from duck.http.core.handler import response_handler
 from duck.http.core.proxyhandler import (
     HttpProxyResponse,
-    AsyncHttpProxyResponse,
     BadGatewayError,
 )
 from duck.http.core.response_finalizer import async_response_finalizer
@@ -186,10 +185,10 @@ class ASGI:
             
             if SETTINGS["USE_DJANGO"]:
                 # Obtain the http response for the request
-                response: Union[HttpResponse, AsyncHttpProxyResponse] = await processor.process_django_request()
+                response: Union[HttpResponse, HttpProxyResponse] = await processor.process_django_request()
                 
                 # Apply middlewares in reverse order
-                if isinstance(response, AsyncHttpProxyResponse):
+                if isinstance(response, HttpProxyResponse):
                     await self.django_apply_middlewares_to_response(response, request)
                 else:
                     await self.apply_middlewares_to_response(response, request)
@@ -266,7 +265,7 @@ class ASGI:
         )
         
         # Check if another protocol is in use and the request is target on Django endpoint
-        if isinstance(response, AsyncHttpProxyResponse):
+        if isinstance(response, HttpProxyResponse):
             # If HttpProxyResponse, this mean this response is from Django remote server. 
             if response.status_code == 101:
                 # Start loop for handling some protocol other than HTTP e.g., websockets
@@ -275,7 +274,7 @@ class ASGI:
     async def handle_django_connection_upgrade(
         self,
         upgrade_request: HttpRequest,
-        upgrade_response: AsyncHttpProxyResponse,
+        upgrade_response: HttpProxyResponse,
         protocol_receive_timeout: Union[int, float] =10,
         protocol_receive_buffer: int = 4096,
     ):

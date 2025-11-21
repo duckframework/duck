@@ -134,8 +134,11 @@ class HttpProxyResponse(StreamingHttpResponse):
         self.payload_obj = payload_obj
         self.content_obj = content_obj
         self.chunk_size = chunk_size
-        self.more_data: List[bytes] = []  # List Buffer for additional data received during streaming
-    
+        self.more_data = bytearray(b'')  # List Buffer for additional data received during streaming
+        
+        # No need to call super() or set stream because we are directly modifying iter methods like iter_content/async_iter_content 
+        # rather than using the default ones wihich requires a stream
+        
     def iter_content(self) -> Generator[bytes, None, None]:
         """
         A generator to stream the current content followed by additional data as it is received.
@@ -175,7 +178,7 @@ class HttpProxyResponse(StreamingHttpResponse):
 
             # Receive data from the socket
             data = SocketIO.receive(self.target_socket, bufsize=buffer, timeout=READ_TIMEOUT)
-            self.more_data.append(data)
+            self.more_data.extend(data)
             return data
 
         except (TimeoutError, ConnectionResetError, EOFError):
@@ -187,6 +190,59 @@ class HttpProxyResponse(StreamingHttpResponse):
 
         return b""
 
+    # ASYNCHRONOUS IMPLEMENTATIONS
+    
+    async def async_iter_content(self) -> AsyncGenerator[bytes, None]:
+        """
+        An asynchronous generator to stream the current content followed by additional data as it is received.
+
+        Yields:
+            bytes: The next chunk of data to stream.
+        """
+        if self.content_obj and self.content_obj.data:
+            yield self.content_obj.data # Yield current data.
+            
+        while True:
+            data = await self.async_recv_more(self.chunk_size)
+            if data:
+                yield data
+            else:
+                break
+                
+    async def async_recv_more(self, buffer: int = 4096) -> bytes:
+        """
+        Asynchronously receive additional data from the target socket.
+
+        Args:
+            buffer (int): The buffer size for receiving data. Defaults to 4096 bytes.
+
+        Returns:
+            bytes: The received data, or an empty byte string if the content is complete.
+        """
+        try:
+            # Calculate the current content length and the expected total length
+            current_content_length = len(self.more_data) + (len(self.content_obj.data) if self.content_obj else 0)
+            expected_content_length = self.payload_obj.get_header("content-length")
+
+            # If the content length is known and fully received, stop receiving
+            if expected_content_length and expected_content_length.isdigit():
+                if current_content_length >= int(expected_content_length):
+                    return b""
+
+            # Receive data from the socket
+            data = await SocketIO.async_receive(self.target_socket, bufsize=buffer, timeout=READ_TIMEOUT)
+            self.more_data.extend(data)
+            return data
+
+        except (TimeoutError, ConnectionResetError, EOFError):
+            # Handle errors silently
+            pass
+
+        except (OSError, socket.error) as e:
+            raise BadGatewayError(f"Receiving additional data failed: {e}")
+
+        return b""
+        
     def __repr__(self):
         return f"<{self.__class__.__name__} (" f"'{self.status_code}'" f")>"
 
@@ -385,103 +441,6 @@ class HttpProxyHandler:
 
 # ASYNCHRONOUS IMPLEMENTATIONS
 
-class AsyncHttpProxyResponse(HttpProxyResponse):
-    """
-    An asynchronous subclass of HttpProxyResponse that handles HTTP responses in a proxy scenario, 
-    including cases where the response content is incomplete or partially received.
-
-    This class is specifically designed to handle situations where:
-    - Only the HTTP response headers are available, and content is streamed progressively.
-    - The response content is incomplete, and the response is processed as it is received.
-    
-    It is ideal for proxy servers or intermediary systems that need to pass along 
-    HTTP responses from a remote server to the client while processing and streaming the data 
-    in chunks, minimizing memory usage by not requiring the full response to be loaded at once.
-
-    Key Features:
-    - **Streaming**: Supports efficient, memory-friendly streaming of content from the proxy server to the client.
-    - **Partial Responses**: Handles scenarios where the response is incomplete or streaming, such as large files or slow connections.
-    - **Real-Time Processing**: Allows the server to process parts of the response as they arrive without blocking or waiting for the full content.
-
-    This class can be extended for custom logic related to response manipulation, 
-    such as modifying headers, handling chunk sizes, or managing specific proxy behaviors.
-    
-    Example Usage:
-    
-    ```py
-    response = AsyncHttpProxyResponse(
-        target_socket,
-        payload_obj,
-        content_obj,
-        chunk_size,
-    )
-        
-    async for content in response.async_iter_content():
-        # Content logic here
-        pass
-    ```
-    
-    Attributes:
-        target_socket: The socket already connected used for communication with the proxy server.
-        payload_obj: The response payload associated with the HTTP response.
-        content_obj: Content object with the initial or incomplete content.
-        chunk_size: The streaming chunk size.
-    """
-    async def async_iter_content(self) -> AsyncGenerator[bytes, None]:
-        """
-        An asynchronous generator to stream the current content followed by additional data as it is received.
-
-        Yields:
-            bytes: The next chunk of data to stream.
-        """
-        if self.content_obj and self.content_obj.data:
-            yield self.content_obj.data # Yield current data.
-            
-        while True:
-            data = await self.recv_more(self.chunk_size)
-            if data:
-                yield data
-            else:
-                break
-                
-    async def recv_more(self, buffer: int = 4096) -> bytes:
-        """
-        Asynchronously receive additional data from the target socket.
-
-        Args:
-            buffer (int): The buffer size for receiving data. Defaults to 4096 bytes.
-
-        Returns:
-            bytes: The received data, or an empty byte string if the content is complete.
-        """
-        try:
-            # Calculate the current content length and the expected total length
-            current_content_length = len(self.more_data) + (len(self.content_obj.data) if self.content_obj else 0)
-            expected_content_length = self.payload_obj.get_header("content-length")
-
-            # If the content length is known and fully received, stop receiving
-            if expected_content_length and expected_content_length.isdigit():
-                if current_content_length >= int(expected_content_length):
-                    return b""
-
-            # Receive data from the socket
-            data = await SocketIO.async_receive(self.target_socket, bufsize=buffer, timeout=READ_TIMEOUT)
-            self.more_data.append(data)
-            return data
-
-        except (TimeoutError, ConnectionResetError, EOFError):
-            # Handle errors silently
-            pass
-
-        except (OSError, socket.error) as e:
-            raise BadGatewayError(f"Receiving additional data failed: {e}")
-
-        return b""
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} (" f"'{self.status_code}'" f")>"
-
-
 class AsyncHttpProxyHandler(HttpProxyHandler):
     """
     An asynchronous HttpProxyHandler class to handle forwarding TCP requests to target hosts.
@@ -494,7 +453,7 @@ class AsyncHttpProxyHandler(HttpProxyHandler):
         self,
         request: HttpRequest,
         client_socket: socket.socket,
-     ) -> AsyncHttpProxyResponse:
+     ) -> HttpProxyResponse:
         """
         Asynchronously handles the client connection and forwards the request to the target server and returns partial response.
         To receive more response, use method HttpPartialResponse.recvmore, this method may raise
@@ -504,7 +463,7 @@ class AsyncHttpProxyHandler(HttpProxyHandler):
             client_socket (socket.socket): The socket object connected to the client.
 
         Returns:
-                AsyncHttpProxyResponse: The partial unfinished response ready for processing but lacking full content.
+                HttpProxyResponse: The partial unfinished response ready for processing but lacking full content.
         """
         # Connect to the target server
         target_socket = await self.connect_to_target()
@@ -523,7 +482,7 @@ class AsyncHttpProxyHandler(HttpProxyHandler):
             except (ValueError, TypeError):
                 pass
             
-            streaming_response = AsyncHttpProxyResponse(
+            streaming_response = HttpProxyResponse(
                 target_socket,
                 payload_obj=payload,
                 content_obj=Content(partial_content),

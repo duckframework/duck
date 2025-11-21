@@ -66,6 +66,7 @@ import signal
 import socket
 import threading
 import setproctitle
+import multiprocessing
 
 from typing import Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, Future
@@ -252,8 +253,6 @@ class App:
             future.add_done_callback(on_task_done)
             return future
             
-        # 
-        
         # Modify default thread pool executor submit method
         self.thread_pool_executor = ThreadPoolExecutor()
         self.thread_pool_executor._super_submit = self.thread_pool_executor.submit
@@ -261,10 +260,12 @@ class App:
         
         # Initialize some concurrent futures
         self.duck_server_future = None
-        self.django_server_future = None
-        self.force_https_future = None
         self.automations_dispatcher_future = None
         self.ducksight_reloader_thread = None
+        
+        # Create some child processes (will be set later when necessary)
+        self.force_https_app_process = None
+        self.django_server_process = None
         
         # Add application port to used ports
         PortRecorder.add_new_occupied_port(port, f"{self}")
@@ -292,7 +293,10 @@ class App:
                 no_logs=not enable_force_https_logs,
                 workers=force_https_workers,
             )  # Create https redirect mivro application.
-        
+            
+            # Set the process safe state for the force https app. 
+            self.force_https_process_safe_running_state = multiprocessing.Value('i', 0)
+            
         # Create a server object.
         self.server = HTTPServer(
             (addr, port),
@@ -442,11 +446,14 @@ class App:
                 # Host 0.0.0.0 not allowed on windows
                 host_addr = "127.0.0.1"
             
+            # Note: Use /admin path as this is not usually altered like path /. Path /
+            # may be accessing real Duck path from Django side, which might be slower than
+            # /admin path, leading to ReadTimeoutError.
             if not self.uses_ipv6:
-                url = f"http://{host_addr}:{port}/"
+                url = f"http://{host_addr}:{port}/admin"
                 
             else:
-                url = f"http://[{host_addr}]:{port}/"
+                url = f"http://[{host_addr}]:{port}/admin"
             
             response = requests.get(
                 url=url,
@@ -454,7 +461,7 @@ class App:
                 timeout=1,
             )
             
-            # Good Statuses = [200, 404, 500]
+            # Acceptable Statuses = [200, 404, 500]
             if not response:
                 # Response status is not expected here.
                 return False
@@ -471,8 +478,14 @@ class App:
         Returns:
             bool: True if up else False
         """
-        return self.force_https_app.server.running
-        
+        if self.force_https_app_process:
+            if self.force_https_app_process.is_alive():
+                return bool(self.force_https_process_safe_running_state.value)
+            else:
+                return False
+        else:
+            return self.force_https_app.server.running
+               
     def set_process_name(self):
         """
         Set the whole process name.
@@ -524,12 +537,20 @@ class App:
             """
             Starts Django application server
             """
+            p = multiprocessing.current_process()
+            setproctitle.setproctitle(p.name)
             host = self.DJANGO_ADDR
             bridge.start_django_server(*host, uses_ipv6=self.uses_ipv6)
             
         if self.use_django:
-            if not self.django_server_future or not self.django_server_future.running():
-                self.django_server_future = self.thread_pool_executor.submit(start_django_server)
+            if not self.django_server_process or not self.django_server_process.is_alive():
+                self.django_server_process = multiprocessing.Process(
+                    target=start_django_server,
+                    name="duck-django-server",
+                )
+                
+                # Start the Django process
+                self.django_server_process.start()
 
     def start_force_https_server(self, log_message: bool = True):
         """
@@ -542,10 +563,14 @@ class App:
          - `ENABLE_HTTPS = True`
          - `FORCE_HTTPS = True`
         """
-        def start_force_https():
+        def start_force_https(process_safe_running_state: multiprocessing.Value):
             """
             Starts app for redirecting non encrypted traffic to main app using https.
             """
+            p = multiprocessing.current_process()
+            setproctitle.setproctitle(p.name)
+            signal.signal(signal.SIGINT, lambda *a: self.force_https_app.stop())
+            self.force_https_app.on_app_start = lambda: setattr(process_safe_running_state, 'value', int(self.force_https_app.server.running))
             self.force_https_app.run()
             
         if self.enable_https and self.force_https:
@@ -556,9 +581,16 @@ class App:
                     level=logger.DEBUG,
                 )
                 
-            # Submit task to the pool
-            if not self.force_https_future or not self.force_https_future.running():
-                self.force_https_future = self.thread_pool_executor.submit(start_force_https)
+            # Start https redirect process
+            if not self.force_https_app_process or not self.force_https_app_process.is_alive():
+                self.force_https_app_process = multiprocessing.Process(
+                    target=start_force_https,
+                    name="duck-force-https-server",
+                    args=(self.force_https_process_safe_running_state, ),
+                )
+                
+                # Start the force https process
+                self.force_https_app_process.start()
     
     def start_automations_dispatcher(self, log_message: bool = True):
         """
@@ -629,8 +661,6 @@ class App:
         """
         return {
             "duck_server": self.duck_server_future,
-            "django_server": self.django_server_future,
-            "force_https_server": self.force_https_future,
             "automations_dispatcher": self.automations_dispatcher_future,
         }
         
@@ -678,6 +708,7 @@ class App:
             "DUCK_DJANGO_ADDR": self.DJANGO_ADDR,
             "DUCK_USES_IPV6": self.uses_ipv6,
             "DUCK_SERVER_BUFFER": SETTINGS["SERVER_BUFFER"],
+            "DUCK_WORKERS": int(self.workers or 0), # Meta.update doesnt support NoneType
         }
         Meta.update_meta(data)
         
@@ -705,9 +736,20 @@ class App:
             log_to_console (bool): Whether to an exit message log to console.
         """
         self.server.stop_server(log_to_console=log_to_console)
-        if stop_force_https_server and self.force_https_app and self.force_https_server_up:
-            self.force_https_app.stop()
-                
+        
+        if (stop_force_https_server
+            and self.force_https_app_process
+            and self.force_https_app_process.is_alive()
+        ):
+            self.force_https_app_process.terminate()
+            self.force_https_app_process.join(1)
+    
+        if (self.django_server_process
+            and self.django_server_process.is_alive()
+        ):
+            self.django_server_process.terminate()
+            self.django_server_process.join(1)                
+    
     def on_pre_stop(self):
         """
         Event called before final application termination.
@@ -797,7 +839,7 @@ class App:
                 self.ducksight_reloader.stop() if self.ducksight_reloader else None
             except Exception as e:
                 logger.log_exception(e)
-                        
+                
         # Cancel all running futures
         concurrent_futures = self.get_threadpool_futures()
         for name, future in concurrent_futures.items():
@@ -1119,3 +1161,7 @@ class App:
                 
         # Call on_app_start handler
         self.on_app_start()
+
+
+if __name__ == "__main__":
+    multiprocessing.freeze_support()

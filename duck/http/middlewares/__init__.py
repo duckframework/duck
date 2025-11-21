@@ -24,10 +24,14 @@ class BaseMiddleware:
     """
 
     request_ok: int = 1
-    """Value to indicate if a request is in the correct format, has no errors, etc."""
+    """
+    Value to indicate if a request is in the correct format, has no errors, etc.
+    """
 
     request_bad: int = 0
-    """Integer to indicate if request has any kind of issues or errors."""
+    """
+    Integer to indicate if request has any kind of issues or errors.
+    """
 
     _class_attrs = {}
 
@@ -52,8 +56,7 @@ class BaseMiddleware:
         """
         Returns the error response when process_request returns `BaseMiddleware.request_bad`.
         """
-        error_response = HttpBadRequestResponse(
-            "Sorry there is an error in Request, that's all we know!")
+        error_response = HttpBadRequestResponse("Sorry there is an error in Request, that's all we know!")
         return error_response
 
     @classmethod
@@ -61,12 +64,15 @@ class BaseMiddleware:
         """
         Processes the incoming request.
         """
-        raise NotImplementedError(
-            f"The method `process_request` should be implemented: {cls}")
+        raise NotImplementedError(f"The method `process_request` should be implemented: {cls}")
 
     @classmethod
-    def process_response(cls, response: HttpResponse,
-                         request: HttpRequest) -> None:
+    def process_response(
+        cls,
+        response: HttpResponse,
+        request: HttpRequest,
+    ) -> None:
         """
         Processes the outgoing response.
         """
+        pass
