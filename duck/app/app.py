@@ -68,7 +68,12 @@ import threading
 import setproctitle
 import multiprocessing
 
-from typing import Optional, Dict, Any
+from typing import (
+    Optional,
+    Dict,
+    Any,
+    Union,
+)
 from concurrent.futures import ThreadPoolExecutor, Future
 
 from duck import processes
@@ -338,6 +343,54 @@ class App:
         return cls.__mainapp__
         
     @staticmethod
+    def restart_background_workers(
+        application: Union['App', 'MicroApp'],
+        start_threadpool: bool = True,
+        start_asyncio_event_loop: bool = True,
+    ):
+        """
+        Restart background workers, e.g. `AsyncioLoopManager` thread & `ThreadPoolManager` pool.
+        
+        Args:
+            application (Union['App', 'MicroApp']): The target application.
+            start_threadpool (bool): Whether to start request handling threadpool in `WSGI` environment.
+            start_asyncio_event_loop (bool): Whether to start asyncio event loop either in `WSGI` or `ASGI` environment.
+            
+        Notes:
+        - This is usually useful when starting new process. Background workers like the request handling threadpool and asyncio loop's 
+           thread.
+        - This only focus on default `AsyncioLoopManager` & `ThreadPoolManager`.
+        """
+        from duck.utils.asyncio.eventloop import AsyncioLoopManager
+        from duck.utils.threading.threadpool import ThreadPoolManager
+        from duck.setup import set_asyncio_loop
+        
+        # Set asyncio event loop
+        set_asyncio_loop()
+        
+        # Reinitialize asyncio/threadpool manager
+        if SETTINGS['ASYNC_HANDLING'] and start_asyncio_event_loop:
+            AsyncioLoopManager._thread = None
+            AsyncioLoopManager._loop = None
+            AsyncioLoopManager.start()
+        else:
+            bg_event_loop = getattr(application, "start_bg_event_loop_if_wsgi", True)
+                
+            # Reinitialize threadpool manager
+            if start_threadpool:
+                ThreadPoolManager._pool = None # Reset pool avoid RuntimeError if _pool is forked.
+                ThreadPoolManager.start(
+                    daemon=True,
+                    thread_name_prefix="request-handler",
+                    task_type="request-handling",
+                 )
+                    
+            if bg_event_loop and start_asyncio_event_loop:
+                AsyncioLoopManager._thread = None
+                AsyncioLoopManager._loop = None
+                AsyncioLoopManager.start()   
+    
+    @staticmethod
     def check_ssl_credentials():
         """
         This checks for ssl certfile and private key file existence.
@@ -461,7 +514,6 @@ class App:
                 timeout=1,
             )
             
-            # Acceptable Statuses = [200, 404, 500]
             if not response:
                 # Response status is not expected here.
                 return False
@@ -540,6 +592,11 @@ class App:
             p = multiprocessing.current_process()
             setproctitle.setproctitle(p.name)
             host = self.DJANGO_ADDR
+            
+            # Restart background workers
+            App.restart_background_workers(self, start_threadpool=False)
+            
+            # Start django server
             bridge.start_django_server(*host, uses_ipv6=self.uses_ipv6)
             
         if self.use_django:
@@ -567,11 +624,19 @@ class App:
             """
             Starts app for redirecting non encrypted traffic to main app using https.
             """
+            from duck.utils.asyncio.eventloop import AsyncioLoopManager
+            from duck.utils.threading.threadpool import ThreadPoolManager
+            
             p = multiprocessing.current_process()
             setproctitle.setproctitle(p.name)
             signal.signal(signal.SIGINT, lambda *a: self.force_https_app.stop())
+            
+            # Restart background workers
+            App.restart_background_workers(self)
+            
+            # Start the microapp
             self.force_https_app.on_app_start = lambda: setattr(process_safe_running_state, 'value', int(self.force_https_app.server.running))
-            self.force_https_app.run()
+            self.force_https_app.run(run_forever=True) # This is blocking
             
         if self.enable_https and self.force_https:
             # Log something if applicable.
@@ -945,7 +1010,7 @@ class App:
         # Record application metadata and run the server
         self.record_metadata()
         return self._run(print_ansi_art=print_ansi_art)
-    
+        
     def _run(self, print_ansi_art: bool = True):
         """
         Runs the Duck application.

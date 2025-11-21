@@ -101,7 +101,11 @@ class ThreadPoolManager:
             raise RuntimeError("Thread pool already available and initialized.")
                             
     @classmethod
-    def submit_task(cls, task: Callable, task_type: Optional[str] = None) -> concurrent.futures.Future:
+    def submit_task(
+        cls,
+        task: Callable,
+        task_type: Optional[str] = None,
+    ) -> concurrent.futures.Future:
         """
         Submit a task to the threadpool.
 
@@ -112,20 +116,19 @@ class ThreadPoolManager:
 
         Raises:
             UnknownTaskError: If task_type mismatches the pool's allowed type.
-            RuntimeError: If the thread pool is not running.
+            RuntimeError: If the thread pool is None/not running.
 
         Returns:
             concurrent.futures.Future: Future for the executing task.
         """
-        if cls._pool is None:
-            raise RuntimeError("Threadpool is not running. Method start() must be called first.")
-
+        pool = cls.get_pool()
+        
         # If protection by task_type is active, enforce it
         if cls._task_type is not None:
             if task_type != cls._task_type:
                 raise UnknownTaskError(task_type, cls._task_type)
 
-        future = cls._pool.submit(task)
+        future = pool.submit(task)
         return future
 
     @classmethod

@@ -166,6 +166,9 @@ class HttpProxyResponse(StreamingHttpResponse):
         Returns:
             bytes: The received data, or an empty byte string if the content is complete.
         """
+        # Set blocking to True just in case.
+        self.target_socket.setblocking(True)
+        
         try:
             # Calculate the current content length and the expected total length
             current_content_length = len(self.more_data) + (len(self.content_obj.data) if self.content_obj else 0)
@@ -199,6 +202,9 @@ class HttpProxyResponse(StreamingHttpResponse):
         Yields:
             bytes: The next chunk of data to stream.
         """
+        # Set blocking to False just in case.
+        self.target_socket.setblocking(False)
+        
         if self.content_obj and self.content_obj.data:
             yield self.content_obj.data # Yield current data.
             

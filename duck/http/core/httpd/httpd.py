@@ -254,46 +254,22 @@ class BaseServer:
             """
             Starts server loop in a worker.
             """
-            from duck.utils.asyncio.eventloop import AsyncioLoopManager
-            from duck.utils.threading.threadpool import ThreadPoolManager
-            from duck.html.components.core.system import LivelyComponentSystem
+            from duck.app import App
             
-            # Modify registry if reimported e.g. on Windows
-            #LivelyComponentSystem.registry = process_safe_lively_registry
+            App.restart_background_workers(self.application)
             
-            # Reinitialize asyncio/threadpool manager
-            if SETTINGS['ASYNC_HANDLING']:
-                AsyncioLoopManager._thread = None
-                AsyncioLoopManager._loop = None
-                AsyncioLoopManager.start()
-                
-            else:
-                bg_event_loop = getattr(self.application, "start_bg_event_loop_if_wsgi", True)
-                
-                # Reinitialize threadpool manager
-                ThreadPoolManager._pool = None # Reset pool avoid RuntimeError if _pool is forked.
-                ThreadPoolManager.start(
-                    daemon=True,
-                    thread_name_prefix="request-handler",
-                    task_type="request-handling",
-                )
-                
-                if bg_event_loop:
-                    AsyncioLoopManager._thread = None
-                    AsyncioLoopManager._loop = None
-                    AsyncioLoopManager.start()
-                    
             # Now start server loop
             self.start_server_loop(interval_fn=lambda: healthcheck_obj.update_heartbeat(idx))
             
         # Start server loop
         if not self.workers:
             if not SETTINGS['DEBUG']:
-                logger.log(
-                    "No worker processes in use"
-                    f"\n  └── Consider providing workers argument to the App ",
-                    level=logger.WARNING,
-                )
+                if not self.no_logs:
+                    logger.log(
+                        "No worker processes in use"
+                        f"\n  └── Consider providing workers argument to the App ",
+                        level=logger.WARNING,
+                    )
                 
             # Start server loop in main process
             self.start_server_loop()

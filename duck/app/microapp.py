@@ -6,6 +6,7 @@ Notes:
 - An example of a mini app is Duck's internal `HttpsRedirectApp` which is used to
 	 redirect `http` traffic to a more secure https server.
 """
+import time
 import threading
 
 from typing import Union, Optional
@@ -216,12 +217,19 @@ class MicroApp:
         await SettingsLoaded.ASGI.finalize_response(response, request)  # finalize response
         return response
 
-    def run(self):
+    def run(self, run_forever: bool = True):
         """
         Runs the duck sub-application.
+        
+        Args:
+            run_forever (bool): Whether to run a while loop to avoid app from exiting. Server 
+                is always run in background and setting `run_forever=False` will make this method return 
+                immediately after starting the background thread.
         """
         self.start_server()
-            
+        while run_forever:
+            time.sleep(1)
+                
     def stop(self):
         """
         Stops the current running micro-application.

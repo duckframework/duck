@@ -309,7 +309,7 @@ class EventHandler:
         # Retrieve the component and then dispatch the event.
         component = resolved_component = LivelyComponentSystem.get_from_registry(root_uid, uid)
         
-        if not component and SETTINGS['DEBUG']:
+        if not component:
             msg = (
                 f"Component with UID `{uid}` at root UID `{root_uid}` requested by WS client not found."
             )
@@ -324,7 +324,8 @@ class EventHandler:
                 )
             
             # Log some blank line.
-            logger.log(msg + "\n", level=logger.WARNING)
+            if SETTINGS['DEBUG']:
+                logger.log(msg + "\n", level=logger.WARNING)
             
             # Send a response that this component is not found
             must_reload = bool(SETTINGS['RELOAD_ON_UNKNOWN_COMPONENTS'])
