@@ -26,11 +26,16 @@ import pathlib
 
 from duck.version import version
 from duck.compat import apply_backward_compatibility
+from duck.utils.threading.patch import patch_threading
 
 
 __author__ = "Brian Musakwa"
 __email__ = "digreatbrian@gmail.com"
 __version__ = version
+
+
+# Patch threading module to add more functionality like getting parent threads
+patch_threading()
 
 # Apply backward compatibility (if applicable)
 apply_backward_compatibility()

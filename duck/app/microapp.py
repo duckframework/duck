@@ -54,6 +54,7 @@ class MicroApp:
         enable_https: bool = False,
         no_logs: bool = True,
         workers: Optional[int] = None,
+        force_worker_processes: bool = False,
     ):
         """
         Initialize the MicroApp class.
@@ -65,8 +66,15 @@ class MicroApp:
             domain (str): Micro application domain. Defaults to None.
             uses_ipv6 (bool): Whether to use `IPV6`. Defaults to False.
             enable_https (bool): Whether to enable `https`. Defaults to False.
-            no_logs (bool): Whether to log anything to console.
+            no_logs (bool): Whether to log anything to console. Defaults to True.
             workers (Optional[int]): Number of workers to use. None will disable workers.
+            force_worker_processes (bool): Determines whether to use worker **processes** instead of the default worker **threads**. 
+                    By default, when `workers` is greater than 1, the server will use worker **threads**.  
+                    Threads avoid cross-process synchronization issues—such as component registry mismatches 
+                    (e.g., issues with Lively components) that occur when state lives in separate processes.  
+                    
+                    Set this flag to `True` only when process isolation is explicitly desired **and** you do not
+                    require shared in-memory synchronization between workers.
         """
         self.addr = addr
         self.port = port
@@ -75,6 +83,7 @@ class MicroApp:
         self.enable_https = enable_https
         self.no_logs = no_logs
         self.workers = workers
+        self.force_worker_processes = force_worker_processes
         
         # Set appropriate domain
         self.domain = domain or addr if not uses_ipv6 else f"[{addr}]"
@@ -94,6 +103,7 @@ class MicroApp:
             enable_ssl=self.enable_https,
             no_logs=no_logs,
             workers=workers,
+            force_worker_processes=force_worker_processes,
         )
         
         # Assign duckserver thread to None

@@ -16,7 +16,6 @@ from typing import (
 )
 
 from duck.settings import SETTINGS
-from duck.meta import Meta
 from duck.logging import logger
 from duck.http.request import HttpRequest
 from duck.http.response import HttpResponse
@@ -56,21 +55,13 @@ class LivelyWebSocketView(WebSocketView):
         "request",
         "execution_futures",
         "event_handler",
-        'RECEIVE_TIMEOUT',
     )
     
     def __init__(self, request, **kwargs):
         super().__init__(request, **kwargs)
         self.execution_futures: Dict[str, asyncio.Future] = {}
         self.event_handler = EventHandler(self)
-        duck_workers = Meta.get_metadata('DUCK_WORKERS') or 0
         
-        if duck_workers > 1:
-            # Duck is using multiprocessing, increase receive timeout as to avoid too much reloading of the browser
-            # when a component is not found. Avoid disconnecting client in short timeout as component registry may have
-            # different referrencies due to independent processes.
-             self.RECEIVE_TIMEOUT = 10 * 60 # 10 minutes
-             
     @staticmethod
     def serialize_data(data: Any) -> bytes:
         """

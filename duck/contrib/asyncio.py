@@ -13,7 +13,7 @@ import asyncio
 
 from typing import Coroutine, Union
 
-from duck.utils.asyncio.eventloop import AsyncioLoopManager, SyncFuture
+from duck.utils.asyncio.eventloop import get_or_create_loop_manager, SyncFuture
 
 
 def run_on_available_loop(
@@ -86,4 +86,5 @@ def get_available_event_loop() -> asyncio.AbstractEventLoop:
         >>> print(loop.is_running())  # Check if the event loop is running
     """    
     # Retrieve the loop from the AsyncioLoopManager in non-async contexts
-    return AsyncioLoopManager.get_event_loop()
+    loop_manager = get_or_create_loop_manager(strictly_get=True)
+    return loop_manager.get_event_loop()

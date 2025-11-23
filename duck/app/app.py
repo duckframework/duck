@@ -89,7 +89,7 @@ from duck.exceptions.all import (
 from duck.http.core.httpd.servers import HTTPServer
 from duck.logging import logger
 from duck.meta import Meta
-from duck.setup import setup
+from duck.setup import setup, set_asyncio_loop
 from duck.csp import csp_nonce_flag
 from duck.art import display_duck_art
 from duck.version import version
@@ -98,8 +98,8 @@ from duck.utils.net import (is_ipv4, is_ipv6)
 from duck.utils.path import url_normalize
 from duck.utils.port_recorder import PortRecorder
 from duck.utils.lazy import Lazy
-from duck.utils.asyncio.eventloop import AsyncioLoopManager
-from duck.utils.threading.threadpool import ThreadPoolManager
+from duck.utils.asyncio.eventloop import get_or_create_loop_manager
+from duck.utils.threading.threadpool import get_or_create_thread_manager
 
 
 if SETTINGS['USE_DJANGO']:
@@ -156,7 +156,9 @@ class App:
         start_bg_event_loop_if_wsgi: bool = True,
         process_name: str = "duck-server",
         workers: Optional[int] = None,
-        force_https_workers: Optional[int] = None, 
+        force_https_workers: Optional[int] = None,
+        force_worker_processes: bool = False,
+        force_https_force_worker_processes: bool = True,
     ):
         """
         Initializes the main Duck application instance.
@@ -181,7 +183,15 @@ class App:
             process_name (str): The name of the process for this application. Defaults to "duck-server".
             workers (Optional[int]): Number of workers to use. None will disable workers.
             force_https_workers (Optional[int]): Number of workers to use for HTTPS redirects. None will disable workers.
-            
+            force_worker_processes (bool): Determines whether to use worker **processes** instead of the default worker **threads**. 
+                    By default, when `workers` is greater than 1, the server will use worker **threads**.  
+                    Threads avoid cross-process synchronization issues—such as component registry mismatches 
+                    (e.g., issues with Lively components) that occur when state lives in separate processes.  
+                    
+                    Set this flag to `True` only when process isolation is explicitly desired **and** you do not
+                    require shared in-memory synchronization between workers.
+            force_https_force_worker_processes (bool): Whether to force use of multiple processes for `HTTPS` redirect app. Defaults to True. 
+                    
         Raises:
             ApplicationError: If the provided address is invalid or if multiple main application
             instances are created (only one is allowed).
@@ -239,6 +249,8 @@ class App:
         self.process_name = process_name or "duck-server"
         self.workers = workers
         self.force_https_workers = force_https_workers
+        self.force_worker_processes = force_worker_processes
+        self.force_https_force_worker_processes = force_https_force_worker_processes
         
         # Initialize some attributes
         self.automations_dispatcher = None
@@ -297,6 +309,7 @@ class App:
                 enable_https=False,
                 no_logs=not enable_force_https_logs,
                 workers=force_https_workers,
+                force_worker_processes=force_https_force_worker_processes,
             )  # Create https redirect mivro application.
             
             # Set the process safe state for the force https app. 
@@ -311,6 +324,7 @@ class App:
             enable_ssl=self.enable_https,
             no_logs=False,
             workers=workers,
+            force_worker_processes=force_worker_processes,
         )
         
         # Set process title
@@ -343,52 +357,66 @@ class App:
         return cls.__mainapp__
         
     @staticmethod
-    def restart_background_workers(
+    def start_background_workers(
         application: Union['App', 'MicroApp'],
         start_threadpool: bool = True,
         start_asyncio_event_loop: bool = True,
+        recreate_managers: bool = False,
     ):
         """
-        Restart background workers, e.g. `AsyncioLoopManager` thread & `ThreadPoolManager` pool.
+        Starts or restarts background workers, e.g. `AsyncioLoopManager` & `ThreadPoolManager`.
         
         Args:
             application (Union['App', 'MicroApp']): The target application.
             start_threadpool (bool): Whether to start request handling threadpool in `WSGI` environment.
             start_asyncio_event_loop (bool): Whether to start asyncio event loop either in `WSGI` or `ASGI` environment.
+            recreate_managers (bool): Whether to recreate managers for the current thread and all it's descendents. Defaults to False.
             
         Notes:
         - This is usually useful when starting new process. Background workers like the request handling threadpool and asyncio loop's 
            thread.
+        - Use methods `get_or_create_loop_manager` and `get_or_create_thread_manager` to create new managers before this function if 
+          new managers are needed.
         - This only focus on default `AsyncioLoopManager` & `ThreadPoolManager`.
-        """
-        from duck.utils.asyncio.eventloop import AsyncioLoopManager
-        from duck.utils.threading.threadpool import ThreadPoolManager
-        from duck.setup import set_asyncio_loop
+        - The thread manager is only run in `WSGI` mode but loop manager can be run in any environment.
+         """
+        if multiprocessing.parent_process() != None:
+            # Not in main process
+            # Reset asyncio event loop
+            set_asyncio_loop()
         
-        # Set asyncio event loop
-        set_asyncio_loop()
-        
+        if recreate_managers:
+            if not SETTINGS['ASYNC_HANDLING']:
+                # In WSGI, reassign loop manager/thread manager for this worker thread and its descendents
+                get_or_create_thread_manager(force_create=True)
+                start_bg_event_loop = getattr(application, "start_bg_event_loop_if_wsgi", True)
+                if start_bg_event_loop:
+                    get_or_create_loop_manager(force_create=True)
+            else:
+                # Reassign new loop manager for this worker thread and all descendent threads
+                get_or_create_loop_manager(force_create=True)
+                    
         # Reinitialize asyncio/threadpool manager
-        if SETTINGS['ASYNC_HANDLING'] and start_asyncio_event_loop:
-            AsyncioLoopManager._thread = None
-            AsyncioLoopManager._loop = None
-            AsyncioLoopManager.start()
+        if SETTINGS['ASYNC_HANDLING']:
+            if start_asyncio_event_loop:
+                loop_manager = get_or_create_loop_manager(strictly_get=False)
+                loop_manager.start()
+            
         else:
-            bg_event_loop = getattr(application, "start_bg_event_loop_if_wsgi", True)
+            _start_bg_event_loop = getattr(application, "start_bg_event_loop_if_wsgi", True)
                 
             # Reinitialize threadpool manager
             if start_threadpool:
-                ThreadPoolManager._pool = None # Reset pool avoid RuntimeError if _pool is forked.
-                ThreadPoolManager.start(
+                thread_manager = get_or_create_thread_manager(strictly_get=False)
+                thread_manager.start(
                     daemon=True,
                     thread_name_prefix="request-handler",
                     task_type="request-handling",
                  )
                     
-            if bg_event_loop and start_asyncio_event_loop:
-                AsyncioLoopManager._thread = None
-                AsyncioLoopManager._loop = None
-                AsyncioLoopManager.start()   
+            if _start_bg_event_loop and start_asyncio_event_loop:
+                loop_manager = get_or_create_loop_manager(strictly_get=False)
+                loop_manager.start()
     
     @staticmethod
     def check_ssl_credentials():
@@ -593,8 +621,10 @@ class App:
             setproctitle.setproctitle(p.name)
             host = self.DJANGO_ADDR
             
-            # Restart background workers
-            App.restart_background_workers(self, start_threadpool=False)
+            # Restart background workers (only asyncio loop manager)
+            # Recreate managers recreates and attaches new managers fot the current 
+            # thread and all its descendents.
+            App.start_background_workers(self, start_threadpool=False, recreate_managers=True) # Thread pool is useless for Django process.
             
             # Start django server
             bridge.start_django_server(*host, uses_ipv6=self.uses_ipv6)
@@ -624,15 +654,14 @@ class App:
             """
             Starts app for redirecting non encrypted traffic to main app using https.
             """
-            from duck.utils.asyncio.eventloop import AsyncioLoopManager
-            from duck.utils.threading.threadpool import ThreadPoolManager
-            
             p = multiprocessing.current_process()
             setproctitle.setproctitle(p.name)
             signal.signal(signal.SIGINT, lambda *a: self.force_https_app.stop())
             
             # Restart background workers
-            App.restart_background_workers(self)
+            # Recreate managers recreates and attaches new managers fot the current 
+            # thread and all its descendents.
+            App.start_background_workers(self, recreate_managers=True)
             
             # Start the microapp
             self.force_https_app.on_app_start = lambda: setattr(process_safe_running_state, 'value', int(self.force_https_app.server.running))
@@ -1050,18 +1079,12 @@ class App:
                 level=logger.WARNING,
             )
         
-        # Start WSGI background event loop if needed
+        # Start background event loop or threadpool if needed
+        type(self).start_background_workers(self)
+        
         if not SETTINGS['ASYNC_HANDLING']:
-            # Start threadpool for handling requests.
-            ThreadPoolManager.start(
-                daemon=True,
-                thread_name_prefix="request-handler",
-                task_type="request-handling",
-            )
-            
             if self.start_bg_event_loop_if_wsgi:
-                # Start asyncio loop in background
-                AsyncioLoopManager.start()
+                # Started asyncio loop in background
                 logger.log(
                     "Background event loop started",
                     level=logger.DEBUG,
@@ -1072,10 +1095,7 @@ class App:
                     "This may prevent protocols like `HTTP/2` or `WebSockets` from working correctly\n",
                     level=logger.WARNING,
                 )
-        else:
-            # Start asyncio loop in background
-            AsyncioLoopManager.start()
-                        
+         
         if SETTINGS['ENABLE_COMPONENT_SYSTEM']:
             # Components are enabled
             logger.log(

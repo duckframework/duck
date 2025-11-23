@@ -23,8 +23,8 @@ from duck.contrib.sync import (
 from duck.settings import SETTINGS
 from duck.logging import logger
 from duck.utils.asyncio import create_task
-from duck.utils.asyncio.eventloop import AsyncioLoopManager
-from duck.utils.threading.threadpool import ThreadPoolManager
+from duck.utils.asyncio.eventloop import get_or_create_loop_manager
+from duck.utils.threading.threadpool import get_or_create_thread_manager
 
 
 class RequestHandlingExecutor:
@@ -83,7 +83,8 @@ class RequestHandlingExecutor:
             
             async def request_handler_wrapper(task):
                 create_task(task)
-            future = AsyncioLoopManager.submit_task(request_handler_wrapper(task))
+            loop_manager = get_or_create_loop_manager(strictly_get=True)
+            future = loop_manager.submit_task(request_handler_wrapper(task))
         else:
             if SETTINGS['ASYNC_HANDLING']:
                 raise RuntimeError(
@@ -92,7 +93,8 @@ class RequestHandlingExecutor:
                 )
                 
             # Submit blocking or CPU-bound task to the thread pool
-            future = ThreadPoolManager.submit_task(task, task_type="request-handling")
+            thread_manager = get_or_create_thread_manager(strictly_get=True)
+            future = thread_manager.submit_task(task, task_type="request-handling")
             
         # Attach name and callback for error handling
         future.name = getattr(task, 'name', repr(task))

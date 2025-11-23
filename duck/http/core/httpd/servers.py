@@ -50,6 +50,7 @@ class HTTPServer(BaseServer):
         ssl_params: Optional[Dict] = None,
         no_logs: bool = False,
         workers: Optional[int] = None,
+        force_worker_processes: bool = False,
     ):
         """
         Initialise the server instance.
@@ -63,6 +64,13 @@ class HTTPServer(BaseServer):
             ssl_params (Optional[Dict]): Dictionary containing ssl parameters to parse to SSLSocket. If None, default ones will be used.
             no_logs (bool): Whether to disable logging.
             workers (Optional[int]): Number of workers to use. None will disable workers.
+            force_worker_processes (bool): Determines whether to use worker **processes** instead of the default worker **threads**. 
+                    By default, when `workers` is greater than 1, the server will use worker **threads**.  
+                    Threads avoid cross-process synchronization issues—such as component registry mismatches 
+                    (e.g., issues with Lively components) that occur when state lives in separate processes.  
+                    
+                    Set this flag to `True` only when process isolation is explicitly desired **and** you do not
+                    require shared in-memory synchronization between workers.
         """
         # This is the server context, will be set on first HTTPS request.
         self._ssl_context = None
@@ -78,6 +86,7 @@ class HTTPServer(BaseServer):
             ssl_params=ssl_params,
             no_logs=no_logs,
             workers=workers,
+            force_worker_processes=force_worker_processes,
         )
         
         # Increment instances
@@ -146,6 +155,7 @@ class MicroHTTPServer(BaseMicroServer, HTTPServer):
         ssl_params: bool = None,
         no_logs: bool = True,
         workers: Optional[int] = None,
+        force_worker_processes: bool = False,
     ):
         self.set_microapp(microapp)
         super().__init__(
@@ -157,4 +167,5 @@ class MicroHTTPServer(BaseMicroServer, HTTPServer):
             ssl_params=ssl_params,
             no_logs=no_logs,
             workers=workers,
+            force_worker_processes=force_worker_processes,
         )

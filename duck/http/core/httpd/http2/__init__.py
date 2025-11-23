@@ -35,7 +35,7 @@ from duck.http.core.httpd.httpd import (
 from duck.logging import logger
 from duck.utils.xsocket import xsocket
 from duck.utils.xsocket.io import SocketIO
-from duck.utils.asyncio.eventloop import AsyncioLoopManager
+from duck.utils.asyncio.eventloop import get_or_create_loop_manager
 
 
 # Regex to match "Upgrade: h2" or "Upgrade: h2c" in headers only
@@ -217,7 +217,8 @@ class BaseHTTP2Server(BaseServer):
         from duck.http.core.httpd.http2.event_handler import EventHandler
         
         # Assume client supports HTTP/2
-        event_loop = AsyncioLoopManager.get_event_loop()
+        loop_manager = get_or_create_loop_manager(strictly_get=True) # loop manager must be already running
+        event_loop = loop_manager.get_event_loop()
         
         protocol = H2Protocol(
             sock=sock,
@@ -238,7 +239,7 @@ class BaseHTTP2Server(BaseServer):
         
         # Submit coroutine for sending/receiving data asynchronously
         # but we create a loop for executing synchronous tasks out of async context, in the current thread.
-        AsyncioLoopManager.submit_task(coro)
+        loop_manager.submit_task(coro) # Fire and forget task
         
         # Wait for protocol to start but for limited time
         wait_time_interval = .1

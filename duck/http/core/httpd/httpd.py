@@ -55,6 +55,8 @@ from duck.utils.ssl import is_ssl_data
 from duck.utils.xsocket import (xsocket, ssl_xsocket, create_xsocket)
 from duck.utils.xsocket.io import SocketIO 
 from duck.utils.multiprocessing.process_manager import WorkerProcessManager, HeartbeatHealthCheck
+from duck.utils.threading.thread_manager import WorkerThreadManager
+from duck.utils.threading.thread_manager import HeartbeatHealthCheck as ThreadHeartbeatHealthCheck
 
 
 KEEP_ALIVE_PATTERN = re.compile(rb"(?i)\bConnection\s*:\s*keep\s*-?\s*alive\b")
@@ -98,6 +100,7 @@ class BaseServer:
         ssl_params: Optional[Dict] = None,
         no_logs: bool = False,
         workers: Optional[int] = None,
+        force_worker_processes: bool = False, 
     ):
         """
         Initialise the server instance.
@@ -111,17 +114,25 @@ class BaseServer:
             ssl_params (Optional[Dict]): Dictionary containing ssl parameters to parse to SSLSocket. If None, default ones will be used.
             no_logs (bool): Whether to disable logging.
             workers (Optional[int]): Number of workers to use. None will disable workers.
+            force_worker_processes (bool): Determines whether to use worker **processes** instead of the default worker **threads**. 
+                By default, when `workers` is greater than 1, the server will use worker **threads**.  
+                Threads avoid cross-process synchronization issues—such as component registry mismatches 
+                (e.g., issues with Lively components) that occur when state lives in separate processes.  
+                
+                Set this flag to `True` only when process isolation is explicitly desired **and** you do not
+                require shared in-memory synchronization between workers.
         """
         from duck.app.app import App
         from duck.app.microapp import MicroApp
         from duck.etc.ssl_defaults import SSL_DEFAULTS
         
-        assert isinstance(addr, tuple), "Argument addr should be an instance of tuple"
-        assert len(addr) == 2, "Argument addr should be a tuple of length 2"
-        assert isinstance(addr[0], str), "Argument addr[0] should be an instance of str"
-        assert isinstance(addr[1], int), "Argument addr[1] should be an instance of int"
-        assert isinstance(application, (App, MicroApp)), f"Argument application should be an instance of App or MicroApp, not {type(application)}"
-        assert ssl_params is None or isinstance(ssl_params, dict), f"Argument ssl_params should be an instance of dictionary, not {type(ssl_params)}"
+        assert isinstance(addr, tuple), "Argument addr should be an instance of tuple."
+        assert len(addr) == 2, "Argument addr should be a tuple of length 2."
+        assert isinstance(addr[0], str), "Argument addr[0] should be an instance of str."
+        assert isinstance(addr[1], int), "Argument addr[1] should be an instance of int."
+        assert isinstance(application, (App, MicroApp)), f"Argument application should be an instance of App or MicroApp, not {type(application)}."
+        assert ssl_params is None or isinstance(ssl_params, dict), f"Argument ssl_params should be an instance of dictionary, not {type(ssl_params)}."
+        assert not workers or workers >= 1, "Workers argument must be a valid integer from 0 and above."
         
         # Create some socket object
         self.__sock = None
@@ -136,8 +147,10 @@ class BaseServer:
         self.ssl_params = ssl_params or SSL_DEFAULTS
         self.no_logs = no_logs
         self.workers = workers
+        self.force_worker_processes = force_worker_processes
         self.running: bool = False
         self.worker_process_manager: Optional[WorkerProcessManager] = None
+        self.worker_thread_manager: Optional[WorkerThreadManager] = None
         
     @property
     def sock(self):
@@ -166,6 +179,15 @@ class BaseServer:
             return []
         return self.worker_process_manager.worker_processes
     
+    @property
+    def worker_threads(self) -> List[threading.Thread]:
+        """
+        Returns list of worker threads.
+        """
+        if not self.worker_thread_manager:
+            return []
+        return self.worker_thread_manager.worker_threads
+    
     def stop_server(self, log_to_console: bool = True):
         """
         Stops the http(s) server.
@@ -188,9 +210,12 @@ class BaseServer:
         
         # Terminate worker processes
         if self.worker_process_manager:
-            self.worker_process_manager.running = False # This attempts to stop running loops
             self.worker_process_manager.stop(graceful=True, wait=True, no_logging=not log_to_console) # Terminate process manager for real
             
+        # Terminate worker threads
+        if self.worker_thread_manager:
+            self.worker_thread_manager.stop(wait=False, no_logging=not log_to_console) # Terminate threads manager for real
+        
         if log_to_console: # log message indicating server stopped.
             logger.log(
                 f"{bold_start}Duck server stopped!{bold_end}",
@@ -250,13 +275,29 @@ class BaseServer:
         if on_server_start_fn:
             on_server_start_fn()
             
-        def start_server_loop_in_worker(idx: int, healthcheck_obj: HeartbeatHealthCheck, process_safe_lively_registry: "ProcessSafeLRUCache"):
+        def start_server_loop_in_worker(
+            idx: int,
+            healthcheck_obj: HeartbeatHealthCheck,
+            restart_background_workers: bool = False,
+        ):
             """
             Starts server loop in a worker.
+            
+            Args:
+                idx (int): The process/thread index.
+                healthcheck_obj (HeartbeatHealthCheck): Object to update/flag a heartbeat at interval.
+                restart_background_workers (bool): These are background threads that are used by the app. Defaults to False and 
+                    may only need to be restarted in new processes.
             """
             from duck.app import App
+            from duck.utils.threading.threadpool import get_or_create_thread_manager
+            from duck.utils.asyncio.eventloop import get_or_create_loop_manager
             
-            App.restart_background_workers(self.application)
+            if restart_background_workers:
+                # Restart background workers
+                # Recreate managers recreates and attaches new managers fot the current 
+                # thread and all its descendents.
+                App.start_background_workers(self.application, recreate_managers=True)
             
             # Now start server loop
             self.start_server_loop(interval_fn=lambda: healthcheck_obj.update_heartbeat(idx))
@@ -274,11 +315,11 @@ class BaseServer:
             # Start server loop in main process
             self.start_server_loop()
             
-        else:
-            # Start server loop in worker processes
-            from duck.utils.multiprocessing import ProcessSafeLRUCache
-            from duck.html.components.core.system import LivelyComponentSystem
-            
+        elif self.workers == 1 or self.force_worker_processes:
+            if self.force_worker_processes:
+                if not self.no_logs:
+                    logger.log("Using worker processes but synchronization between processes is not guaranteed", level=logger.WARNING)
+                    
             # Create heartbeat health check object
             healthcheck_obj = HeartbeatHealthCheck(heartbeat_timeout=SETTINGS['SERVER_POLL'] + 3)
             
@@ -286,7 +327,7 @@ class BaseServer:
             self.worker_process_manager = WorkerProcessManager(
                 worker_fn=start_server_loop_in_worker,
                 num_workers=self.workers,
-                args_fn=lambda _: (LivelyComponentSystem.registry),
+                args_fn=lambda idx: (True), # HeartbeatHealthCheck object is included in args automatically.
                 worker_name_fn=lambda idx: f"duck-worker-{idx}",
                 health_check_fn=healthcheck_obj,
                 restart_timeout=2,
@@ -298,6 +339,34 @@ class BaseServer:
             
             # Start worker processes
             self.worker_process_manager.start()
+            
+        else:
+            # Workers are greater than 1, make sure to enforce sticky sessions where clients must have
+            # We will use use worker threads instead as they allow components from component registry
+            # to persist within each worker rather than using worker processes. Worker processes can't serialize
+            # component objects which might make it difficult for component synchronization within 
+            # global registry.
+            
+            # Create heartbeat health check object
+            healthcheck_obj = ThreadHeartbeatHealthCheck(heartbeat_timeout=SETTINGS['SERVER_POLL'] + 3)
+            
+            # Assign worker thread manager
+            self.worker_thread_manager = WorkerThreadManager(
+                worker_fn=start_server_loop_in_worker,
+                num_workers=self.workers,
+                args_fn=lambda idx: (True), # HeartbeatHealthCheck object is included in args automatically.
+                worker_name_fn=lambda idx: f"duck-worker-{idx}",
+                health_check_fn=healthcheck_obj,
+                restart_timeout=2,
+                enable_logs=(not self.no_logs),
+                verbose_logs=SETTINGS['DEBUG'] or (SETTINGS['VERBOSE_LOGGING']),
+                enable_monitoring=True,
+                thread_stop_timeout=3,
+                daemon=True,
+            )
+            
+            # Start worker threads
+            self.worker_thread_manager.start()
             
     def start_server_loop(self, interval_fn: Optional[Callable] = None):
         """
@@ -326,10 +395,6 @@ class BaseServer:
                 
                 if server in ready:
                     sock = self.accept_and_handle()
-                else:
-                    # Check if socket is closed or not.
-                    if server.fileno() < 0:
-                         break
                            
             except (ConnectionResetError, BlockingIOError):
                 pass

@@ -46,7 +46,7 @@ from duck.logging import logger
 from duck.meta import Meta
 from duck.utils.path import normalize_url_path, joinpaths
 from duck.utils.threading import SyncFuture
-from duck.utils.asyncio.eventloop import AsyncioLoopManager
+from duck.utils.asyncio.eventloop import get_or_create_loop_manager
 
 
 DJANGO_SIDE_PATTERNS = [re.compile(p) for p in SETTINGS["DJANGO_SIDE_URLS"] or []]
@@ -249,7 +249,8 @@ class RequestProcessor:
                     
                     # Submit the coroutine to queue
                     response_coro = async_view_wrapper(view.run)()
-                    future: SyncFuture = AsyncioLoopManager.submit_task(response_coro, return_sync_future=True)
+                    loop_manager = get_or_create_loop_manager(strictly_get=True)
+                    future: SyncFuture = loop_manager.submit_task(response_coro, return_sync_future=True)
                     
                     # Wait for response from coroutine.
                     response = future.result()

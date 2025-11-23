@@ -38,7 +38,7 @@ from duck.utils.xsocket import xsocket, ssl_xsocket
 from duck.utils.xsocket.io import SocketIO
 from duck.utils.asyncio.eventloop import (
     SyncFuture,
-    AsyncioLoopManager,
+    get_or_create_loop_manager,
 )
 
 
@@ -232,12 +232,14 @@ class H2Protocol:
         )
         
         # Return synchronous future.
+        loop_manager = get_or_create_loop_manager(strictly_get=True)
+        
         if return_future:
-            future = AsyncioLoopManager.submit_task(coro, return_sync_future=True)
+            future = loop_manager.submit_task(coro, return_sync_future=True)
             return future
             
         # Fire and forget task
-        AsyncioLoopManager.submit_task(coro)
+        loop_manager.submit_task(coro)
         
     # ASYNCHRONOUS IMPLEMENTATIONS
     
