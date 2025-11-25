@@ -188,12 +188,13 @@ class BaseServer:
             return []
         return self.worker_thread_manager.worker_threads
     
-    def stop_server(self, log_to_console: bool = True):
+    def stop_server(self, log_to_console: bool = True, wait: bool = True):
         """
         Stops the http(s) server.
         
         Args:
             log_to_console (bool): Log the message that the sever stoped. Defaults to True.
+            wait (bool): Wait for worker processes/threads to finish. Defaults to True.
         """
         bold_start = "\033[1m"
         bold_end = "\033[0m"
@@ -210,11 +211,11 @@ class BaseServer:
         
         # Terminate worker processes
         if self.worker_process_manager:
-            self.worker_process_manager.stop(graceful=True, wait=True, no_logging=not log_to_console) # Terminate process manager for real
+            self.worker_process_manager.stop(graceful=True, wait=wait, no_logging=not log_to_console) # Terminate process manager for real
             
         # Terminate worker threads
         if self.worker_thread_manager:
-            self.worker_thread_manager.stop(wait=False, no_logging=not log_to_console) # Terminate threads manager for real
+            self.worker_thread_manager.stop(wait=wait, no_logging=not log_to_console) # Terminate threads manager for real
         
         if log_to_console: # log message indicating server stopped.
             logger.log(

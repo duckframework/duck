@@ -3,6 +3,7 @@ Manages the registration and lifecycle of HTML components, and enables communica
 with the browser via WebSocket to dispatch events and execute JavaScript in real-time.
 """
 import os
+import threading
 
 from typing import (
     List,
@@ -43,6 +44,11 @@ class LivelyComponentSystem:
     Mapping of UIDs to components.
     
     Format: {root_uid: {root_uid: component, child_uid: component, ...}}
+    """
+    
+    registry_lock = threading.Lock()
+    """
+    Lock for avoiding race conditions in multiple threads, especially in worker threads.
     """
     
     @classmethod
@@ -100,8 +106,9 @@ class LivelyComponentSystem:
         Returns:
             Component | Any: The component if found, otherwise the default value.
         """
-        root_uid_dict = cls.registry.get(root_uid) or {}
-        return root_uid_dict.get(uid)
+        with cls.registry_lock:
+            root_uid_dict = cls.registry.get(root_uid) or {}
+            return root_uid_dict.get(uid)
 
     @classmethod
     def add_to_registry(cls, uid: str, component: Component) -> None:
@@ -122,20 +129,22 @@ class LivelyComponentSystem:
             )
         
         root_uid = component.get_raw_root().uid
-        root_registry = cls.registry.get(root_uid, None)
         
-        if root_registry is None:
-            cls.registry.set(root_uid, {})
-            root_registry = cls.registry.get(root_uid)
+        with cls.registry_lock:
+            root_registry = cls.registry.get(root_uid, None)
             
-        if component.isroot():
-            existing = root_registry.get(uid)
-            if existing is component:
-                raise AlreadyInRegistry("Component is already registered with this UID.")
+            if root_registry is None:
+                cls.registry.set(root_uid, {})
+                root_registry = cls.registry.get(root_uid)
                 
-        root_registry[uid] = component
-        cls.registry.set(root_uid, root_registry) # Update registry just in case.
-        
+            if component.isroot():
+                existing = root_registry.get(uid)
+                if existing is component:
+                    raise AlreadyInRegistry("Component is already registered with this UID.")
+                    
+            root_registry[uid] = component
+            cls.registry.set(root_uid, root_registry) # Update registry just in case.
+            
     @classmethod
     def get_html_tags(cls) -> List[ComponentTag]:
         """

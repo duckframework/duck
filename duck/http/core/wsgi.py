@@ -13,6 +13,7 @@ from typing import (
     Optional,
     Tuple,
     Union,
+    Callable,
 )
 
 from duck.exceptions.all import (
@@ -100,7 +101,6 @@ class WSGI:
         
         # Parse request data
         request.parse(request_data)
-        
         return request
 
     def finalize_response(self,
@@ -160,42 +160,40 @@ class WSGI:
             # this means all middlewares were successful.
             self.apply_middlewares_to_response(response, request)
     
-    def get_response(self, request: HttpRequest) -> HttpResponse:
+    def produce_final_response_failsafe(
+        self,
+        request: HttpRequest,
+        response_producer_callable: Callable,
+        processor: Optional["RequestProcessor"] = None,
+    ) -> HttpResponse:
         """
-        Returns the full response for a request, with all middlewares and other configurations applied.
+        Tries to produce a response a response using the given callable. It handles all errors 
+        and produces final response nomatter what.  
         
+        This returns the full response for a request, with all middlewares and other configurations applied.
+        
+        Args:
+            request (HttpRequest): Target HTTP request.
+            response_producer_callable (Callable): The callable for producing HTTP response.
+            processor (Optional[RequestProcessor]): Request processor for the request.
+            
         Returns:
             HttpResponse: The corresponding HTTP response.
         
         Raises:
             ExpectingNoResponse: Raised if we are never going to get a response e.g. when we reach a WebSocketView.
-                This handles everything on its own and it will never return a response. 
+                This handles everything on its own and it will never return a response.
         """
-        from duck.http.core.processor import RequestProcessor
-        
-        processor: RequestProcessor # initialize request processor
-        response: HttpResponse
-        
         try:
-            processor = RequestProcessor(request)
+            assert callable(response_producer_callable), f"Response producer callable must be a callable not {type(response_producer_callable)}."
+            response: Union[HttpResponse, HttpProxyResponse] = response_producer_callable()
             
-            if SETTINGS["USE_DJANGO"]:
-                # Obtain the http response for the request
-                response: Union[HttpResponse, HttpProxyResponse] = processor.process_django_request()
-                
-                # Apply middlewares in reverse order
-                if isinstance(response, HttpProxyResponse):
-                    self.django_apply_middlewares_to_response(response, request)
-                else:
-                    self.apply_middlewares_to_response(response, request)
-                    
+            # Apply middlewares in reverse order
+            if isinstance(response, HttpProxyResponse):
+                self.django_apply_middlewares_to_response(response, request)
             else:
-                # Obtain the http response for the request
-                response = processor.process_request()
-                
-                # Apply middlewares in reverse order
-                self.apply_middlewares_to_response(response, request)
-                
+                 self.apply_middlewares_to_response(response, request)
+                 
         except RouteNotFoundError:
             # The request url cannot match any registered routes.
             response = get_404_error_response(request)
@@ -207,7 +205,7 @@ class WSGI:
                 if processor:
                     # Obtain the request route info
                     route_info = processor.route_info
-            except:
+            except Exception:
                 pass
             
             # Retrieve the method not allowed error response.
@@ -227,27 +225,62 @@ class WSGI:
                 # This is not an error as such but its a way to tell the server that it should not expect a 
                 # response because there is a lower-level handling of the client e.g. websocket protocol
                 raise e # reraise exception
-            
+                        
             else:
-                # Retrieve ther server error response    
+                # Retrieve ther server error response
                 response = get_server_error_response(e, request)
                 logger.log_exception(e)
             
         # Finalize and return response
         self.finalize_response(response, request)
         
-        # Finally, return response.
+        # Finally, return response
         return response
         
-    def start_response(self, request: HttpRequest):
+    def get_response(self, request: HttpRequest) -> HttpResponse:
+        """
+        Returns the full response for a request, with all middlewares and other configurations applied.
+        
+        Returns:
+            HttpResponse: The corresponding HTTP response.
+        
+        Raises:
+            ExpectingNoResponse: Raised if we are never going to get a response e.g. when we reach a WebSocketView.
+                This handles everything on its own and it will never return a response.
+        """
+        from duck.http.core.processor import RequestProcessor
+        
+        response: HttpResponse
+        processor = RequestProcessor(request)
+            
+        def produce_response() -> HttpResponse:
+            """
+            Produces response for us.
+            """
+            if SETTINGS["USE_DJANGO"]:
+                # Obtain the http response for the request
+                response: Union[HttpResponse, HttpProxyResponse] = processor.process_django_request()  
+            else:
+                # Obtain the http response for the request
+                response = processor.process_request()
+            
+            # Return response
+            return response
+              
+        # Return final response
+        final_response = self.produce_final_response_failsafe(request, produce_response, processor)
+        return final_response
+        
+    def start_response(self, request: HttpRequest, response: Optional[HttpResponse] = None):
         """
         Start the response to the client. This method should be called for handling and sending the response to client.
 
         Args:
-                request (HttpRequest): The request object.
+            request (HttpRequest): The request object.
+            response (Optional[HttpResponse]): An optional response you want to send or the response will just be resolved by normal means.
         """
         try:
-            response = self.get_response(request)
+            response = response or self.get_response(request)
         except ExpectingNoResponse:
             # Nothing to do at this point.
             return
@@ -264,14 +297,16 @@ class WSGI:
         if isinstance(response, HttpProxyResponse):
             # If HttpProxyResponse, this mean this response is from Django remote server. 
             if response.status_code == 101:
-                from duck.settings.loaded import ASGI
+                from duck.settings.loaded import SettingsLoaded
                 from duck.utils.asyncio import create_task
-                from duck.utils.asyncio.eventloop import AsyncioLoopManager
+                from duck.utils.asyncio.eventloop import get_or_create_loop_manager
                 
                 # Start loop for handling some protocol other than HTTP e.g., websockets
+                loop_manager = get_or_create_loop_manager(strictly_get=True)
+                
                 async def task():
-                    create_task(ASGI.handle_django_connection_upgrade(request, response))
-                _ = AsyncioLoopManager.submit_task(task())
+                    create_task(SettingsLoaded.ASGI.handle_django_connection_upgrade(request, response))
+                _ = loop_manager.submit_task(task())
                 
     def __call__(
         self,
@@ -333,5 +368,4 @@ class WSGI:
         
         # Start sending response
         self.start_response(request)
-        
         return request

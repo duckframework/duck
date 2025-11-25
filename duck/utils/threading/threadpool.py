@@ -110,7 +110,6 @@ from typing import (
     List,
 )
 
-from duck.utils.threading import get_max_workers
 from duck.utils.threading.patch import get_parent_thread
 
 
@@ -272,7 +271,7 @@ class ThreadPoolManager:
         
     def start(
         self,
-        max_workers: Optional[int] = None,
+        max_workers: int,
         task_type: Optional[str] = None,
         daemon: bool = False,
         thread_name_prefix: Optional[str] = None
@@ -281,7 +280,7 @@ class ThreadPoolManager:
         Starts the threadpool, ready to accept tasks.
 
         Args:
-            max_workers (Optional[int]): Maximum threads for pool.
+            max_workers (int): Maximum threads for pool.
             task_type (Optional[str]): Only allows tasks with this type to be submitted.
                 Useful for protecting pools handling critical jobs (e.g., request_handling only).
             daemon (bool): Whether pool worker threads should be daemon threads.
@@ -300,7 +299,7 @@ class ThreadPoolManager:
                 return False
                 
         if self._pool is None or not is_pool_active():
-            self._max_workers = max_workers or get_max_workers()
+            self._max_workers = max_workers
             self._daemon = daemon
             self._task_type = task_type
 

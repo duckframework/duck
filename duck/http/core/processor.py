@@ -253,7 +253,11 @@ class RequestProcessor:
                     future: SyncFuture = loop_manager.submit_task(response_coro, return_sync_future=True)
                     
                     # Wait for response from coroutine.
+                    # TODO: This is slow and doesnt free the thread until coroutine finishes. 
+                    # Find a way to free the thread and leave the task to event loop. Right now its 
+                    # impossible to free thread and leave the rest to the event loop.
                     response = future.result()
+                
                 else:
                     # Convert the run method to sync if not.
                     run = convert_to_sync_if_needed(view.run)

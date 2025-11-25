@@ -392,6 +392,7 @@ class WorkerProcessManager:
         Monitor thread: checks worker health/liveness and restarts unhealthy/dead workers.
         Non-blocking for main thread.
         """
+        time.sleep(2) # Sleep a little
         heartbeat_never_called_counter = 0
         
         while self.running:

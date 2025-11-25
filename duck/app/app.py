@@ -277,12 +277,12 @@ class App:
         
         # Initialize some concurrent futures
         self.duck_server_future = None
+        self.django_server_future = None
         self.automations_dispatcher_future = None
         self.ducksight_reloader_thread = None
         
         # Create some child processes (will be set later when necessary)
         self.force_https_app_process = None
-        self.django_server_process = None
         
         # Add application port to used ports
         PortRecorder.add_new_occupied_port(port, f"{self}")
@@ -380,6 +380,8 @@ class App:
         - This only focus on default `AsyncioLoopManager` & `ThreadPoolManager`.
         - The thread manager is only run in `WSGI` mode but loop manager can be run in any environment.
          """
+        from duck.utils.threading import get_max_workers
+         
         if multiprocessing.parent_process() != None:
             # Not in main process
             # Reset asyncio event loop
@@ -408,7 +410,9 @@ class App:
             # Reinitialize threadpool manager
             if start_threadpool:
                 thread_manager = get_or_create_thread_manager(strictly_get=False)
+                max_workers = get_max_workers()
                 thread_manager.start(
+                    max_workers=max_workers,
                     daemon=True,
                     thread_name_prefix="request-handler",
                     task_type="request-handling",
@@ -611,34 +615,27 @@ class App:
                 
     def start_django_server(self):
         """
-        Starts Django server and use Duck as reverse proxy server for django.
+        Starts Django server and use Duck as reverse proxy server for Django.
         """
+        
+        # We were starting Django in new process but we shouldn't because it isolates 
+        # memory spaces which may make using Lively component system at Django side difficult.
+        # If we used a new process, synchronization between django process and main process Lively Component System registry 
+        # is almost impossible now. This can lead to components not found all the time.
+        
         def start_django_server():
             """
             Starts Django application server
             """
-            p = multiprocessing.current_process()
-            setproctitle.setproctitle(p.name)
             host = self.DJANGO_ADDR
-            
-            # Restart background workers (only asyncio loop manager)
-            # Recreate managers recreates and attaches new managers fot the current 
-            # thread and all its descendents.
-            App.start_background_workers(self, start_threadpool=False, recreate_managers=True) # Thread pool is useless for Django process.
             
             # Start django server
             bridge.start_django_server(*host, uses_ipv6=self.uses_ipv6)
             
         if self.use_django:
-            if not self.django_server_process or not self.django_server_process.is_alive():
-                self.django_server_process = multiprocessing.Process(
-                    target=start_django_server,
-                    name="duck-django-server",
-                )
+            if not self.django_server_future or not self.django_server_future.is_running():
+                self.django_server_future = self.thread_pool_executor.submit(start_django_server)
                 
-                # Start the Django process
-                self.django_server_process.start()
-
     def start_force_https_server(self, log_message: bool = True):
         """
         Starts force HTTPS redirect micro application.  
@@ -756,6 +753,7 @@ class App:
         return {
             "duck_server": self.duck_server_future,
             "automations_dispatcher": self.automations_dispatcher_future,
+            "django_server": self.django_server_future,
         }
         
     def register_signals(self):
@@ -821,6 +819,7 @@ class App:
         self,
         stop_force_https_server: bool = True,
         log_to_console: bool = True,
+        wait: bool = True,
     ):
         """
         Stop all running servers i.e., Duck main server, Force HTTPS server & Django server.
@@ -828,8 +827,9 @@ class App:
         Args:
             stop_force_https_server (bool): Whether to stop Force HTTPS redirect microapp.
             log_to_console (bool): Whether to an exit message log to console.
+            wait (bool): Whether to wait for termination. Defaults to True but with a timeout.
         """
-        self.server.stop_server(log_to_console=log_to_console)
+        self.server.stop_server(log_to_console=log_to_console, wait=wait)
         
         if (stop_force_https_server
             and self.force_https_app_process
@@ -837,13 +837,7 @@ class App:
         ):
             self.force_https_app_process.terminate()
             self.force_https_app_process.join(1)
-    
-        if (self.django_server_process
-            and self.django_server_process.is_alive()
-        ):
-            self.django_server_process.terminate()
-            self.django_server_process.join(1)                
-    
+            
     def on_pre_stop(self):
         """
         Event called before final application termination.
@@ -906,7 +900,7 @@ class App:
 
         try:
             # Stop all servers
-            self.stop_servers(log_to_console=log_to_console)
+            self.stop_servers(log_to_console=log_to_console, wait=wait_for_thread_pool_executor_shutdown if no_exit else False)
         except Exception as e:
             logger.log_raw('\n')
             logger.log(f"Error stopping servers: {e}", level=logger.ERROR)

@@ -265,6 +265,7 @@ class AsyncioLoopManager:
     - Allows submitting coroutines from synchronous code.
     - Supports synchronous result blocking via SyncFuture.
     - Can restrict tasks by type to prevent inappropriate coroutine submission to protected loops.
+    - Using the event loop directly is not recommended and it seems not to work, use `submit_task` instead.
     """
     
     __instances = []

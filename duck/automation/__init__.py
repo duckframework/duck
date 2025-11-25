@@ -68,9 +68,9 @@ import datetime
 import threading
 
 from duck.contrib.sync import convert_to_async_if_needed
-from duck.contrib.asyncio import get_available_event_loop
 from duck.utils.dateutils import build_readable_date, datetime_difference
 from duck.utils.asyncio import create_task
+from duck.utils.asyncio.eventloop import get_or_create_loop_manager
 
 
 class AutomationError(Exception):
@@ -479,10 +479,14 @@ class Automation:
               raise AutomationError(
                     "Automation is already running in another async Task, cannot start automation."
                 )
-            event_loop = get_available_event_loop()
-            coro = self._async_start()
-            task = create_task(coro, loop=event_loop)
-            self._async_task = task
+                
+            async def async_task_wrapper():
+                task = create_task(self._async_start())
+                self._async_task = task
+            
+            # Execute asynchronous task
+            loop_manager = get_or_create_loop_manager(strictly_get=True)
+            loop_manager.submit_task(async_task_wrapper())
             
         else:
             # Use synchronous blocking execution

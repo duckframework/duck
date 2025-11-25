@@ -15,6 +15,7 @@ from typing import (
     Optional,
     Tuple,
     Union,
+    Callable,
 )
 
 from duck.exceptions.all import (
@@ -43,7 +44,7 @@ from duck.contrib.responses.errors import (
     get_method_not_allowed_error_response,
     get_bad_request_error_response,
 )
-from duck.contrib.sync import convert_to_async_if_needed
+from duck.contrib.sync import convert_to_async_if_needed, iscoroutinefunction
 from duck.utils.xsocket import xsocket
 from duck.utils.xsocket.io import SocketIO
 from duck.utils.asyncio import create_task
@@ -164,10 +165,23 @@ class ASGI:
             # this means all middlewares were successful.
             await self.apply_middlewares_to_response(response, request)
     
-    async def get_response(self, request: HttpRequest) -> HttpResponse:
+    async def produce_final_response_failsafe(
+        self,
+        request: HttpRequest,
+        response_producer_callable: Callable,
+        processor: Optional["AsyncRequestProcessor"] = None,
+    ) -> HttpResponse:
         """
-        Returns the full response for a request, with all middlewares and other configurations applied.
+        Tries to produce a response a response using the given callable. It handles all errors 
+        and produces final response nomatter what.  
         
+        This returns the full response for a request, with all middlewares and other configurations applied.
+        
+        Args:
+            request (HttpRequest): Target HTTP request.
+            response_producer_callable (Callable): The callable for producing HTTP response.
+            processor (Optional[AsyncRequestProcessor]): Asynchronous request processor for the request.
+            
         Returns:
             HttpResponse: The corresponding HTTP response.
         
@@ -175,31 +189,16 @@ class ASGI:
             ExpectingNoResponse: Raised if we are never going to get a response e.g. when we reach a WebSocketView.
                 This handles everything on its own and it will never return a response.
         """
-        from duck.http.core.processor import AsyncRequestProcessor
-        
-        processor: AsyncRequestProcessor # initialize request processor
-        response: HttpResponse
-        
         try:
-            processor = AsyncRequestProcessor(request)
+            assert iscoroutinefunction(response_producer_callable), "Response producer callable must be a coroutine function."
+            response: Union[HttpResponse, HttpProxyResponse] = await response_producer_callable()
             
-            if SETTINGS["USE_DJANGO"]:
-                # Obtain the http response for the request
-                response: Union[HttpResponse, HttpProxyResponse] = await processor.process_django_request()
-                
-                # Apply middlewares in reverse order
-                if isinstance(response, HttpProxyResponse):
-                    await self.django_apply_middlewares_to_response(response, request)
-                else:
-                    await self.apply_middlewares_to_response(response, request)
-                    
+            # Apply middlewares in reverse order
+            if isinstance(response, HttpProxyResponse):
+                await self.django_apply_middlewares_to_response(response, request)
             else:
-                # Obtain the http response for the request
-                response = await processor.process_request()
-                
-                # Apply middlewares in reverse order
-                await self.apply_middlewares_to_response(response, request)
-                
+                 await self.apply_middlewares_to_response(response, request)
+                 
         except RouteNotFoundError:
             # The request url cannot match any registered routes.
             response = get_404_error_response(request)
@@ -243,15 +242,50 @@ class ASGI:
         # Finally, return response
         return response
         
-    async def start_response(self, request: HttpRequest):
+    async def get_response(self, request: HttpRequest) -> HttpResponse:
+        """
+        Returns the full response for a request, with all middlewares and other configurations applied.
+        
+        Returns:
+            HttpResponse: The corresponding HTTP response.
+        
+        Raises:
+            ExpectingNoResponse: Raised if we are never going to get a response e.g. when we reach a WebSocketView.
+                This handles everything on its own and it will never return a response.
+        """
+        from duck.http.core.processor import AsyncRequestProcessor
+        
+        response: HttpResponse
+        processor = AsyncRequestProcessor(request)
+            
+        async def produce_response() -> HttpResponse:
+            """
+            Produces response for us.
+            """
+            if SETTINGS["USE_DJANGO"]:
+                # Obtain the http response for the request
+                response: Union[HttpResponse, HttpProxyResponse] = await processor.process_django_request()  
+            else:
+                # Obtain the http response for the request
+                response = await processor.process_request()
+             
+            # Return response
+            return response
+             
+        # Return final response
+        final_response = await self.produce_final_response_failsafe(request, produce_response, processor)
+        return final_response
+        
+    async def start_response(self, request: HttpRequest, response: Optional[HttpResponse] = None):
         """
         Start the response to the client. This method should be called for handling and sending the response to client.
 
         Args:
-                request (HttpRequest): The request object.
+            request (HttpRequest): The request object.
+            response (Optional[HttpResponse]): An optional response you want to send or the response will just be resolved by normal means.
         """
         try:
-            response = await self.get_response(request)
+            response = response or await self.get_response(request)
         except ExpectingNoResponse:
             # Do nothing at this point.
             return
