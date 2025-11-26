@@ -16,9 +16,9 @@ If you discover a security vulnerability in **Duck**, please report it responsib
 
 1. **Do not disclose the vulnerability publicly** until it has been reviewed and patched.
 2. **Submit a report** by opening a **private discussion** via GitHub Security Advisories:
-   - [🔒 Submit a Security Advisory](https://github.com/digreatbrian/duck/security/advisories)
+   - [🔒 Submit a Security Advisory](https://github.com/duckframework/duck/security/advisories)
 3. Alternatively, you can **email the security team** at:  
-   📧 **[digreatbrian@example.com]**
+   📧 **digreatbrian@gmail.com**
 4. Include as much detail as possible:
    - Steps to reproduce the vulnerability
    - The affected version(s)

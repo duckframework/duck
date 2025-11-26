@@ -50,7 +50,7 @@ Please note that this project is released with a [Contributor Code of Conduct](C
 ## Getting Started
 
 To get started with development, follow these steps:
-1. Clone the repository (`git clone https://github.com/digreatbrian/duck.git`).
+1. Clone the repository (`git clone https://github.com/duckframework/duck.git`).
 2. Install dependencies (`pip install -r requirements.txt`, etc.).
 3. Run the project (`python3 -m duck runserver`).
 

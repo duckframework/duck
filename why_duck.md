@@ -19,7 +19,7 @@ Say hello to **Duck** — a high-performance Python web framework built for buil
 
 Duck is perfect for developers who crave **clarity over clutter**—a no-nonsense framework that gets the job done, fast.
 
-### 👉 [Check it out on GitHub](https://github.com/digreatbrian/duck)
+### 👉 [Check it out on GitHub](https://github.com/duckframework/duck)
 
 Help shape the future of web development! Feedback, contributions, and stars are always welcome.  
 Let’s build something lightweight—and powerful—**together**.

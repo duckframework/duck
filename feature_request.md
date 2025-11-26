@@ -3,7 +3,7 @@
 We love hearing your ideas for new features! To request a feature, please follow the steps below:
 
 1. **Open an Issue**  
-   Visit our [Feature Requests](https://github.com/digreatbrian/duck/issues) page and open a new issue using the "Feature Request" template. Clearly describe what you'd like to see added and why it would be helpful.
+   Visit our [Feature Requests](https://github.com/duckframework/duck/issues) page and open a new issue using the "Feature Request" template. Clearly describe what you'd like to see added and why it would be helpful.
 
 2. **Be Clear and Specific**  
    Include any relevant use cases, examples, or mockups that might help us better understand the request.
