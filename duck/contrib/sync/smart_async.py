@@ -48,65 +48,197 @@ async def main():
 
 asyncio.run(main())
 ```
+
+The core principal of async responsiveness, use of small tasks rather than awaiting 
+long running task or even converting to async.
 """
 
 import os
 import uuid
+import time
 import queue
 import asyncio
 import inspect
 import threading
 import contextvars
 
-from functools import wraps
-from typing import Any, Callable, TypeVar, Optional, Dict
+from functools import wraps, partial
+from typing import (
+    Any,
+    Callable,
+    TypeVar,
+    Optional,
+    Dict,
+)
+
+from duck.exceptions.all import SettingsError
+
 
 T = TypeVar("T")
 
 
-def get_optimal_thread_count() -> int:
+class TaskTookTooLongWarning(UserWarning):
     """
-    Determine optimal thread pool size based on CPU count and environment.
-    For DB ops, you may want to tune based on DB max connections.
+    Warning when a task took too much time executing as this might exhaust the threadpool 
+    and might cause significant performance degradation (hangs subsequently). 
     """
-    return min(os.cpu_count(), 4) or 4
-
+    
 
 class TransactionThread(threading.Thread):
     """
     Dedicated thread for executing atomic/transactional database operations.
     Each thread maintains its own DB connection context.
     All tasks submitted are executed serially, preserving transaction context.
+    
+    Notes:
+    - This thread can also be used in non-transactional general contexts.
     """
     def __init__(self, context_id=None):
         super().__init__(daemon=True)
         self.context_id = context_id
         self.task_queue = queue.Queue()
+        self._busy = threading.Event()   # NEW: busy indicator
+        self._current_task_executing = None
+        self._max_task_duration = 0.2 # Seconds for optimal task duration
         self.start()
 
+    def is_free(self) -> bool:
+        """
+        Returns True if the thread is idle (no task running and queue empty).
+        """
+        # _busy = False AND queue empty -> free
+        return not self._busy.is_set() and self.task_queue.empty()
+
+    def current_task_executing(self) -> Optional[Any]:
+        """
+        Returns the current task/callable being executed.
+        """
+        return self._current_task_executing
+        
     def run(self):
+        try:
+            from duck.logging import logger
+        except SettingsError:
+            # Not in a Duck project
+            from duck.logging import console as logger
+
         while True:
-            item = self.task_queue.get()
+            item = self.task_queue.get() # This blocks until something is submitted
+            
             if item is None:  # shutdown sentinel
                 break
+
             func, args, kwargs, future, loop = item
+
+            # Mark thread busy
+            self._busy.set()
+            
+            # Set task
+            task = partial(func, *args, **kwargs)
+            start_time = time.time()
+            
+            # Execute task
+            def set_result_or_exception(future, result):
+                """
+                Set result or exception for the future.
+                
+                This handles `asyncio.InvalidStateError` and `asyncio.CancelledError` by default.
+                """
+                is_error = False
+                is_debug = True
+                
+                try:
+                    from duck.settings import SETTINGS
+                    is_debug = SETTINGS['DEBUG']
+                except SettingsError:
+                    pass # Not inside a Duck project.
+                    
+                if isinstance(result, BaseException):
+                    is_error = True
+                
+                try:
+                    if is_error:
+                        future.set_exception(result)
+                    else:
+                        future.set_result(result)
+                    exec_time = time.time() - start_time
+                    
+                    # Warn user if task too long
+                    if exec_time > self._max_task_duration:
+                        logger.warn(
+                            (
+                                f"Task took too long to finish: {exec_time:.2f} s, task: {task}. "
+                                f"This might cause hanging or performance degradation. "
+                                f"Max task duration: {self._max_task_duration: .2f} seconds. "
+                                "Consider splitting task into smaller sub-tasks."
+                            ),
+                            TaskTookTooLongWarning,
+                        )
+                    
+                except (asyncio.InvalidStateError, asyncio.CancelledError):
+                    pass
+                
             try:
-                result = func(*args, **kwargs)
-                loop.call_soon_threadsafe(future.set_result, result)
+                self._current_task_executing = task
+                result = task()
+                
+                # Set future result
+                loop.call_soon_threadsafe(set_result_or_exception, future, result)
+                
             except Exception as e:
-                loop.call_soon_threadsafe(future.set_exception, e)
+                # Set future exception
+                loop.call_soon_threadsafe(set_result_or_exception, future, e)
+                
             finally:
+                # Mark thread free AFTER executing the task
+                self._busy.clear()
+                self._current_task_executing = None
                 self.task_queue.task_done()
 
     def submit(self, func: Callable[..., T], *args, **kwargs) -> asyncio.Future:
+        """
+        Puts the task in queue for execution.
+        
+        Returns:
+            asyncio.Fututure: An asynchronous future you can wait for in async context.
+        """
         loop = asyncio.get_event_loop()
         future: asyncio.Future = loop.create_future()
         self.task_queue.put((func, args, kwargs, future, loop))
         return future
 
     def shutdown(self):
+        """
+        Shutsdown the thread but if no task is being executed or after current task finishes.
+        """
         self.task_queue.put(None)
+    
+    def __str__(self):
+        return (
+            f"<[{self.__class__.__name__} \n"
+            f'  name="{self.name}",  \n'
+            f"  daemon={self.daemon}, \n"
+            f"  is_alive={self.is_alive()}, \n"
+            f"  is_free={self.is_free()},  \n"
+            f"  context_id={self.context_id},  \n"
+            f"  ident={self.ident}, \n"
+            f"  current_task_executing={self.current_task_executing()}, \n"
+            "]>"
+        )
 
+    def __repr__(self):
+        return (
+            f"<[{self.__class__.__name__} \n"
+            f'  name="{self.name}",  \n'
+            f"  daemon={self.daemon}, \n"
+            f"  is_alive={self.is_alive()}, \n"
+            f"  is_free={self.is_free()},  \n"
+            f"  context_id={self.context_id},  \n"
+            f"  ident={self.ident}, \n"
+            f"  current_task_executing={self.current_task_executing()}, \n"
+            "]>"
+        )
+        
 
 class TransactionThreadPool:
     """
@@ -115,13 +247,24 @@ class TransactionThreadPool:
     Scales up to max_threads as needed.
     """
     def __init__(self, max_threads: Optional[int] = None):
-        self.max_threads = max_threads or get_optimal_thread_count()
+        from duck.utils.threading import get_max_workers
+        
+        self.max_threads = max_threads or get_max_workers()
         self.threads: Dict[str, TransactionThread] = {}  # context_id -> thread
-        self.general_threads: list = []                  # threads for non-context tasks
+        self.general_threads: List[TransactionThread] = []                  # threads for non-context tasks
         self.lock = threading.Lock()
         self.counter = 0
 
-    def get_thread(self, context_id=None):
+    def get_thread(self, context_id: Optional[str] = None) -> TransactionThread:
+        """
+        Returns the appropriate thread to run the tasks on.
+        
+        Args:
+            context_id (Optional[str]): This is the context ID of the thread that is needed to run the task.
+        
+        Returns:
+            TransactionThread: The thread matching the context ID or any free/appropriate thread if no context_id provided.
+        """
         with self.lock:
             if context_id:
                 thread = self.threads.get(context_id)
@@ -149,39 +292,50 @@ class TransactionThreadPool:
                 self.general_threads.append(thread)
                 return thread
             
-            # Round robin over available general threads
+            # Round robin over available general threads. If thread is not free try other ones if any is free.
             thread = self.general_threads[self.counter % len(self.general_threads)]
+            if not thread.is_free():
+                for t in self.general_threads:
+                    if t.is_free():
+                        return t
+                        
+            # Return round-robined thread
             self.counter += 1
             return thread
 
     def submit(self, func: Callable[..., T], *args, context_id=None, **kwargs) -> asyncio.Future:
+        """
+        Puts the task in queue for execution in correct thread according to context ID or just any free/appropriate 
+        thread if no context ID provided.
+        
+        Returns:
+            asyncio.Fututure: An asynchronous future you can wait for in async context.
+        """
         thread = self.get_thread(context_id)
         return thread.submit(func, *args, **kwargs)
 
-    def shutdown(self, wait=True):
+    def shutdown(self, wait: bool = True):
+        """
+        Stop all running threads attached to this pool.
+        
+        Args:
+            wait (bool): Whether to wait for all threads to stop. Defaults to True.
+        """
         # Cleanly stop all threads (poison pill)
         for t in list(self.threads.values()) + self.general_threads:
             t.shutdown()
+        
         if wait:
             for t in list(self.threads.values()) + self.general_threads:
                 t.join()
+        
+        # Clear all threads
         self.threads.clear()
         self.general_threads.clear()
 
 
-class BasicThreadPool:
-    """
-    Basic pool for non-transactional, concurrent operations.
-    Uses `asyncio.to_thread` for simplicity.
-    """
-    @staticmethod
-    async def submit(func: Callable[..., T], *args, **kwargs) -> T:
-        return await asyncio.to_thread(func, *args, **kwargs)
-
-
-# Global pools
+# Global pool
 _TRANSACTION_THREAD_POOL = TransactionThreadPool()
-_BASIC_THREAD_POOL = BasicThreadPool()
 
 # Contextvar for transaction affinity
 _transaction_context_id_var = contextvars.ContextVar("_transaction_context_id_var", default=None)
@@ -248,7 +402,7 @@ def sync_to_async(
         if context_id:
             return await _TRANSACTION_THREAD_POOL.submit(func, *args, context_id=context_id, **kwargs)
         else:
-            return await _BASIC_THREAD_POOL.submit(func, *args, **kwargs)
+            return await _TRANSACTION_THREAD_POOL.submit(func, *args, context_id=None, **kwargs) # Using None as context_id will use round-robin for threads
     return wrapper
 
 

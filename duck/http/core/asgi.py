@@ -445,5 +445,4 @@ class ASGI:
         
         # Process and start sending response
         await self.start_response(request)
-        
         return request

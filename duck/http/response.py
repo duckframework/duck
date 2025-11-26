@@ -38,7 +38,7 @@ from duck.template.environment import (
     Template,
 )
 from duck.html.components import Component
-from duck.contrib.sync import iscoroutinefunction
+from duck.contrib.sync import iscoroutinefunction, convert_to_async_if_needed
 from duck.exceptions.all import AsyncViolationError
 from duck.etc.statuscodes import responses
 from duck.utils.string import smart_truncate
@@ -1269,7 +1269,7 @@ class HttpTooManyRequestsResponse(HttpErrorRequestResponse):
         headers: Dict = {},
         content_type: Optional[str] = None,
     ):
-        status_code = 400
+        status_code = 429
 
         super().__init__(content,
                          status_code,
@@ -1338,7 +1338,7 @@ class TemplateResponse(HttpResponse):
         )
 
 
-class ComponentResponse(HttpResponse):
+class ComponentResponse(StreamingHttpResponse):
     """
     HTTP response that streams the rendered output of an HTML component.
     
@@ -1366,14 +1366,12 @@ class ComponentResponse(HttpResponse):
             raise TypeError(f"Component should be an instance of Component, not {type(component).__name__}.")
 
         self.component = component
-        
-        # Render component
-        rendered = component.render().encode('utf-8')
+        self._rendered_component = None
         
         # Initialize response object.
         super().__init__(
-            rendered,
-            status_code,
+            stream=[],
+            status_code=status_code,
             headers=headers or {},
             content_type=content_type,
         )
@@ -1382,3 +1380,14 @@ class ComponentResponse(HttpResponse):
         if hasattr(component, "fullpage_reload_headers"):
             if any([h.lower() in self.headers for h in component.fullpage_reload_headers]):
                 component.fullpage_reload = True
+    
+    def iter_content(self) -> Generator[bytes, None, None]:
+        if not self._rendered_component:
+            self._rendered_component = self.component.render()
+        yield self._rendered_component.encode('utf-8')
+    
+    async def async_iter_content(self) -> AsyncGenerator[bytes, None]:
+        if not self._rendered_component:
+            self._rendered_component = await convert_to_async_if_needed(self.component.render)()
+        yield self._rendered_component.encode('utf-8')
+    

@@ -181,7 +181,7 @@ def get_or_create_thread_manager(
             # Manager namespace found
             manager = managers.get(id)
             if manager is None and not strictly_get:
-                manager = ThreadPoolManager()
+                manager = ThreadPoolManager(thread)
                 managers[id] = manager
             return manager
 
@@ -204,7 +204,7 @@ def get_or_create_thread_manager(
     if manager is None:
         if strictly_get:
             raise ManagerNotFound("Strict getting of manager is True yet the manager cannot be resolved.")
-        manager = ThreadPoolManager()
+        manager = ThreadPoolManager(current)
         REGISTRY[current.ident] = {id: manager}
     return manager
 
@@ -248,7 +248,14 @@ class ThreadPoolManager:
     """
     This is the list of created instances.
     """
-    def __init__(self):
+    def __init__(self, creator_thread: Optional[threading.Thread] = None):
+        """
+        Initialize the threadpool.
+        
+        Args:
+            creator_thread (Optional[threading.Thread]): This is the thread responsible for this manager.'
+        """
+        self._creator_thread = creator_thread
         self._pool: Optional[concurrent.futures.ThreadPoolExecutor] = None
         self._max_workers: Optional[int] = None
         self._daemon: Optional[bool] = None
@@ -376,3 +383,9 @@ class ThreadPoolManager:
         if self._pool is not None:
             self._pool.shutdown(wait=wait)
             self._pool = None
+    
+    def __str__(self):
+        return f"<{self.__class__.__name__} creator_thread={self._creator_thread}>"
+    
+    def __repr__(self):
+        return f"<{self.__class__.__name__} creator_thread={self._creator_thread}>"

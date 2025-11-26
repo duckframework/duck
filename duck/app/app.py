@@ -362,6 +362,7 @@ class App:
         start_threadpool: bool = True,
         start_asyncio_event_loop: bool = True,
         recreate_managers: bool = False,
+        start_automations_event_loop: bool = False,
     ):
         """
         Starts or restarts background workers, e.g. `AsyncioLoopManager` & `ThreadPoolManager`.
@@ -371,6 +372,7 @@ class App:
             start_threadpool (bool): Whether to start request handling threadpool in `WSGI` environment.
             start_asyncio_event_loop (bool): Whether to start asyncio event loop either in `WSGI` or `ASGI` environment.
             recreate_managers (bool): Whether to recreate managers for the current thread and all it's descendents. Defaults to False.
+            start_automations_event_loop (bool): Whether to start a dedicated event loop for running automations. Defaults to False.
             
         Notes:
         - This is usually useful when starting new process. Background workers like the request handling threadpool and asyncio loop's 
@@ -387,6 +389,10 @@ class App:
             # Reset asyncio event loop
             set_asyncio_loop()
         
+        if start_automations_event_loop:
+            loop_manager = get_or_create_loop_manager(id="automations-loop-manager")
+            loop_manager.start()
+            
         if recreate_managers:
             if not SETTINGS['ASYNC_HANDLING']:
                 # In WSGI, reassign loop manager/thread manager for this worker thread and its descendents
@@ -1074,7 +1080,7 @@ class App:
             )
         
         # Start background event loop or threadpool if needed
-        type(self).start_background_workers(self)
+        type(self).start_background_workers(self, start_automations_event_loop=True)
         
         if not SETTINGS['ASYNC_HANDLING']:
             if self.start_bg_event_loop_if_wsgi:
@@ -1089,7 +1095,15 @@ class App:
                     "This may prevent protocols like `HTTP/2` or `WebSockets` from working correctly\n",
                     level=logger.WARNING,
                 )
-         
+        else:
+            # Fine tune threadpool for executing sync_to_async calls (Only in ASGI because in WSGI, the app is already flooding with many Threads).
+            from duck.contrib.sync.smart_async import _TRANSACTION_THREAD_POOL
+                
+            sync_to_async_workers = _TRANSACTION_THREAD_POOL.max_threads
+                
+            # Update max_threads according to app workers
+            _TRANSACTION_THREAD_POOL.max_threads = (sync_to_async_workers * self.workers) if self.workers else sync_to_async_workers
+                
         if SETTINGS['ENABLE_COMPONENT_SYSTEM']:
             # Components are enabled
             logger.log(

@@ -376,7 +376,6 @@ class ResponseHandler:
             
             # Wait for this action to complete.
             _ = sync_future.result()
-            
             return # No further processing
         
         # Explicitly send response
@@ -551,15 +550,19 @@ class ResponseHandler:
                 )
             
             # H2 Protocol already handles close_streaming_response
-            await self.async_send_http2_response(
-                response=response,
-                stream_id=stream_id,
-                sock=sock,
-                request=request,
-                disable_logging=disable_logging,
-                suppress_errors=suppress_errors,
-            )
-            
+            try:
+                await self.async_send_http2_response(
+                    response=response,
+                    stream_id=stream_id,
+                    sock=sock,
+                    request=request,
+                    disable_logging=disable_logging,
+                    suppress_errors=suppress_errors,
+                )
+            except TimeoutError:
+                # Timeout whilst sending
+                pass
+                
             return # No further processing
         
         # Explicitly send response

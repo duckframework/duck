@@ -205,7 +205,7 @@ def get_or_create_loop_manager(
             # Manager namespace found
             manager = managers.get(id, None)
             if manager is None and not strictly_get:
-                manager = AsyncioLoopManager()
+                manager = AsyncioLoopManager(thread)
                 managers[id] = manager
             return manager
 
@@ -227,7 +227,7 @@ def get_or_create_loop_manager(
     if manager is None:
         if strictly_get:
             raise ManagerNotFound("Strict getting of manager is True yet the manager cannot be resolved.")
-        manager = AsyncioLoopManager()
+        manager = AsyncioLoopManager(current)
         REGISTRY[current.ident] = {id: manager}
     return manager
 
@@ -273,7 +273,14 @@ class AsyncioLoopManager:
     This is the list of created instances.
     """
     
-    def __init__(self):
+    def __init__(self, creator_thread: Optional[threading.Thread] = None):
+        """
+        Initialize the threadpool.
+        
+        Args:
+            creator_thread (Optional[threading.Thread]): This is the thread responsible for this manager.'
+        """
+        self._creator_thread = creator_thread
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
         self._task_type: Optional[str] = None
@@ -380,3 +387,9 @@ class AsyncioLoopManager:
             self._loop = None
             self._thread = None
             self._task_type = None
+
+    def __str__(self):
+        return f"<{self.__class__.__name__} creator_thread={self._creator_thread}>"
+    
+    def __repr__(self):
+        return f"<{self.__class__.__name__} creator_thread={self._creator_thread}>"

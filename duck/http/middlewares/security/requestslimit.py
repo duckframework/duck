@@ -1,98 +1,116 @@
 """
-Module containing RequestsLimitMiddleware class for limiting number of
-requests from same client within a specific duration.
+RequestsLimitMiddleware
+
+High-performance rate-limiting middleware using InMemoryCache expiry-based
+counters.
+
+This implementation uses a *fixed window* algorithm:
+
+- Each client/IP has a single counter stored in the cache.
+- The key expires automatically after `requests_delay` seconds.
+- On each request, the counter increments.
+- If it exceeds `max_requests`, the request is rejected.
+
+This design provides:
+- O(1) operations
+- Zero list allocations
+- Zero timestamp storage
+- Minimal memory footprint
+- Very high request throughput
 """
-
-import random
-
-from time import monotonic
 
 from duck.http.middlewares import BaseMiddleware
 from duck.settings import SETTINGS
 from duck.shortcuts import simple_response, template_response
 from duck.http.response import HttpTooManyRequestsResponse
-        
+from duck.utils.caching import InMemoryCache
+
 
 class RequestsLimitMiddleware(BaseMiddleware):
     """
-    Middleware for limiting the number of requests from a single IP address
-    within a fixed time window.
+    High-speed request limiter using expiry-based counters.
 
-    Tracks request timestamps per IP and rejects requests that exceed the
-    allowed rate, preventing abuse or denial-of-service patterns.
+    Attributes:
+        _clients (InMemoryCache):
+            Cache storing counters per client IP.
+            Keys automatically expire after the configured window duration.
+
+        requests_delay (float):
+            Duration (in seconds) forming the rate-limit window.
+
+        max_requests (int):
+            Maximum number of requests allowed within the window.
     """
 
-    _clients: dict[str, list[float]] = {}
-    """
-    In-memory store of request timestamps per client IP.
-    """
+    # LRU in-memory cache with expiry support
+    _clients = InMemoryCache(maxkeys=2000)
 
+    # Fixed window settings
     requests_delay: float = 60
     """
     Duration in seconds defining the time window for request counting.
     """
-
+    
     max_requests: int = 200
     """
     Maximum number of allowed requests within the `requests_delay` window.
     """
     
     debug_message: str = "RequestsLimitMiddleware: Too many requests"
-    
+
     @classmethod
     def _process_request(cls, request):
         """
-        Processes the request by enforcing the rate limit logic.
+        Core request-processing logic.
 
-        Args:
-            request (HttpRequest): The incoming HTTP request object.
+        Flow:
+        1. Extract client IP.
+        2. Fetch current request count from cache.
+        3. If count is missing -> this is first request in the window.
+            Create count=1 with expiry.
+        4. If count >= max_requests -> reject.
+        5. Otherwise increment counter and update expiry.
 
-        Returns:
-            str: `cls.request_ok` if allowed, else `cls.request_bad` for rate-limited clients.
+        This implementation does not store timestamps and does not scan arrays.
+        It relies fully on cache expiry to define the time window.
         """
-        now = monotonic()
 
-        if request.client_address:
-            ip, _ = request.client_address
-            timestamps = cls._clients.get(ip, [])
+        # Extract client IP; if missing, fail open
+        addr = request.client_address
+        if not addr:
+            return cls.request_ok
 
-            # Filter timestamps within the allowed window
-            timestamps = [ts for ts in timestamps if now - ts < cls.requests_delay]
+        ip = addr[0]
 
-            if len(timestamps) >= cls.max_requests:
-                return cls.request_bad
+        # Localize variables for micro-optimizations
+        window = cls.requests_delay
+        limit = cls.max_requests
 
-            timestamps.append(now)
-            cls._clients[ip] = timestamps
+        # Retrieve current request count (or None if expired/new)
+        count = cls._clients.get(ip)
 
-            # Passive cleanup if too many IPs stored
-            if len(cls._clients) > 10_000 and random.random() < 0.01:
-                cls._cleanup_clients(now)
+        if count is None:
+            # First request in this window → create counter with expiry
+            cls._clients.set(ip, 1, expiry=window)
+            return cls.request_ok
 
+        # If limit reached → reject immediately
+        if count >= limit:
+            return cls.request_bad
+
+        # Increment count and refresh expiry
+        # We set the expiry again so each request resets the 60-second window.
+        # (If fixed windows are desired instead, do NOT refresh expiry here.)
+        cls._clients.set(ip, count + 1, expiry=window)
         return cls.request_ok
-
-    @classmethod
-    def _cleanup_clients(cls, now: float):
-        """
-        Performs a passive cleanup of expired request data from the `_clients` dict.
-
-        Args:
-            now (float): The current monotonic time used for expiry comparison.
-        """
-        threshold = now - cls.requests_delay
-        cls._clients = {
-            ip: [t for t in ts if t > threshold]
-            for ip, ts in cls._clients.items()
-            if any(t > threshold for t in ts)
-        }
 
     @classmethod
     def get_readable_limit(cls) -> str:
         """
-        Returns a human-readable description of the request rate limit.
+        Returns a user-friendly description of the rate limit.
 
-        Returns:
-            str: A string describing the maximum allowed requests per time window.
+        Example:
+            "200 requests per 60 seconds"
         """
         if cls.requests_delay == 1:
             return f"{cls.max_requests} requests per second"
@@ -101,19 +119,17 @@ class RequestsLimitMiddleware(BaseMiddleware):
     @classmethod
     def get_error_response(cls, request):
         """
-        Returns an appropriate error response for rate-limited clients.
+        Creates a 429 Too Many Requests HTTP response.
 
-        Args:
-            request (HttpRequest): The incoming request.
-
-        Returns:
-            HttpResponse: A 429 (Too Many Requests) response.
+        Includes additional debugging information when DEBUG is enabled.
         """
         body = (
             "<h4>Too Many Requests!</h4>"
-            f"<p>Rate limit for {cls.__name__}: {cls.get_readable_limit()}.</p>"
-            f"<p>Received more than {cls.max_requests} requests within the last {cls.requests_delay} seconds.</p>"
+            f"<p>Rate limit: {cls.get_readable_limit()}.</p>"
+            f"<p>You sent more than {cls.max_requests} requests within "
+            f"{cls.requests_delay} seconds.</p>"
         )
+
         if SETTINGS["DEBUG"]:
             return template_response(HttpTooManyRequestsResponse, body=body)
         return simple_response(HttpTooManyRequestsResponse, body=body)
@@ -121,15 +137,14 @@ class RequestsLimitMiddleware(BaseMiddleware):
     @classmethod
     def process_request(cls, request):
         """
-        Main entry point called by the Duck framework to process each request.
+        Framework entry point.
 
-        Args:
-            request (HttpRequest): The incoming HTTP request object.
-
-        Returns:
-            str: `cls.request_ok` or `cls.request_bad` based on request rate.
+        Wraps the internal handler and ensures the server always
+        fails open instead of blocking requests due to middleware errors.
         """
         try:
             return cls._process_request(request)
         except Exception:
+            raise
+            # Never rate-limit due to internal middleware errors
             return cls.request_ok

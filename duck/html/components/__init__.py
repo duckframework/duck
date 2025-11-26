@@ -826,7 +826,7 @@ class HtmlComponent:
                  level = uid.count(".")
                  if level > max_nesting_level:
                      logger.warn(
-                         f"Warning: The component {component} is deeply nested at level {level} "
+                         f"The component {component} is deeply nested at level {level} "
                          "and has event bindings attached. Updates to this component may be slow due to increased DOM traversal, "
                         "layout recalculations, and event propagation overhead. "
                         f"Consider reducing nesting depth to {max_nesting_level} or optimizing event handling.\n",

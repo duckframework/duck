@@ -485,7 +485,7 @@ class Automation:
                 self._async_task = task
             
             # Execute asynchronous task
-            loop_manager = get_or_create_loop_manager(strictly_get=True)
+            loop_manager = get_or_create_loop_manager(strictly_get=True, id="automations-loop-manager")
             loop_manager.submit_task(async_task_wrapper())
             
         else:

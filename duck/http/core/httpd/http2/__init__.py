@@ -272,6 +272,10 @@ class BaseHTTP2Server(BaseServer):
             except Exception as e:
                 future.set_exception(e)
                 logger.log_exception(e)
+            
+            finally:
+                if not protocol.sync_queue.is_empty():
+                    protocol.sync_queue.task_done()
                 
     # ASYNCHRONOUS IMPLEMENTATIONS
      

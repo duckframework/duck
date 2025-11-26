@@ -255,7 +255,7 @@ class LivelyWebSocketView(WebSocketView):
                     logger.log("Error whilst handling lively operation for ws client: ", level=logger.WARNING)
                     logger.log_exception(e)
 
-            
+ 
 class EventHandler:
     """
     Event handler for incoming WebSocket messages.

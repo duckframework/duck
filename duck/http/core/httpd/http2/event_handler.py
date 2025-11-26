@@ -190,8 +190,7 @@ class EventHandler:
             stream_id (int): The HTTP/2 stream ID that was reset.
         """
         # Remove stream request data if exists
-        if self.stream_data.has(stream_id):
-            self.stream_data.pop(stream_id)
+        self.stream_data.pop(stream_id, None)
             
         # Cancel flow control future if one exists
         future = self.flow_control_futures.pop(stream_id, None)
