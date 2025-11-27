@@ -4,6 +4,7 @@ Module to represent a request/response Content class.
 import gzip
 import zlib
 import fnmatch
+
 from typing import Tuple
 
 from duck.exceptions.all import ContentError
@@ -13,7 +14,10 @@ from duck.http.mimes import (
 )
 from duck.settings import SETTINGS
 
+
+# Set Compression Configuration
 CONTENT_COMPRESSION = SETTINGS["CONTENT_COMPRESSION"]
+
 COMPRESSION_ENCODING = CONTENT_COMPRESSION.get(
     "encoding", "identity",
 )  # defaults to gzip

@@ -20,6 +20,7 @@ import json
 import sys
 import re
 
+
 class SafeCodeSandbox:
     """
     Enhanced Secure Python Code Sandbox:
@@ -87,7 +88,6 @@ class SafeCodeSandbox:
         for banned in blocked_builtins:
             if re.search(rf'\b{banned}\b', code):
                 raise ValueError(f"Blocked usage: {banned}")
-
         return code
 
     def run_in_subprocess(self, py_code: str, variable_name: str, temp_dir: str) -> dict:
@@ -175,8 +175,8 @@ except Exception as e:
                 text=True,
                 timeout=2,
             )
-
             output = process.stdout.strip()
+            
             if output:
                 return json.loads(output)
             else:
@@ -184,8 +184,10 @@ except Exception as e:
 
         except subprocess.TimeoutExpired:
             return {"error": "Execution time limit exceeded"}
+        
         except json.JSONDecodeError:
             return {"error": "Invalid JSON output from subprocess"}
+        
         except Exception:
             return {"error": traceback.format_exc()}
 

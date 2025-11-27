@@ -16,11 +16,10 @@ def parse_headers_from_bytes(data: bytes, delimiter: str = "\r\n") -> Dict[str, 
         Dict[str, List[str]]: A dictionary with header names as keys (in lowercase) and lists of their respective values.
     """
     assert isinstance(data, bytes), "Only bytes is allowed as data."
-    delimiter = (delimiter.decode("utf-8") if isinstance(delimiter, bytes) else delimiter)
     
+    delimiter = (delimiter.decode("utf-8") if isinstance(delimiter, bytes) else delimiter)
     data = data.strip().decode("utf-8")
     lines = data.split(delimiter)
-
     headers: Dict[str, List[str]] = {}
 
     # Parse each line and add to headers dictionary
@@ -35,5 +34,4 @@ def parse_headers_from_bytes(data: bytes, delimiter: str = "\r\n") -> Dict[str, 
                 headers[header].append(value)
             else:
                 headers[header] = [value]
-
     return headers

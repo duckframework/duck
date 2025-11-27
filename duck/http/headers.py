@@ -9,6 +9,9 @@ class Headers(dict):
     """
     Headers class for representing request or response headers.
     """
+    
+    __slots__ = ()
+    
     def titled_headers(self):
         """
         Returns headers in title format rather than small cased

@@ -284,6 +284,7 @@ class AsyncioLoopManager:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
         self._task_type: Optional[str] = None
+        self._id = id(self)
         AsyncioLoopManager.__instances.append(self)
         
     @classmethod
@@ -320,7 +321,7 @@ class AsyncioLoopManager:
             self._loop.run_forever()
 
         if self._thread is None or not self._thread.is_alive():
-            self._thread = threading.Thread(target=run_loop)
+            self._thread = threading.Thread(target=run_loop, daemon=True)
             self._thread.start()
         else:
             raise RuntimeError("Asyncio loop is not None and event loop's thread is alive.")
@@ -383,13 +384,13 @@ class AsyncioLoopManager:
         if self._loop:
             self._loop.call_soon_threadsafe(self._loop.stop)
             if self._thread:
-                self._thread.join()
+                self._thread.join(1)
             self._loop = None
             self._thread = None
             self._task_type = None
 
     def __str__(self):
-        return f"<{self.__class__.__name__} creator_thread={self._creator_thread}>"
+        return f"<{self.__class__.__name__} id='{self._id}', creator_thread={self._creator_thread}>"
     
     def __repr__(self):
-        return f"<{self.__class__.__name__} creator_thread={self._creator_thread}>"
+        return f"<{self.__class__.__name__} id='{self._id}', creator_thread={self._creator_thread}>"

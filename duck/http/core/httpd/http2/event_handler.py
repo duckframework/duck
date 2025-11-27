@@ -42,6 +42,17 @@ class EventHandler:
     
     This handles `h2` events asynchrously.
     """
+    
+    __slots__ = {
+        "protocol",
+        "conn",
+        "server",
+        "stream_data",
+        "flow_control_futures",
+        "async_tasks",
+        "event_map",
+    }
+    
     def __init__(self, protocol, server):
         self.protocol = protocol
         self.conn = protocol.conn

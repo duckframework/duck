@@ -13,7 +13,8 @@ class EventList(list):
     before any item is inserted or deleted (including through methods like append,
     extend, pop, remove, clear, slice assignment, etc.).
     """
-
+    __slots__ = {"_on_new_item", "_on_delete_item"}
+    
     def __init__(
         self,
         initlist=None,
@@ -120,7 +121,6 @@ class EventList(list):
                 self.on_delete_item(item)
         else:
             self.on_delete_item(self[index])
-
         super().__delitem__(index)
 
     def __setitem__(self, index, value):

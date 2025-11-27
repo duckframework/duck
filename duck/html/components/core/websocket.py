@@ -57,6 +57,8 @@ class LivelyWebSocketView(WebSocketView):
         "event_handler",
     )
     
+    RECEIVE_TIMEOUT = 240 # Default is 120 (2 minutes)
+    
     def __init__(self, request, **kwargs):
         super().__init__(request, **kwargs)
         self.execution_futures: Dict[str, asyncio.Future] = {}

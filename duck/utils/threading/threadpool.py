@@ -260,6 +260,7 @@ class ThreadPoolManager:
         self._max_workers: Optional[int] = None
         self._daemon: Optional[bool] = None
         self._task_type: Optional[str] = None
+        self._id = id(self)
         ThreadPoolManager.__instances.append(self)
     
     @classmethod
@@ -309,16 +310,11 @@ class ThreadPoolManager:
             self._max_workers = max_workers
             self._daemon = daemon
             self._task_type = task_type
-
-            def thread_factory(*args, **kwargs):
-                t = threading.Thread(*args, **kwargs)
-                t.daemon = daemon
-                return t
-
+            
             self._pool = concurrent.futures.ThreadPoolExecutor(
                 max_workers=self._max_workers,
                 thread_name_prefix=thread_name_prefix,
-                initializer=None
+                initializer=self._worker_init,
             )
 
             # Mark threads daemon if requested
@@ -384,8 +380,14 @@ class ThreadPoolManager:
             self._pool.shutdown(wait=wait)
             self._pool = None
     
+    def _worker_init(self):
+        """
+        Method called when worker thread is initialized.
+        """
+        pass
+        
     def __str__(self):
-        return f"<{self.__class__.__name__} creator_thread={self._creator_thread}>"
+        return f"<{self.__class__.__name__} id='{self._id}', max_workers={self._max_workers}, creator_thread={self._creator_thread}>"
     
     def __repr__(self):
-        return f"<{self.__class__.__name__} creator_thread={self._creator_thread}>"
+        return f"<{self.__class__.__name__} id='{self._id}', max_workers={self._max_workers}, creator_thread={self._creator_thread}>"

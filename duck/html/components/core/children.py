@@ -50,7 +50,7 @@ class ChildrenList(EventList):
         """
         Attach a new child to this component, ensuring correct parent/root.
         """
-    
+        
         if not isinstance(child, Component):
             raise ComponentError(
                 f"Child {child} must be an instance of HtmlComponent, not {type(child)}."
@@ -77,7 +77,7 @@ class ChildrenList(EventList):
             child.root = new_root
             if isinstance(child, InnerComponent) and child.children:
                 self._update_root_iterative(child, new_root)
-        
+                
         # Call on_parent event.
         child.on_parent(current)
         

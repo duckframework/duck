@@ -90,6 +90,15 @@ class URL:
     
     This class works on urls without scheme unlike urllib.parse and other libraries.
     """
+    
+    __slots__ = {
+        "scheme",
+        "netloc",
+        "path",
+        "query",
+        "fragment",
+    }
+    
     def __init__(self, url: str, normalize_url: bool = True, normalization_ignore_chars: Optional[List[str]] = None):
         self.scheme = ''
         self.netloc = ''

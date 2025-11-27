@@ -48,12 +48,17 @@ def generate_server_cert():
     csr_path = SETTINGS["SSL_CSR_LOCATION"]
     certfile_path = SETTINGS["SSL_CERTFILE_LOCATION"]
     private_key_path = SETTINGS["SSL_PRIVATE_KEY_LOCATION"]
-    logger.log("Generating SSL certificate to use for HTTPS",
-               level=logger.DEBUG)
+    
+    logger.log(
+        "Generating SSL certificate to use for HTTPS",
+        level=logger.DEBUG,
+    )
+    
     logger.log(
         "This will generate a self-signed certificate for development.",
         level=logger.DEBUG,
     )
+    
     logger.log(
         "For production, please submit the CSR (Certificate Signing Request) to trusted CA (Certificate Authority) for "
         "signing to ensure browser compatibility and trust.\n",
@@ -66,9 +71,7 @@ def generate_server_cert():
         overwrite_existing = input(
             "SSL certfile and key pair already exist. Overwrite existing (y/N): "
         )
-
         print()
-
         if not overwrite_existing.lower().startswith("y"):
             logger.log("Cancelled SSL Certificate generation",
                        level=logger.DEBUG)

@@ -718,7 +718,7 @@ class HtmlComponent:
         """
         Fallback method to retrieve the html element tag.
         """
-        raise NotImplementedError(f"Method `get_element` is not implemented yet the element argument is empty or None. This is a fallback method.")
+        raise NotImplementedError(f"Fallback method `get_element` is not implemented yet the 'element' argument is empty or None.")
     
     def on_create(self):
         """

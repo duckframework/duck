@@ -6,7 +6,9 @@ class QueryDict(dict):
     """
     A dictionary subclass that allows multiple values for a single key.
     """
-
+    
+    __slots__ = ()
+    
     def __repr__(self):
         return f"<{self.__class__.__name__} {super().__repr__()}>"
 
@@ -22,7 +24,9 @@ class QueryDict(dict):
             super().__setitem__(key, [value])
 
     def __setitem__(self, key: str, value) -> None:
-        """Ensures values are always stored as lists."""
+        """
+        Ensures values are always stored as lists.
+        """
         if key in self:
             existing_value = super().__getitem__(key)
             if isinstance(existing_value, list):
@@ -43,12 +47,16 @@ class QueryDict(dict):
         raise KeyError(f"Key '{key}' not found")
 
     def __delitem__(self, key: str) -> None:
-        """Deletes a key from the QueryDict."""
+        """
+        Deletes a key from the QueryDict.
+        """
         if key in self:
             super().__delitem__(key)
 
     def update(self, other=None, **kwargs) -> None:
-        """Merges values instead of replacing them."""
+        """
+        Merges values instead of replacing them.
+        """
         if other:
             if isinstance(other, dict):
                 for key, value in other.items():
@@ -64,45 +72,65 @@ class QueryDict(dict):
             self.appendlist(key, value)
 
     def get(self, key: str, default=None):
-        """Retrieves the first value for a key, or `default` if not found."""
+        """
+        Retrieves the first value for a key, or `default` if not found.
+        """
         return self[key] if key in self else default
 
     def getlist(self, key: str, default=None):
-        """Retrieves all values for a key as a list."""
+        """
+        Retrieves all values for a key as a list.
+        """
         return super().get(key, default if default is not None else [])
 
     def setlist(self, key: str, values: list) -> None:
-        """Sets a key to multiple values, replacing existing ones."""
+        """
+        Sets a key to multiple values, replacing existing ones.
+        """
         if not isinstance(values, list):
             raise TypeError("setlist() expects a list")
         super().__setitem__(key, values)
 
     def pop(self, key: str, default=None):
-        """Removes a key and returns its list of values."""
+        """
+        Removes a key and returns its list of values.
+        """
         return super().pop(key, default)
 
     def poplist(self, key: str, default=None):
-        """Removes a key and returns its values as a list."""
+        """
+        Removes a key and returns its values as a list.
+        """
         return super().pop(key, default if default is not None else [])
 
     def keys(self):
-        """Returns all keys in the QueryDict."""
+        """
+        Returns all keys in the QueryDict.
+        """
         return super().keys()
 
     def values(self):
-        """Returns all values in the QueryDict."""
+        """
+        Returns all values in the QueryDict.
+        """
         return super().values()
 
     def items(self):
-        """Returns all key-value pairs in the QueryDict."""
+        """
+        Returns all key-value pairs in the QueryDict.
+        """
         return super().items()
 
     def copy(self):
-        """Returns a copy of the QueryDict."""
+        """
+        Returns a copy of the QueryDict
+        ."""
         return QueryDict(self)
 
     def clear(self) -> None:
-        """Removes all items from the QueryDict."""
+        """
+        Removes all items from the QueryDict.
+        """
         super().clear()
 
 
@@ -111,7 +139,9 @@ class FixedQueryDict(QueryDict):
     A custom dictionary-like class that accepts a dictionary with any number of keys.
     This class does not support deletion or modification of keys but only modification of values.
     """
-
+    
+    __slots__ = ("_data", "_keys")
+    
     def __init__(self, data: dict):
         """
         Initializes the FixedQueryDict with a dictionary of any number of keys.
@@ -124,7 +154,6 @@ class FixedQueryDict(QueryDict):
         """
         if not isinstance(data, dict):
             raise ValueError("Input must be a dictionary.")
-
         self._data = data
         self._keys = set(data.keys())
 
