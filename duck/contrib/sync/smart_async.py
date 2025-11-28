@@ -1,3 +1,4 @@
+
 """
 Smart module for high-concurrency async execution of synchronous callables,
 with intelligent handling of transactional/atomic operations.
@@ -62,6 +63,7 @@ import inspect
 import threading
 import contextvars
 
+from math import ceil
 from functools import wraps, partial
 from typing import (
     Any,
@@ -69,6 +71,7 @@ from typing import (
     TypeVar,
     Optional,
     Dict,
+    List,
 )
 
 from duck.exceptions.all import SettingsError
@@ -242,22 +245,114 @@ class TransactionThread(threading.Thread):
 
 class TransactionThreadPool:
     """
-    Dynamically scalable pool of transaction threads for concurrent atomic operations.
-    Ensures thread affinity for transaction contexts.
-    Scales up to max_threads as needed.
+    Dynamically scalable pool of TransactionThread objects.
+
+    Features:
+    - Context-affinity: threads created with a context_id are stored and reused for that context.
+      These threads are NOT auto-freed, because callers may rely on persistent context-affinity.
+    - General threads: threads without context_id are pooled and may be auto-freed when there are
+      more idle general threads than the configured 'general_threads_free_level' percentage.
+    - Thread creation is bounded by max_threads. max_threads applies to both context and general threads.
     """
-    def __init__(self, max_threads: Optional[int] = None):
+
+    def __init__(
+        self,
+        max_threads: Optional[int] = None,
+        auto_free_general_threads: bool = True,
+        general_threads_free_level: int = 50,
+    ):
+        """
+        Initialize the thread pool.
+
+        Args:
+            max_threads (Optional[int]): Maximum number of threads to create (per context/non-context threads). If None will
+                use a reasonable default from `duck.utils.threading.get_max_workers()`.
+            auto_free_general_threads (bool): If True, extra idle general threads will be automatically
+                shut down when the pool has more idle threads than the configured free level.
+            general_threads_free_level (int): percentage (0-100) of general threads to keep free before
+                freeing additional idle threads. For example, 50 keeps at least half of the general
+                free threads; any extra idle threads will be candidates for freeing.
+        """
         from duck.utils.threading import get_max_workers
         
         self.max_threads = max_threads or get_max_workers()
         self.threads: Dict[str, TransactionThread] = {}  # context_id -> thread
         self.general_threads: List[TransactionThread] = []                  # threads for non-context tasks
+        self.auto_free_general_threads = auto_free_general_threads
+        self.general_threads_free_level = min(max(int(general_threads_free_level), 0), 100) # Clamp free level to [0, 100]
         self.lock = threading.Lock()
         self.counter = 0
 
+    def _maybe_free_general_threads(self, ignore_threads: Optional[List[TransactionThread]] = None) -> None:
+        """
+        Free extra idle general threads to respect `general_threads_free_level`.
+        
+        Args:
+            ignore_threads (Optional[List[TransactionThread]]): This is a list of threads to ignore when freeing threads. This 
+                may be useful in cases, you want to free but excluding some thread you wanna use.
+                
+        Calculation:
+        ```py
+        desired_free_threads = ceil(max_threads * (free_level / 100))
+        if current_free_threads > desired_free_threads:
+            free (current_free_threads - desired_free_threads) # (but keep at least one general thread).
+        ```
+        """
+        ignore_threads = ignore_threads or []
+        
+        # Never use nested `with lock` on same lock 
+        if not self.auto_free_general_threads:
+            return
+
+        total = len(self.general_threads)
+            
+        if total <= 1:
+            # Always keep at least one general thread to avoid constant recreation
+            return
+            
+        current_free_threads = [t for t in self.general_threads if t.is_free()]
+        current_free_threads = len(current_free_threads)
+        desired_free_threads = ceil(self.max_threads * (self.general_threads_free_level / 100.0))
+        
+        # Ensure at least 1 desired free
+        desired_free_threads = max(1, desired_free_threads)
+        
+        if current_free_threads <= desired_free_threads:
+            return  # nothing to free
+                
+        # Calculate number to free
+        num_to_free = current_free_threads - desired_free_threads
+        
+        # Avoid freeing so many that we'd end up with zero general threads
+        max_removable = total - 1
+        num_to_free = min(num_to_free, max_removable)
+        removed = 0 # Initialize removed threads
+        
+        # Prefer to remove the oldest idle threads (iterate in list order)
+        for t in self.general_threads:
+            if removed < num_to_free and t not in ignore_threads and t.is_free():
+                try:
+                    t.shutdown()
+                    t.join(.01)
+                    self.general_threads.remove(t)
+                except Exception:
+                    raise # reraise any exception
+                
+                # Increment removed and continue     
+                removed += 1
+                continue
+                
     def get_thread(self, context_id: Optional[str] = None) -> TransactionThread:
         """
-        Returns the appropriate thread to run the tasks on.
+        Return a `TransactionThread` appropriate for the provided `context_id`.
+
+        If a `context_id` is given, the pool attempts to return a dedicated thread for that context,
+        creating one if necessary (and if under `max_threads`). Context-bound threads are not
+        auto-freed by the pool.
+
+        If `context_id` is None, returns an available general thread if free, otherwise may create a
+        new general thread (subject to `max_threads`). This method may trigger auto-freeing of
+        extra general threads when appropriate.
         
         Args:
             context_id (Optional[str]): This is the context ID of the thread that is needed to run the task.
@@ -286,21 +381,42 @@ class TransactionThreadPool:
                 reused_context = list(self.threads.values())[rr_idx]
                 return reused_context
             
-            # Non-context: use/reuse thread (max max_threads for fairness)
-            if len(self.general_threads) < self.max_threads:
+            # Handle general threads (no context)
+            if len(self.general_threads) == 0:
+                # No available threads yet, create one
                 thread = TransactionThread()
                 self.general_threads.append(thread)
                 return thread
-            
+                    
             # Round robin over available general threads. If thread is not free try other ones if any is free.
             thread = self.general_threads[self.counter % len(self.general_threads)]
+            
+            # If chosen thread is busy, attempt to find another free one
             if not thread.is_free():
                 for t in self.general_threads:
                     if t.is_free():
                         return t
-                        
+                
+                # Chosen thread is not free yet there is no available free thread.
+                # No free general thread found; create another if allowed
+                # Non-context: use/reuse thread (max max_threads for fairness)
+                if len(self.general_threads) < self.max_threads:
+                    thread = TransactionThread()
+                    self.general_threads.append(thread)
+                    
+                    # After adding, see if we should free any extras (keeps pool from growing uncontrolled)
+                    self._maybe_free_general_threads(ignore_threads=[thread])
+                    
+                    # Return the new thread.
+                    return thread
+            
             # Return round-robined thread
             self.counter += 1
+            
+            # After returning a thread, we can attempt to free extras (this call is safe and fast)
+            self._maybe_free_general_threads(ignore_threads=[thread])
+            
+            # Return respective thread.
             return thread
 
     def submit(self, func: Callable[..., T], *args, context_id=None, **kwargs) -> asyncio.Future:
@@ -310,8 +426,12 @@ class TransactionThreadPool:
         
         Returns:
             asyncio.Fututure: An asynchronous future you can wait for in async context.
+        
+        Raises:
+            AssertionError: If the returned thread from `get_thread` is dead/not running.
         """
         thread = self.get_thread(context_id)
+        assert thread.is_alive(), f"Expected a running thread, but got a dead thread."
         return thread.submit(func, *args, **kwargs)
 
     def shutdown(self, wait: bool = True):

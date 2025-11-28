@@ -158,7 +158,7 @@ class App:
         workers: Optional[int] = None,
         force_https_workers: Optional[int] = None,
         force_worker_processes: bool = False,
-        force_https_force_worker_processes: bool = True,
+        force_https_force_worker_processes: bool = False,
     ):
         """
         Initializes the main Duck application instance.
@@ -190,7 +190,7 @@ class App:
                     
                     Set this flag to `True` only when process isolation is explicitly desired **and** you do not
                     require shared in-memory synchronization between workers.
-            force_https_force_worker_processes (bool): Whether to force use of multiple processes for `HTTPS` redirect app. Defaults to True. 
+            force_https_force_worker_processes (bool): Whether to force use of multiple processes for `HTTPS` redirect app. Defaults to False. 
                     
         Raises:
             ApplicationError: If the provided address is invalid or if multiple main application
