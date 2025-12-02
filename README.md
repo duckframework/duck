@@ -161,7 +161,7 @@ Unlike `nginx` setups, **Duck** simplifies this with a few commands.
 duck makeproject myproject
 cd myproject
 duck django-add "path/to/your/django_project"
-duck runserver --dj
+duck runserver -dj
 ```
 
 ### Notes:
