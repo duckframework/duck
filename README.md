@@ -47,7 +47,9 @@
 20. Comes with built-in web development tools and helpers  
 21. Log management with `duck logs` and file-based logging by default  
 22. Real-time system monitoring for CPU, RAM, Disk usage, and I/O activity with `duck monitor`
-23. Highly **customizable** to fit any use case  
+23. Easily generate app sitemap using command [`duck sitemap`](https://duckframework.xyz/documentation/sitemap.html) or just use 
+       the builtin blueprint [`duck.etc.apps.essentials.blueprint.Sitemap`](https://duckframework.xyz/documentation/sitemap.html) for dynamic cached sitemap serving.
+24. Highly **customizable** to fit any use case  
 
 And more — see [feature list](https://duckframework.xyz/features)
 
