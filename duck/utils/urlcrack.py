@@ -34,7 +34,13 @@ Brian Musakwa <digreatbrian@gmail.com>
 import re
 import os
 
-from typing import Tuple, Union, Optional, List
+from functools import lru_cache
+from typing import (
+    Tuple,
+    Union,
+    Optional,
+    List,
+)
 
 
 __author__ = "Brian Musakwa"
@@ -107,6 +113,13 @@ class URL:
         self.fragment = ''
         self.parse(url, normalize_url, normalization_ignore_chars=normalization_ignore_chars)
     
+    @property
+    def is_absolute(self) -> bool:
+        """
+        Returns boolean on whether this URL is an absolute URL.
+        """
+        return bool(self.scheme)
+        
     @property
     def user_info(self) -> Optional[str]:
         """
@@ -207,6 +220,9 @@ class URL:
         Example:
             > https://duckframework.xyz/some/path + http://digreatbrian.tech/path/endpoint = https://digreatbrian.tech/some/path/endpoint
         """
+        assert isinstance(base_url, str), f"Base URL must be an instance of str not {type(base_url)}"
+        assert isinstance(head_url, str), f"Head URL must be an instance of str not {type(head_url)}"
+        
         base_url_obj = URL(base_url, normalize_url=normalize_urls, normalization_ignore_chars=normalization_ignore_chars)
         head_url_obj = URL(head_url, normalize_url=normalize_urls, normalization_ignore_chars=normalization_ignore_chars)
         
@@ -484,26 +500,56 @@ class URL:
            scheme, netloc, path, query, fragment)
     
     def to_str(self) -> str:
+        return self.build_url_string(
+            scheme=self.scheme,
+            netloc=self.netloc,
+            path=self.path,
+            query=self.query,
+            fragment=self.fragment,
+        )
+    
+    @lru_cache(maxsize=1024)
+    def build_url_string(
+        self,
+        scheme: Optional[str] = None,
+        netloc: Optional[str] = None,
+        path: Optional[str] = None,
+        query: Optional[str] = None,
+        fragment: Optional[str] = None,
+    ) -> str:
         """
         Converts the current URL object to string.
         """
-        url = ''
+        scheme = scheme or ""
+        netloc = netloc or ""
+        path = path or ""
+        query = query or ""
+        fragment = fragment or ""
+            
+        parts = []
         
-        if self.scheme:
-            url += self.scheme + '://'
+        if scheme:
+            parts.append(scheme + '://')
         
-        if self.netloc:
-            url += self.netloc
+        if netloc:
+            parts.append(netloc)
         
-        if self.path:
-            url += self.path
+        if path:
+            parts.append(path)
+            
             # Only add query or fragment if path exists
-            if self.query:
-                url += '?' + self.query
-            if self.fragment:
-                url += '#' + self.fragment
-        if self.netloc:
+            if query:
+                parts.append('?' + query)
+            
+            if fragment:
+                parts.append('#' + fragment)
+        
+        # Build URL        
+        url = "".join(parts)
+        
+        if netloc:
             url = url.strip('/')
+        
         return url
         
     def __repr__(self):

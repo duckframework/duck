@@ -109,7 +109,7 @@ class Meta:
         if uses_ipv6 is None:
             raise MetaError("Variable DUCK_USES_IPV6 not set.")
 
-        return f"{protocol}://{domain}:{port}" if port else f"{protocol}://{domain}"
+        return f"{protocol}://{domain}:{port}" if (port and port not in [80, 443]) else f"{protocol}://{domain}"
 
     @classmethod
     def get_absolute_ws_server_url(cls) -> str:
@@ -144,7 +144,7 @@ class Meta:
             protocol = "ws"
         else:
             protocol = "wss"
-        return f"{protocol}://{domain}:{port}" if port else f"{protocol}://{domain}"
+        return f"{protocol}://{domain}:{port}" if (port and port not in [80, 443]) else f"{protocol}://{domain}"
         
     @classmethod
     def update_meta(cls, data: dict):

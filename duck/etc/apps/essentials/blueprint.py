@@ -12,6 +12,7 @@ from . import views
 
 STATIC_URL = normalize_url_path(str(SETTINGS["STATIC_URL"]))
 MEDIA_URL = normalize_url_path(str(SETTINGS["MEDIA_URL"]))
+ASYNC = SETTINGS['ASYNC_HANDLING']
 
 
 MediaFiles = Blueprint(
@@ -20,7 +21,7 @@ MediaFiles = Blueprint(
     urlpatterns=[
         path(
             f"{MEDIA_URL}/<mediafile>",
-            views.mediafiles_view,
+            views.mediafiles_view if not ASYNC else views.async_mediafiles_view,
             name="mediafiles",
             methods=["GET"],
         ),
@@ -38,8 +39,26 @@ StaticFiles = Blueprint(
     urlpatterns=[
         path(
             f"{STATIC_URL}/<staticfile>",
-            views.staticfiles_view,
+            views.staticfiles_view if not ASYNC else views.async_staticfiles_view,
             name="staticfiles",
+            methods=["GET"],
+        ),
+    ],
+    prepend_name_to_urls=False,
+    enable_template_dir=False,
+    enable_static_dir=False,
+    is_builtin=True,
+)
+
+
+Sitemap = Blueprint(
+    location=__file__,
+    name="sitemap",
+    urlpatterns=[
+        path(
+            f"/sitemap.xml",
+            views.sitemap_view if not ASYNC else views.async_sitemap_view,
+            name="sitemap",
             methods=["GET"],
         ),
     ],

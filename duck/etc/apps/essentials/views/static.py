@@ -87,3 +87,34 @@ def staticfiles_view(request: HttpRequest, staticfile: str):
         return response
     
     return FileResponse(staticfile)
+
+
+async def async_staticfiles_view(request: HttpRequest, staticfile: str):
+    """
+    View for serving staticfiles for the app.
+    """
+    if SETTINGS["DEBUG"]:
+        # Lookup for staticfile in all possible staticfile.
+        staticfile = dev_find_staticfile(staticfile) or ""
+    else:
+        # Lookup for static file from one directory where collectstatic puts all staticfiles.
+        staticfile = joinpaths(STATIC_ROOT, staticfile)
+        
+    if not os.path.isfile(staticfile):
+        if SETTINGS["DEBUG"]:
+            response = not_found404(
+                body=(
+                    f"<p>Nothing matches the provided URI: {request.path}</p>"
+                    "<p>Make sure the static file is available in <strong>global</strong> static dirs or blueprint static dirs.</p>"
+                    "<p>Don't forget to execute <strong>collectstatic</strong> in production.</p>"
+                ),
+            )
+        else:
+            response = not_found404(
+                body=(
+                    f"<p>Nothing matches the provided URI: {request.path}</p>"
+                ),
+            )
+        return response
+    
+    return FileResponse(staticfile)

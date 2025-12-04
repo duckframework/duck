@@ -1,52 +1,10 @@
 """
-Module for duplicating callables (functions and methods) with the same signature.
-
-This module provides a utility function ``duplicate_callable`` that allows you to create a duplicate
-of any given callable (function or method) while retaining its original signature, name, and docstring.
-The duplicated callable can optionally be assigned a custom name and can also have a decorator applied.
-
-Features
---------------
-
-- Duplicates functions and methods while preserving their signature, name, and docstring.
-- Allows assignment of custom names to duplicated callables.
-- Supports applying decorators to the duplicated callables.
-
-Usage Example
--------------------------
-
-```py
-# Define a function to be duplicated
-def example_function(arg1, arg2, kwarg1=None, kwarg2=None):
-    # An example function that takes two positional arguments and two keyword arguments
-    return f"arg1: {arg1}, arg2: {arg2}, kwarg1: {kwarg1}, kwarg2: {kwarg2}"
-
-# Create a duplicate of the function with a custom name
-duplicated_function = duplicate_callable(example_function, new_name="duplicated_function")
-
-# Call the duplicated function
-result = duplicated_function(1, 2, kwarg1="test", kwarg2="example")
-print(result)  
-# Output: arg1: 1, arg2: 2, kwarg1: test, kwarg2: example
-
-# Define a class with a method to be duplicated
-class MyClass:
-    def example_method(self, arg1, arg2, kwarg1=None, kwarg2=None):
-        # An example method that takes two positional arguments and two keyword arguments
-        return f"arg1: {arg1}, arg2: {arg2}, kwarg1: {kwarg1}, kwarg2: {kwarg2}"
-
-# Create a duplicate of the method with a custom name
-MyClass.duplicated_method = duplicate_callable(MyClass.example_method, new_name="duplicated_method")
-
-# Instantiate the class and call the duplicated method
-obj = MyClass()
-result = obj.duplicated_method(1, 2, kwarg1="test", kwarg2="example")
-print(result)  
-# Output: arg1: 1, arg2: 2, kwarg1: test, kwarg2: example
-```
+Module for callable utilities.
 """
 import inspect
 import functools
+
+from types import MethodType, FunctionType
 
 
 def duplicate_callable(callable_obj, new_name=None, decorator=None):
@@ -137,5 +95,55 @@ def duplicate_callable(callable_obj, new_name=None, decorator=None):
     new_callable = create_callable(wrapper)
     new_callable.__name__ = new_name if new_name else callable_obj.__name__
     new_callable.__signature__ = sig
-
     return new_callable
+
+
+def get_callable_type(obj, owner: type = None) -> str:
+    """
+    Return a descriptive type for the given callable.
+
+    Args:
+        obj: Callable object to classify.
+        owner (type, optional): Class owning the callable if known.
+                               Needed only to detect unbound methods.
+
+    Returns:
+        str: One of:
+            - "bound_method"
+            - "unbound_method"
+            - "classmethod"
+            - "staticmethod"
+            - "function"
+            - "callable_object"
+            - "builtin_function"
+            - "unknown"
+    """
+    if inspect.ismethod(obj):
+        return "bound_method"
+    
+    if inspect.isbuiltin(obj):
+        return "builtin_function"
+        
+    if not isinstance(obj, (FunctionType, MethodType)) and callable(obj):
+        return "callable_object"
+
+    if owner is not None:
+        attr = getattr(owner, obj.__name__, None)
+
+        # Classmethod: stored as function but wrapped in descriptor
+        if isinstance(attr, classmethod):
+            return "classmethod"
+
+        # Staticmethod: stored as StaticMethod object
+        if isinstance(attr, staticmethod):
+            return "staticmethod"
+
+        # Unbound method (Python 3 treats as function)
+        if isinstance(obj, FunctionType) and attr is obj:
+            return "unbound_method"
+            
+    if isinstance(obj, FunctionType):
+        # Plain function
+        return "function"
+
+    return "unknown"

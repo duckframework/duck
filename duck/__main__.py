@@ -22,6 +22,7 @@ from duck.cli.commands.service import ServiceCommand
 from duck.cli.commands.integration import DjangoAddCommand
 from duck.cli.commands.logs import LogsCommand
 from duck.cli.commands.monitor import MonitorCommand
+from duck.cli.commands.sitemap import SitemapCommand
 
 
 EXAMPLES = f"""
@@ -143,7 +144,7 @@ def runserver(address, port, domain, settings, ipv6, file, use_django, is_reload
         mainfile=file,
         uses_ipv6=ipv6,
         is_reload=is_reload,
-        workers=(os.cpu_count() or 4) if workers == "auto" else int(workers),
+        workers=(os.cpu_count() or 4) if workers == "auto" else int(workers or 0),
     )
 
 
@@ -215,9 +216,18 @@ def monitor(interval, duck_process, pid, cpu_warning, ram_warning):
     )
 
 
+@cli.group()
+def sitemap():
+    """
+    Create sitemap for Duck.
+    """
+    pass
+
+ 
 # Register subcommands the duck commands.
 ServiceCommand.register_subcommands(main_command=service)
 LogsCommand.register_subcommands(main_command=logs)
+SitemapCommand.register_subcommands(main_command=sitemap)
 
 
 if __name__ == "__main__":

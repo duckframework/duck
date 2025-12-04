@@ -51,6 +51,8 @@ class Frame:
     def __repr__(self):
         return f"<[{self.__class__.__name__} opcode={self.opcode}, fin={self.fin}]>"
 
+    __str__ = __repr__
+    
     def check(self) -> None:
         """
         Check that reserved bits and opcode have acceptable values.

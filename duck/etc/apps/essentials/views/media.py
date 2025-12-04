@@ -37,3 +37,28 @@ def mediafiles_view(request: HttpRequest, mediafile: str):
         return response
     
     return FileResponse(mediafile)
+
+
+async def async_mediafiles_view(request: HttpRequest, mediafile: str):
+    """
+    Asynchronous iew for serving media files for the app.
+    """
+    mediafile = joinpaths(MEDIA_ROOT, mediafile)
+
+    if not os.path.isfile(mediafile):
+        if SETTINGS["DEBUG"]:
+            response = not_found404(
+                body=(
+                    f"<p>Nothing matches the provided URI: {request.path}</p>"
+                    "<p>Make sure the media file is available in <strong>MEDIA_ROOT.</strong>"
+                ),
+            )
+        else:
+            response = not_found404(
+                body=(
+                    f"<p>Nothing matches the provided URI: {request.path}</p>"
+                ),
+            )
+        return response
+    
+    return FileResponse(mediafile)

@@ -144,6 +144,7 @@ class Modal(FlexContainer):
                     
                     // Restore modal height
                     modal.style["height"] = modal._originalHeight || "";
+                    modal.style["min-height"] = modal._originalMinHeight || "";
                   }}
                 }}
                 
@@ -173,10 +174,12 @@ class Modal(FlexContainer):
             
             function setModalHeight(modal) {{
               modal._originalHeight = modal.style["height"];
+              modal._originalMinHeight = modal.style["min-height"];
               const height = document.documentElement.scrollHeight;
               const modalOffsetTop = getOffsetTop(modal);
               const heightPx = (height - modalOffsetTop) + "px";
               modal.style["height"] = heightPx;
+              modal.style['min-height'] = heightPx;
             }}
             
             if (document.readyState !== "complete") {{

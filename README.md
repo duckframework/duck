@@ -62,7 +62,8 @@ And more — see [feature list](https://duckframework.xyz/features)
 7. **DuckSight Hot Reload** – Instead of full reload on file changes, implement **hot reload** for the **DuckSight Reloader**. This is faster and efficient than full reload.
 8. **Internal Updates** – Implement logic for listing and securely applying updates when available, utilizing cryptographic code signing (using standards like TUF) to verify GitHub-sourced updates, protecting against rollbacks, and man-in-the-middle exploits.
 9. ~~**Worker Processes** – Use of worker processes to utilize all available CPU cores for improved request handling.~~
-10. **...and more** – [Request a feature](./feature_request.md)
+10. **Complete Reverse Proxy Server** – **Duck** only acts as reverse proxy for  Django only. Need to make Duck a full-fledged reverse proxy server with optional sticky sessions.
+11. **...and more** – [Request a feature](./feature_request.md)
 
 ---
 
