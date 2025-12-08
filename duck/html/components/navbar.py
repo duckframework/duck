@@ -128,6 +128,7 @@ class NavbarLinks(InnerComponent):
             url = link_item.get("url", "#")
             link = Link(url=url, text=text, props={"class": "nav-link active"})
             link.color = "white"
+            link.style["text-wrap"] = "nowrap"
             list_item = to_component(tag="li", props={'class': 'nav-item'})
             list_item.add_child(link)
             self.add_child(list_item)

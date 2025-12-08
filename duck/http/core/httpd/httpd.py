@@ -233,13 +233,14 @@ class BaseServer:
         """
         host, port = self.addr
         
-        if SETTINGS["DEBUG"]:
-            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            if hasattr(socket, "SO_REUSEPORT"):
-                try:
-                    self.sock.setsockopt(socket.SO_REUSEPORT, socket.SO_REUSEPORT, 1)
-                except OSError:
-                    pass
+        # We were only using sock reuse in DEBUG but we are allowing it for both DEBUG and PRODUCTION for fast 
+        # server restarts. 
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if hasattr(socket, "SO_REUSEPORT"):
+            try:
+                self.sock.setsockopt(socket.SO_REUSEPORT, socket.SO_REUSEPORT, 1)
+            except OSError:
+                pass
                     
         # Bind and listen        
         self.sock.bind(self.addr)  # bind socket to (address, port)
@@ -392,11 +393,18 @@ class BaseServer:
                 server = self.sock
                 
                 # Wait until the server socket is ready (timeout = 1s)
+                start_time = time.time()
                 ready, _, _ = select.select([server], [], [], SETTINGS['SERVER_POLL'])
                 
                 if server in ready:
                     sock = self.accept_and_handle()
-                           
+                
+                # Calculate if total time taken is equal to SERVER_POLL
+                time_taken = time.time() - start_time
+                if time_taken < SETTINGS['SERVER_POLL']:
+                    # Sleep to make total time be equal to server poll
+                    time.sleep(SETTINGS['SERVER_POLL'] - time_taken)
+                                  
             except (ConnectionResetError, BlockingIOError):
                 pass
         

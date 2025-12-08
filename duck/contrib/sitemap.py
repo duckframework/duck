@@ -121,6 +121,7 @@ class SitemapBuilder:
             excludes_ignorecase (bool): Whether to use `re.IGNORECASE` when compiling exclude patterns. Defaults to True.
         """
         # TODO: Improve video indexing by using <video> directive
+        # TODO: Add functionality for including other sitemaps using <sitemap> directive
         self.filepath = str(filepath) if isinstance(filepath, Path) else filepath
         self.save_to_file = bool(save_to_file)
         self.extra_urls = list(extra_urls or [])
