@@ -67,6 +67,7 @@ def cached_view(
     namespace: Optional[Union[str, Callable]] = None,
     skip_cache_attr: str = "skip_cache",
     on_cache_result: Optional[Callable] = None,
+    returns_static_response: bool = False,
 ):
     """
     Decorator for caching view outputs based on selected request attributes
@@ -127,6 +128,11 @@ def cached_view(
         on_cache_result (Optional[Callable]): This is a callable that can be executed upon receiving a result from cache. If some 
             data needs to be reinitialized, you can do this here.
             
+        returns_static_response (bool): By default, If user tries to cache a view which returns either a component or component response whilst 
+            `LivelyComponentSystem` is active and is not disabled on the target component. This may lead to `ViewCachingWarning` being raised. This 
+            tells the system that the component is a static component and cannot be altered directly by users. So setting this to True avoids `ViewCachingWarning` being 
+            logged on safe static components. In the future, this will apply to any dynamic responses.
+        
     Returns:
         Callable: Wrapped view function with caching behavior.
     
@@ -412,6 +418,11 @@ def cached_view(
             """
             from duck.html.components.core.system import LivelyComponentSystem
             
+            if returns_static_response:
+                # The component being returned is a static component and its safe from 
+                # direct user-specific alteration.
+                return
+                
             # Log a warning if components are cached while Lively component system is active
             if LivelyComponentSystem.is_active():
                 if isinstance(result, (ComponentResponse, Component)):

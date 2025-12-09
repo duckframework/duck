@@ -80,7 +80,7 @@ def on_cache_result(request: HttpRequest, cached: HttpResponse):
                 cached.stream._total_read_bytes = cached_data # Update read bytes
 
 
-@cached_view(targets={media_mtime: None}, on_cache_result=on_cache_result) # Cache view based on modified time
+@cached_view(targets={"path": None, media_mtime: None}, on_cache_result=on_cache_result) # Cache view based on modified time
 def mediafiles_view(request: HttpRequest, mediafile: str):
     """
     View for serving media files for the app.
@@ -106,7 +106,7 @@ def mediafiles_view(request: HttpRequest, mediafile: str):
     return FileResponse(mediafile)
 
 
-@cached_view(targets={media_mtime: None}, on_cache_result=on_cache_result) # Cache view based on modified time
+@cached_view(targets={"path": None, media_mtime: None}, on_cache_result=on_cache_result) # Cache view based on modified time
 async def async_mediafiles_view(request: HttpRequest, mediafile: str):
     """
     Asynchronous iew for serving media files for the app.

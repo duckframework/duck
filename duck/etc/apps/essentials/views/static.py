@@ -143,7 +143,7 @@ def on_cache_result(request: HttpRequest, cached: HttpResponse):
                 cached.stream._total_read_bytes = cached_data # Update read bytes
 
 
-@cached_view(targets={static_mtime: None}, on_cache_result=on_cache_result) # Cache view based on modified time
+@cached_view(targets={"path": None, static_mtime: None}, on_cache_result=on_cache_result) # Cache view based on modified time
 def staticfiles_view(request: HttpRequest, staticfile: str):
     """
     View for serving staticfiles for the app.
@@ -170,7 +170,7 @@ def staticfiles_view(request: HttpRequest, staticfile: str):
     return FileResponse(staticfile)
 
 
-@cached_view(targets={static_mtime: None}, on_cache_result=on_cache_result) # Cache view based on modified time
+@cached_view(targets={"path": None, static_mtime: None}, on_cache_result=on_cache_result) # Cache view based on modified time
 async def async_staticfiles_view(request: HttpRequest, staticfile: str):
     """
     View for serving staticfiles for the app.
