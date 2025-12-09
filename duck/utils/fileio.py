@@ -78,6 +78,7 @@ class FileIOStream(io.IOBase):
         "_mode",
         "_file_size",
         "_lock",
+        "_total_read_bytes",
     }
     
     def __init__(
@@ -104,6 +105,7 @@ class FileIOStream(io.IOBase):
         self._pos = 0
         self._mode = mode
         self._file_size = os.path.getsize(filepath) if os.path.exists(filepath) else 0
+        self._total_read_bytes = None # Will be set on read
         
         if open_now:
             self.open()
@@ -148,6 +150,14 @@ class FileIOStream(io.IOBase):
 
         data = self._file.read() if size == -1 else self._file.read(min(size, self.chunk_size))
         self._pos += len(data)
+        
+        # Record total read data
+        if self._total_read_bytes:
+            self._total_read_bytes = b"".join([b"", self._total_read_bytes])
+        else:
+            self._total_read_bytes = data
+        
+        # Return data   
         return data
 
     def write(self, data: bytes) -> int:
@@ -263,6 +273,14 @@ class AsyncFileIOStream(FileIOStream):
                 data = await convert_to_async_if_needed(self._file.read)(min(size, self.chunk_size))
             
             self._pos += len(data)
+            
+            # Record data read upto now
+            if self._total_read_bytes:
+                self._total_read_bytes = b"".join([b"", self._total_read_bytes])
+            else:
+                self._total_read_bytes = data
+            
+            # Return data
             return data
 
     async def write(self, data: bytes) -> int:

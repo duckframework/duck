@@ -578,6 +578,21 @@ class Request:
         raw_request = raw_request.join([b"", b"\r\n\r\n"]).join([b"", self.content or b""])
         return raw_request
     
+    @property
+    def remote_addr(self) -> Tuple[str, int]:
+        """
+        Returns the client remote address and port.
+        """
+        if self.__remote_addr:
+            return self.__remote_addr
+
+        if self.client_socket:
+            try:
+                self.__remote_addr = self.client_socket.getsockname()
+            except socket.error:
+                pass
+        return self.__remote_addr
+        
     @staticmethod
     def extract_cookies_from_request(request) -> Dict[str, str]:
         """
@@ -818,21 +833,6 @@ class Request:
             url += f"{key}=" + "%s" % queries.get(key)
             counter += 1
         return url
-        
-    @property
-    def remote_addr(self) -> Tuple[str, int]:
-        """
-        Returns the client remote address and port.
-        """
-        if self.__remote_addr:
-            return self.__remote_addr
-
-        if self.client_socket:
-            try:
-                self.__remote_addr = self.client_socket.getsockname()
-            except socket.error:
-                pass
-        return self.__remote_addr
     
     def build_meta(self) -> Dict:
         """
