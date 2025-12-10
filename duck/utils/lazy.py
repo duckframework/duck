@@ -70,9 +70,9 @@ class Lazy:
         try:
             return getattr(super().__getattribute__('getresult')(), key)
         except AttributeError as e:
-            raise LazyError(f"Attribute '{key}' not found in lazy-loaded object: {e}")
+            raise LazyError(f"Attribute '{key}' not found in lazy-loaded object: {e}") from e
         except Exception as e:
-            raise LazyError(f"Error accessing attribute '{key}': {e}")
+            raise LazyError(f"Error accessing attribute '{key}': {e}") from e
 
     def __setattr__(self, key, value):
         if key in (*type(self).__slots__, *type(self).__all_private_attrs):

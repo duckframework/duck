@@ -295,8 +295,9 @@ class EventHandler:
         on the component tree.
         """
         from duck.html.components.core.system import LivelyComponentSystem
-        from duck.html.components.page import Page
-        
+        from duck.html.components.page import Page, EventHandlerChain
+        from duck.html.components import HtmlComponent
+         
         root_uid, uid, event_name, value, is_document_event = data
             
         # Retrieve the component and then dispatch the event.
@@ -342,21 +343,27 @@ class EventHandler:
             return
 
         # Execute event and send patches/updates
-        event_handler, update_targets, update_self = component.get_event_info(event_name) if not is_document_event else component.get_document_event_info(event_name)
+        event_handler: Union[Callable, EventHandlerChain]
+        update_targets: Set[HtmlComponent]
+        
+        event_handler, update_targets = component.get_event_info(event_name) if not is_document_event else component.get_document_event_info(event_name)
         update_targets = set(update_targets or [])
-            
-        if update_self:
-            update_targets.add(component)
-            
+        
+        # Continue
         old_vdoms = {c: c.to_vdom() for c in update_targets} # Create targets current VDOM's
-        event_handler_return_value = None # Return value for the event handler
+        event_handler_execution_results: Dict[Callable, Any] = {} # Mapping of event handlers and their return values
         force_updates_patchlist = [] # List of force updates patches already sent to client.
+        is_event_handler_chain = isinstance(event_handler, EventHandlerChain)
         
-        # Execute event handler
-        # Convert handler to async (if handler is synchronous) in case it is doing long tasks to avoid blocking event loop
-        event_handler_coro = convert_to_async_if_needed(event_handler)(component, event_name, value, self.ws_view)
-        event_handler_return_value = await event_handler_coro
-        
+        if not is_event_handler_chain:
+            # Execute event handler
+            # Convert handler to async (if handler is synchronous) in case it is doing long tasks to avoid blocking event loop
+            event_handler_coro = convert_to_async_if_needed(event_handler)(component, event_name, value, self.ws_view)
+            event_handler_execution_results[event_handler] = await event_handler_coro
+        else:
+            event_handler_chain = event_handler
+            event_handler_execution_results = await event_handler_chain.async_execute((component, event_name, value, self.ws_view), restart=False)
+            
         async def on_force_update_patch(patch):
             """
             Action called when new patch found as a result of a force update.
@@ -402,21 +409,25 @@ class EventHandler:
                     nonlocal resolved_component_props_patch_sent
                     resolved_component_props_patch_sent = True
                     
-        # Update force updates
-        if event_handler_return_value:
-            if not isinstance(event_handler_return_value, Iterable):
-                if not isinstance(event_handler_return_value, ForceUpdate):
-                    raise ForceUpdateError(f"Return value for the event handler {event_handler} must be an instance of `ForceUpdate` or a list of ForceUpdate instances not {type(event_handler_return_value)}")
-                # Send force update patch
-                force_update = event_handler_return_value
-                await force_update.generate_patch_and_act(action=on_force_update_patch)
-            else:
-                # Check if the list of updates only include `ForceUpdate` instances else raise an error.
-                check_force_updates(event_handler_return_value)
-                
-                # Send force updates first but avoid resending same patches on DOM patch if an identical patch already sent.
-                for force_update in event_handler_return_value:
+        # Update force updates     
+        # Loop over all return values.
+        for event_handler, event_handler_return_value in event_handler_execution_results.items():
+            if event_handler_return_value:
+                if not isinstance(event_handler_return_value, Iterable):
+                    if not isinstance(event_handler_return_value, ForceUpdate):
+                        raise ForceUpdateError(f"Return value for the event handler {event_handler} must be an instance of `ForceUpdate` or a list of ForceUpdate instances not {type(event_handler_return_value)}")
+                    
+                    # Send force update patch
+                    force_update = event_handler_return_value
                     await force_update.generate_patch_and_act(action=on_force_update_patch)
+                
+                else:
+                    # Check if the list of updates only include `ForceUpdate` instances else raise an error.
+                    check_force_updates(event_handler_return_value)
+                    
+                    # Send force updates first but avoid resending same patches on DOM patch if an identical patch already sent.
+                    for force_update in event_handler_return_value:
+                        await force_update.generate_patch_and_act(action=on_force_update_patch)
                      
         # This is the flag on whether the resolved component was be diffed somehow.
         # This value will be used to track event bindings.

@@ -48,25 +48,23 @@ class Modal(FlexContainer):
             "width": "100vw",
             "height": "100vh",
             "background": "rgba(0, 0, 0, 0.68)", # Slightly stronger dark overlay for dark modals
-            "justify-content": "center",
             "z-index": "1000",
+            "align-items": "center",
             "flex-direction": "column",
             "display": "none", # Hide by default.
             "overflow": "hidden", # Ensures overlay itself doesn't scroll
         }
-        self.style.setdefaults(style)
-
+        self.style.update(style)
+           
         # Modal dialog styles (dark, minimal)
         modal_box_style = {
             "background": "#111",
             "color": "#fff",
             "border-radius": "8px",
-            "padding": "24px 20px",
-            "width": "90%",
-            "max-width": "90%",
+            "width": "100%",
             "box-shadow": "0 8px 30px rgba(0,0,0,0.18)",
-            "position": "fixed",
             "display": "flex",
+            "padding": "24px 20px",
             "align-items": "center",
             "flex-direction": "column",
             "overflow": "auto",              # Only modal content scrolls
@@ -175,9 +173,12 @@ class Modal(FlexContainer):
             function setModalHeight(modal) {{
               modal._originalHeight = modal.style["height"];
               modal._originalMinHeight = modal.style["min-height"];
+              
               const height = document.documentElement.scrollHeight;
               const modalOffsetTop = getOffsetTop(modal);
               const heightPx = (height - modalOffsetTop) + "px";
+              
+              // Set modal height
               modal.style["height"] = heightPx;
               modal.style['min-height'] = heightPx;
             }}
@@ -207,7 +208,17 @@ class Modal(FlexContainer):
         if self.title_heading:
             content_children.append(self.title_heading)
 
-        # Modal content container (FlexContainer for vertical layout)
+        # Modal content container (modal content parent)
+        self.modal_content_container = FlexContainer(
+            style={
+                "flex-direction": "column",
+                "position": "fixed",
+                "height": "100vh",
+            },
+            id="modal-content-container",
+        )
+        
+        # Modal content  (FlexContainer for vertical layout)
         self.modal_content = FlexContainer(
             direction="column",
             style=modal_box_style,
@@ -216,7 +227,8 @@ class Modal(FlexContainer):
         )
 
         # Add modal content.
-        super().add_child(self.modal_content)
+        super().add_child(self.modal_content_container)
+        self.modal_content_container.add_child(self.modal_content)
 
         for child in content_children:
             self.add_child(child)

@@ -161,6 +161,7 @@ from typing import (
     Any,
     Tuple,
     Union,
+    Set,
 )
 
 from duck.utils.lazy import Lazy, LiveResult
@@ -1026,8 +1027,7 @@ class HtmlComponent:
                     
         self._event_bindings[event] = (
             event_handler,
-            update_targets or [],
-            update_self,
+            sync_targets,
         )
         
         # Flag that event bindings changed.
@@ -1054,9 +1054,9 @@ class HtmlComponent:
             if not failsafe:
                 raise UnknownEventError(f"Event '{event}' is not bound to this component: {self}.")
                
-    def get_event_info(self, event: str) -> Tuple[Callable, List["HtmlComponent"], bool]:
+    def get_event_info(self, event: str) -> Tuple[Callable, Set["HtmlComponent"]]:
         """
-        Returns the event info in form: (event_handler, sync_changes_with, sync_changes_with_self).
+        Returns the event info in form: (event_handler, update_targets).
         """
         event_info = self._event_bindings.get(event, None)
         

@@ -89,6 +89,9 @@ from typing import (
     Optional,
     Callable,
     Tuple,
+    Set,
+    Iterable,
+    Any,
 )
 
 from duck.html.components import (
@@ -96,6 +99,7 @@ from duck.html.components import (
     InnerComponent,
     NoInnerComponent,
     to_component,
+    RedundantUpdate,
 )
 from duck.html.components.core.exceptions import UnknownEventError, EventAlreadyBound
 from duck.html.components.extensions import RequestNotFoundError
@@ -108,6 +112,7 @@ from duck.html.components.label import Label
 from duck.html.components.style import Style
 from duck.html.components.modal import Modal
 from duck.html.components.paragraph import Paragraph
+from duck.contrib.sync import convert_to_async_if_needed
 from duck.utils.lazy import Lazy
 
 
@@ -121,6 +126,68 @@ class UnrecommendedAddChildWarning(Warning):
     """
     Warning that gets flagged when a user try to use `add_child` on a **Page** component instead of using `add_to_body` or `add_to_head`.
     """
+
+
+class EventHandlerChainError(PageError):
+    """
+    Raised on exceptions related to event handler chaining.
+    """
+    
+
+class EventHandlerChain:
+    """
+    Class representing an event handler chain.
+    """
+    __slots__ = ("_event_handlers", "_execution_results")
+    
+    def __init__(self):
+        self._event_handlers: Dict[Callable, HtmlComponent] = {}
+        self._execution_results: Dict[Callable, Any] = {}
+     
+    def add_event_handler(self, event_handler: Callable, update_targets: Set["HtmlComponent"]):
+         """
+         Adds new event handler to event handler chain.
+         """
+         self._event_handlers[event_handler] = update_targets
+    
+    def all_update_targets(self) -> Set["HtmlComponent"]:
+        """
+        Returns all update targets for each and every event handler.
+        """
+        update_targets = set()
+        
+        for targets in self._event_handlers.values():
+            for i in targets:
+                update_targets.add(i)
+            
+        return update_targets
+
+    async def async_execute(self, args: Union[Tuple, Iterable], restart: bool = False) -> Dict[Callable, Any]:
+        """
+        Execute all event handlers and return results.
+        
+        Args:
+            args (Union[Tuple, Iterable]): These are positional arguments to parse to event handlers.
+            restart (bool): By default, if this method is called more than once, the actual 
+                event handler execution does not happen and cached results will be returned. This 
+                also mean if some some execution of an event handler fails after execution of other event handlers, 
+                those successful event handlers' results will be cached. Set this to True to execute all event handlers.
+        """
+        if restart:
+            self._execution_results.clear()
+            
+        for event_handler in self._event_handlers.keys():
+            if not restart and event_handler in self._execution_results.keys():
+                continue
+            
+            try:
+                result = await convert_to_async_if_needed(event_handler)(*args)
+                self._execution_results[event_handler] = result
+            except Exception as e:
+                raise EventHandlerChainError(f"Error executing event handler '{event_handler}': {e}")
+        
+        # Return exection results.
+        return self._execution_results
 
 
 class Page(InnerComponent):
@@ -138,7 +205,7 @@ class Page(InnerComponent):
             disable_lively (bool): This disables `Lively` components for the page. Defaults to False.
         """
         self._request = request
-        self._document_event_bindings = {}
+        self._document_event_bindings: Dict[Union[Callable, EventHandlerChain], Set[HtmlComponent]] = {}
         self._add_doctype_declaration = True
         self._domcontentloaded_event_called = False # Will be set on successful DOMContentLoaded event.
         self.disable_lively = disable_lively
@@ -202,6 +269,7 @@ class Page(InnerComponent):
         force_bind: bool = False,
         update_targets: List["HtmlComponent"] = None,
         update_self: bool = True,
+        event_handler_chaining: bool = False,
     ) -> None:
         """
         Bind an event handler to the document object.
@@ -214,7 +282,9 @@ class Page(InnerComponent):
                 when this event is triggered. Defaults to None.
             update_self (bool): Whether this component’s state may change as a result of the event. 
                 If False, only other components will be considered for DOM updates. Defaults to True.
-    
+            event_handler_chaining (bool): This force binding to event even if the event is already bound. This creates a chain of event 
+                handlers that will be executed in order when an event happens.
+            
         Raises:
             UnknownEventError: If the event is not recognized and `force_bind` is False.
             AssertionError: If the event handler is not a callable.
@@ -243,8 +313,11 @@ class Page(InnerComponent):
             "DOMContentLoaded", "DuckNavigated"
         }
         
-        if event in self._document_event_bindings:
-            raise EventAlreadyBound(f"Event `{event}` already bound, please call `document_unbind` first before rebinding.")
+        event_already_bound = event in self._document_event_bindings
+        
+        if event_already_bound:
+            if not event_handler_chaining:
+                raise EventAlreadyBound(f"Event `{event}` already bound, please call `document_unbind` first before rebinding or set `event_handler_chaining=True`.")
             
         if not force_bind and event not in known_events:
             raise UnknownEventError(
@@ -258,6 +331,23 @@ class Page(InnerComponent):
         if update_self:
             sync_targets.add(self)
         
+        if event_already_bound:
+            # Event is already bound so lets use event chaining
+            existing_event_info = self.get_document_event_info(event)
+            existing_event_handler, existing_update_targets = existing_event_info
+            event_handler_chain = None
+            
+            if not isinstance(existing_event_handler, EventHandlerChain):
+                event_handler_chain = EventHandlerChain()
+                event_handler_chain.add_event_handler(existing_event_handler, existing_update_targets)
+                event_handler_chain.add_event_handler(event_handler, sync_targets)
+            else:
+                event_handler_chain = existing_event_handler
+                event_handler_chain.add_event_handler(event_handler, sync_targets)
+            
+            # Assign new event handler and new sync_updates
+            event_handler, sync_targets = event_handler_chain, event_handler_chain.all_update_targets()
+                
         # Checking for repetitive unnecessary updates.
         for target in sync_targets:
             for other in sync_targets:
@@ -276,10 +366,9 @@ class Page(InnerComponent):
                     
         self._document_event_bindings[event] = (
             event_handler,
-            update_targets or [],
-            update_self,
+            sync_targets,
         )
-        
+            
         # Flag event bindings changed.
         self._event_bindings_changed = True
         
@@ -308,9 +397,9 @@ class Page(InnerComponent):
             if not failsafe:
                 raise UnknownEventError(f"Event '{event}' is not bound to the page's document: {self}.")
                 
-    def get_document_event_info(self, event: str) -> Tuple[Callable, List["HtmlComponent"], bool]:
+    def get_document_event_info(self, event: str) -> Tuple[Callable, Set["HtmlComponent"]]:
         """
-        Returns the event info in form: (event_handler, sync_changes_with, sync_changes_with_self).
+        Returns the event info in form: (event_handler, update_targets).
         """
         event_info = self._document_event_bindings.get(event, None)
         if not event_info:
