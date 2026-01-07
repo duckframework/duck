@@ -58,12 +58,12 @@ class VDomNode:
         self.children = children or []
         self.text = text
         self.component = component
-    
-    def __repr__(self):
-        return f'<{self.__class__.__name__} key={self.key}, children={len(self.children)}>'
         
-    def __str__(self):
-        return f'<{self.__class__.__name__} key={self.key}, children={len(self.children)}>'
+        # Check if component is loaded
+        component.raise_if_not_loaded(
+            f"Component {component} is not loaded. "
+            f"This might mean that this is a lazy component."
+        )
         
     def to_list(self) -> list:
         """
@@ -230,4 +230,55 @@ class VDomNode:
             else:
                 # Node exists -> diff recursively
                 await VDomNode.diff_and_act(action, old_child, new_child)
-            
+    
+    def __repr__(self):
+        return f"<{self.__class__.__name__} key='{self.key}', children={len(self.children)}>"
+        
+    __str__ = __repr__
+
+
+class LiveVDomNode(VDomNode):
+    """
+    Custom VDomNode which maintains close relationship with a component.
+    """
+    __slots__ = ("component")
+    
+    def __init__(self, component):
+        """
+        Initialize LiveVDomNode.
+        
+        Args:
+            component: The associated component.
+        """
+        self.component = component
+        
+        # Check if component is loaded
+        component.raise_if_not_loaded(
+            f"Component {component} is not loaded. "
+            f"This might mean that this is a lazy component."
+        )
+     
+    @property
+    def tag(self):
+        return self.component.element or self.component.get_element()
+     
+    @property
+    def key(self):
+        return self.component.uid
+     
+    @property
+    def props(self):
+        return self.component.props
+     
+    @property
+    def style(self):
+        return self.component.style
+     
+    @property
+    def children(self):
+        return [LiveVDomNode(child) for child in getattr(self.component, "children", [])]
+     
+    @property
+    def text(self):
+        from duck.utils.lazy import Lazy
+        return self.component.inner_html if not isinstance(self.component.inner_html, Lazy) else str(self.component.inner_html)

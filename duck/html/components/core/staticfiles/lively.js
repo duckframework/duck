@@ -1188,6 +1188,11 @@ class DOMPatcher {
     if (!pageUid) throw new LivelyError("Page UID is null and could not be resolved from window.LIVELY_APPLICATION.PAGE_UID");
     
     const pageEl = this.getElement(pageUid);
+    
+    // Perform some checks
+    if (!pageEl) throw new LivelyError(`Page element with UID '${pageUid}' could not be resolved.`);
+    
+    // Bind page document events.
     const documentEvents = (pageEl.dataset.documentEvents || "").split(',');
     
     // Finally bind document events.
@@ -1716,6 +1721,7 @@ class NavigationHandler {
       
       // Finally update page UID
       window.LIVELY_APPLICATION.PAGE_UID = nextPageUid;
+      window.PAGE_UID = nextPageUid;
       
       // Update the window history (only if allowed)
       if (!this._noPushState) {

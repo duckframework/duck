@@ -5,6 +5,7 @@ import io
 import re
 import os
 import json
+import asyncio
 
 from http.cookies import SimpleCookie, Morsel
 from inspect import isasyncgen
@@ -43,6 +44,7 @@ from duck.exceptions.all import AsyncViolationError
 from duck.etc.statuscodes import responses
 from duck.utils.string import smart_truncate
 from duck.utils.asyncio import in_async_context
+from duck.utils.threading.threadpool import get_or_create_thread_manager
 from duck.utils.fileio import (
     FileIOStream,
     AsyncFileIOStream,
@@ -507,7 +509,7 @@ class StreamingHttpResponse(HttpResponse):
         - The file is opened lazily when the stream is accessed.
         - The `seek` and `tell` methods allow for random access to the file.
         """
-        return FileIOStream(filepath, chunk_size, open_now=True)
+        return FileIOStream(filepath, chunk_size, open_now=False)
 
     def _read_from_file(self, file_obj: io.IOBase, chunk_size: int = 2 * 1024 * 1024) -> Generator:
         """
@@ -574,7 +576,7 @@ class StreamingHttpResponse(HttpResponse):
         - The file is opened lazily when the stream is accessed.
         - The `seek` and `tell` methods allow for random access to the file.
         """
-        return AsyncFileIOStream(filepath, chunk_size, open_now=True)
+        return AsyncFileIOStream(filepath, chunk_size, open_now=False)
 
     async def _async_read_from_file(self, file_obj: io.IOBase, chunk_size: int = 2 * 1024 * 1024) -> Generator:
         """
@@ -957,6 +959,10 @@ class FileResponse(StreamingRangeHttpResponse):
         else:
             file_stream = StreamingHttpResponse.file_io_stream(filepath)
         
+        if not file_stream.is_open():
+            # Open file stream
+            file_stream.open()
+            
         super().__init__(
             stream=file_stream,
             status_code=status_code,
@@ -1380,14 +1386,26 @@ class ComponentResponse(StreamingHttpResponse):
         if hasattr(component, "fullpage_reload_headers"):
             if any([h.lower() in self.headers for h in component.fullpage_reload_headers]):
                 component.fullpage_reload = True
-    
+                
     def iter_content(self) -> Generator[bytes, None, None]:
         if not self._rendered_component:
+            if not self.component.is_loaded():
+                # This is a lazy component
+                if self.component.is_loading():
+                    self.wait_for_load()
+                else:
+                    self.component.load()
             self._rendered_component = self.component.render()
         yield self._rendered_component.encode('utf-8')
     
     async def async_iter_content(self) -> AsyncGenerator[bytes, None]:
         if not self._rendered_component:
+            if not self.component.is_loaded():
+                # This is a lazy component
+                if self.component.is_loading():
+                    await self.component.async_wait_for_load()
+                else:
+                    await convert_to_async_if_needed(self.component.load)()
             self._rendered_component = await convert_to_async_if_needed(self.component.render)()
         yield self._rendered_component.encode('utf-8')
     

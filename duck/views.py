@@ -68,6 +68,7 @@ def cached_view(
     skip_cache_attr: str = "skip_cache",
     on_cache_result: Optional[Callable] = None,
     returns_static_response: bool = False,
+    freeze_if_component_response: bool = True,
 ):
     """
     Decorator for caching view outputs based on selected request attributes
@@ -132,6 +133,9 @@ def cached_view(
             `LivelyComponentSystem` is active and is not disabled on the target component. This may lead to `ViewCachingWarning` being raised. This 
             tells the system that the component is a static component and cannot be altered directly by users. So setting this to True avoids `ViewCachingWarning` being 
             logged on safe static components. In the future, this will apply to any dynamic responses.
+        
+        freeze_if_component_response (bool): Whether to freeze target component if the result is a component/component response. This boosts performance by `>=50%` and 
+            it only applies if `returns_static_component=True`.
         
     Returns:
         Callable: Wrapped view function with caching behavior.
@@ -485,7 +489,7 @@ def cached_view(
             
             if cached is not None:
                 if on_cache_result:
-                    on_cache_result(request, cached)
+                   on_cache_result(request, cached)
                 return cached
                 
             if not view_obj:
@@ -501,6 +505,13 @@ def cached_view(
             # May log a warning if caching the result may cause issues.
             maybe_warn_user(result)
             
+            if returns_static_response and freeze_if_component_response:
+                if isinstance(result, Component):
+                    result.ensure_freeze() # Freezes component right now or lazily freezes upon load() if component not yet loaded 
+                
+                elif isinstance(result, ComponentResponse):
+                    result.component.ensure_freeze() # Freezes component right now or lazily freezes upon load() if component not yet loaded 
+                    
             # Return live computed result
             return result
         
@@ -584,6 +595,14 @@ def cached_view(
             # May log a warning if caching the result may cause issues.
             maybe_warn_user(result)
             
+            # Freeze component (if applicable)
+            if returns_static_response and freeze_if_component_response:
+                if isinstance(result, Component):
+                    result.ensure_freeze()
+                
+                elif isinstance(result, ComponentResponse):
+                    result.component.ensure_freeze()
+                    
             # Return live computed result
             return result
         

@@ -7,7 +7,10 @@ Utility functions for managing cookie consent in Duck framework apps.
 - Generate a cookie string for use in client-side (JavaScript) dynamic consent banners.
 
 Consent is stored as a JSON-encoded cookie, e.g.:
-    {"analytics": true, "marketing": false}
+
+```json
+{"analytics": true, "marketing": false}
+```
 
 **Recommended usage:**
 - Use the same cookie name (default: "cookie_consent") on both backend and frontend.
@@ -46,7 +49,7 @@ USAGE EXAMPLES
 from duck.utils.cookie_consent import set_cookie_consent, has_cookie_consent
 
 def accept_cookies_view(request):
-    response = simple_response("Consent updated")
+    response = HttpResponse("Consent updated")
     set_cookie_consent(response, {"analytics": True, "marketing": False})
     return response
 

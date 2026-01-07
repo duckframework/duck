@@ -38,7 +38,7 @@ class LivelyScripts(Container):
         
         # Super create
         super().on_create()
-        
+        return
         try:
             # When resolving urls, the result should be absolute as absolute LIVELY_WS_URL may be needed by
             # the Lively client to resolve server domain.

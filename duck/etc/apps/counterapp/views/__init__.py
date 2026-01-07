@@ -9,7 +9,6 @@ formatting this python file.
 
 from duck.views import View
 from duck.shortcuts import static, to_response
-from duck.html.components import LiveResult
 from duck.html.components.container import FlexContainer
 from duck.html.components.heading import Heading
 from duck.html.components.button import Button, FlatButton
@@ -21,7 +20,6 @@ from duck.html.components.code import Code
 
 # Source code for the counter app.
 SOURCE_CODE = """
-from duck.html.components import LiveResult
 from duck.html.components.container import FlexContainer
 from duck.html.components.heading import Heading
 from duck.html.components.button import Button
@@ -40,6 +38,7 @@ class HomePage(Page):
         
         def on_btn_click(btn, *_):
             self.counter += 1
+            self.label.text = self.counter
             
         # Container for components alignment
         self.container = FlexContainer()
@@ -54,7 +53,7 @@ class HomePage(Page):
         self.container.add_child(self.heading)
         
         # Add label
-        self.label = Label(text=LiveResult(lambda: self.counter))
+        self.label = Label(text=self.counter)
         self.label.color = "black"
         self.label.style["font-size"] = "1.5rem"
         self.container.add_child(self.label)
@@ -110,6 +109,7 @@ class HomePage(Page):
             if btn == self.btn:
                 # Increment button
                 self.counter += 1
+                self.label.text = self.counter
             else:
                 if self.code.style.get("display") == "none":
                     btn.text = "Hide source"
@@ -131,7 +131,7 @@ class HomePage(Page):
         self.container.add_child(self.heading)
         
         # Add label
-        self.label = Label(text=LiveResult(lambda: self.counter))
+        self.label = Label(text=self.counter)
         self.label.color = "black"
         self.label.style["font-size"] = "1.5rem"
         self.container.add_child(self.label)

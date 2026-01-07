@@ -1,4 +1,3 @@
-
 """
 Smart module for high-concurrency async execution of synchronous callables,
 with intelligent handling of transactional/atomic operations.

@@ -18,8 +18,8 @@ class MyExtension(Extension):
         # When overriding an existing method, don't forget to call `super()`
         # Do something, e.g. access component keyword arguments through `self.kwargs`
 
-    def on_create(self):
-        super().on_create()
+    def apply_extension(self):
+        super().apply_extension()
         # Modify something or do something
         self.style["background-color"] = "red"
 
@@ -31,8 +31,6 @@ btn.style["background-color"] == "red"  # Outputs: True
 ```
 """
 from typing import Optional, Any, Union
-
-from duck.utils.lazy import Lazy, LiveResult
 
 
 class ExtensionError(Exception):
@@ -60,7 +58,22 @@ class Extension:
     Extensions allow reusable behaviors to be added to components via mixins.
     Override methods like `on_create` or define new ones for extended logic.
     """
-    pass
+    def on_create(self):
+        super().on_create()
+        self.apply_extension() # This applies all extensions in according to MRO
+        
+        if not getattr(self, "_base_extension_applied", False):
+            raise ExtensionError("Seems like extension method `apply_extension` has been overridden but 'super().apply_extension()' has not been called.")
+        
+    def apply_extension(self):
+        """
+        Overrride this method to apply the desired extensions.
+        
+        Notes:
+        - Don't forget to call `super().apply_extensions()` inside the method.
+        - Methods or property definations are applied to the component automatically.
+        """
+        self._base_extension_applied = True
 
 
 class BasicExtension(Extension):
@@ -68,12 +81,14 @@ class BasicExtension(Extension):
     Basic extension for HTML components, providing common properties like `text`, `id`, `bg_color`, and `color`.
     """
 
-    def on_create(self):
+    def apply_extension(self):
         """
-        Called when the component is created. Applies initial values from `kwargs`
+        Apply the extension. Applies initial values from `kwargs`
         for basic properties such as `id`, `klass`, `text`, `bg_color`, and `color`.
         """
-        super().on_create()
+        super().apply_extension()
+        
+        # Apply the current extension
         keys = {"id", "klass", "text", "bg_color", "color"}
         
         for key in keys:
@@ -143,15 +158,15 @@ class BasicExtension(Extension):
         return self.inner_html
 
     @text.setter
-    def text(self, text: Union[str, LiveResult, Lazy]):
+    def text(self, text: Union[str, int, float]):
         """
-        Sets the inner body of the component.
+        Sets the text of the component.
 
         Args:
-            text (Union[str, LiveResult, Lazy]): The new inner content.
+            text (Union[str, int, float]): The new inner content.
         
         Notes:
-            This escapes HTML if found in text. You can disable this by setting `escape_on_text=False` on component.
+            This escapes HTML if found in text. You can disable this by setting `self.escape_on_text=False` on component.
            
         Raises:
             ExtensionError: If the component does not support `inner_html` or if input is not a string, LiveResult or Lazy object.
@@ -162,31 +177,13 @@ class BasicExtension(Extension):
         if not isinstance(self, InnerComponent):
             raise ExtensionError(f"Property `text` can only be used on inner components with `inner_html`, not {type(self)}")
 
-        if not isinstance(text, (str, Lazy)):
-            raise ExtensionError(f"Text must be a valid string, LiveResult or Lazy object, not {type(text)}")
+        if not isinstance(text, (str, int, float)):
+            raise ExtensionError(f"Text must be a valid string, integer or float, not {type(text)}")
         
         if not self.escape_on_text:
-            self.inner_html = text
-            return
-            
-        def escape_lazy_obj(lazy_obj):
-            """
-            Escape HTML on a LiveResult or Lazy object.
-            """
-            getresult = lazy_obj.extra_data["real_getresult"]
-            result = getresult()
-            if isinstance(result, str):
-                result = escape(result)
-            return result
-            
-        if isinstance(text, Lazy):
-            if not text.extra_data.get("escape_on_text"):
-                text.extra_data['real_getresult'] = text.getresult
-                text.getresult = lambda: escape_lazy_obj(text)
-                text.extra_data["escape_on_text"] = True
-        else:
+            text = str(text) if not isinstance(text, str) else text # Convert data to right format
             text = escape(text)
-            
+             
         # Set escaped text.
         self.inner_html = text
 
@@ -399,9 +396,9 @@ class StyleCompatibilityExtension(Extension):
         # Super init
         super().__init__(*args, **kw)
         
-    def on_create(self):
-        super().on_create()
-
+    def apply_extension(self):
+        super().apply_extension()
+        
         def on_style_setitem(key, val):
             """
             Called on setting of style key to apply compatibility keys.
@@ -409,7 +406,8 @@ class StyleCompatibilityExtension(Extension):
             # Add vendor-prefixed versions if applicable
             for compat_key in self.compatibility_keys.get(key, []):
                 self.style.__setitem__(compat_key, val, call_on_set_item_handler=False)
-
+            super_on_set_item(key, val)
+            
         def on_style_delitem(key):
             """
             Called on deletion of a style key.
@@ -419,7 +417,11 @@ class StyleCompatibilityExtension(Extension):
                 for compat_key in self.compatibility_keys.get(key, []):
                     if compat_key in self.style:
                         self.style.__delitem__(compat_key, call_on_delete_item_handler=False)
-
+            super_on_delete_item(key)
+                        
         # Replace the style’s magic methods with our enhanced versions
-        self.style.on_set_item = on_style_setitem
-        self.style.on_delete_item = on_style_delitem
+        super_on_set_item = self.style._on_set_item
+        super_on_delete_item = self.style._on_delete_item
+        
+        self.style._on_set_item = on_style_setitem
+        self.style._on_delete_item = on_style_delitem

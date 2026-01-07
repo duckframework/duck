@@ -22,6 +22,18 @@ class InitializationError(HtmlComponentError):
   """
 
 
+class ComponentCopyError(HtmlComponentError):
+  """
+  Raised on component copy issues.
+  """
+
+
+class ComponentNotLoadedError(HtmlComponentError):
+  """
+  Raised if component is not loaded yet it is required for component to be loaded.
+  """
+
+
 class NoRootError(HtmlComponentError):
     """
     Exception raised for errors when an html component has no root component.

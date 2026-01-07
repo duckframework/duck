@@ -22,6 +22,7 @@ from duck.http.request import HttpRequest
 from duck.http.response import (
     HttpResponse,
     FileResponse,
+    ComponentResponse,
     StreamingHttpResponse,
     StreamingRangeHttpResponse,
     HttpRangeNotSatisfiableResponse,
@@ -90,7 +91,7 @@ def set_compressable_iter_content(response):
             content_obj.compression_mimetypes = COMPRESSION_MIMETYPES
             compressed = content_obj.compress(COMPRESSION_ENCODING)
             compressed_data = content_obj.data
-                    
+            
             yield compressed_data
 
     async def async_iter_and_compress():
@@ -293,13 +294,14 @@ class ResponseFinalizer:
                 response.stream.seek(0, io.SEEK_END) # seek to EOF
                 total_stream_size = response.stream.tell()
             else:
-                return # Quit with the compression
+                return # Quit with the compression, no stream!
                     
             if total_stream_size is not None:
                 if total_stream_size < COMPRESSION_MIN_SIZE or total_stream_size > COMPRESSION_MAX_SIZE :
                     # Total stream size if beyond or below compression limits
                     return
             else:
+                # Don't compress anything with unknown size
                 return
             
             # Don't compress HttpProxyResponse instances as doing response.iter_content() for checking if data is compressable
@@ -605,13 +607,15 @@ class AsyncResponseFinalizer(ResponseFinalizer):
                 response.stream.seek(0, io.SEEK_END) # seek to EOF
                 total_stream_size = response.stream.tell()
             else:
-                return # Quit with the compression
+                if not isinstance(response, ComponentResponse):
+                    return # Quit with the compression, no stream!
                     
             if total_stream_size is not None:
                 if total_stream_size < COMPRESSION_MIN_SIZE or total_stream_size > COMPRESSION_MAX_SIZE :
                     # Total stream size if beyond or below compression limits
                     return
             else:
+                # Don't compress anything with unknown size
                 return
             
             # Don't compress HttpProxyResponse instances as doing response.iter_content() for checking if data is compressable
@@ -652,7 +656,6 @@ class AsyncResponseFinalizer(ResponseFinalizer):
                         compressable = content_obj.compress(COMPRESSION_ENCODING) # sets if content is compressable
                     break
                     
-            
             if response.get_header("content-encoding", "identity") == "identity" and compressable:
                 # Assume compression will not fail, this is is a bit dangerous if compression fails as response might include 
                 # unmatching invalid content content encoding

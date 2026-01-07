@@ -20,6 +20,7 @@ class EventList(list):
         initlist=None,
         on_new_item: Optional[Callable[[Any], None]] = None,
         on_delete_item: Optional[Callable[[Any], None]] = None,
+        skip_initlist_events: bool = False,
     ):
         """
         Initialize the EventList.
@@ -28,10 +29,15 @@ class EventList(list):
             initlist (iterable, optional): Initial values to populate the list.
             on_new_item (Callable, optional): Callback triggered before adding an item.
             on_delete_item (Callable, optional): Callback triggered before removing an item.
+            skip_initlist_events (bool): Whether to skip calling event handler for each item in initlist.
         """
         super().__init__(initlist or [])
         self._on_new_item = on_new_item
         self._on_delete_item = on_delete_item
+        
+        if initlist and not skip_initlist_events:
+            for i in initlist:
+                self.on_new_item(i) # Call event for the initlist
 
     def on_new_item(self, item: Any):
         """

@@ -150,6 +150,9 @@ def home(request):
 ```
 """
 import re
+import time
+import copy
+import asyncio
 import secrets
 
 from collections import deque, UserDict
@@ -162,13 +165,26 @@ from typing import (
     Tuple,
     Union,
     Set,
+    Iterable,
 )
 
-from duck.utils.lazy import Lazy, LiveResult
-from duck.html.components.extensions import BasicExtension, StyleCompatibilityExtension
+from duck.utils.string import smart_truncate
+from duck.html.components.extensions import (
+    BasicExtension,
+    StyleCompatibilityExtension,
+)
+from duck.html.components.extensions.frozen import FreezeableComponent as FreezeableComponentExtension
+from duck.html.components.extensions.frozen import do_freeze as _do_freeze, FrozenDict
+from duck.html.components.core.props import PropertyStore, StyleStore
+from duck.html.components.core.children import ChildrenList
 from duck.html.components.core.vdom import VDomNode
 from duck.html.components.core.warnings import DeeplyNestedEventBindingWarning
 from duck.html.components.core.force_update import ForceUpdate as ForceUpdate # Avoids this being removed as unused on when formatters touch this.
+from duck.html.components.core.mutation import (
+    on_mutation,
+    Mutation,
+    MutationCode,
+)
 from duck.html.components.core.exceptions import (
     HtmlComponentError,
     AlreadyInRegistry,
@@ -177,6 +193,8 @@ from duck.html.components.core.exceptions import (
     InitializationError,
     EventAlreadyBound,
     ComponentAttributeProtection,
+    ComponentCopyError,
+    ComponentNotLoadedError,
 )
 
 
@@ -222,177 +240,6 @@ def to_component(html: Optional[str] = None, tag: str = 'span', no_closing_tag: 
     return quote(html or "", tag, no_closing_tag, **kwargs)
 
 
-class PropertyStore(dict):
-    """
-    A dictionary subclass to store properties for HTML components, with certain restrictions.
-
-    Keys and values must both be strings. Certain methods (pop, popitem, update, setdefault, etc.)
-    are overridden to ensure they utilize the custom __setitem__ and __delitem__ logic,
-    including event hooks for set and delete operations.  
-    
-    **Args:**
-    - `*args`: Arguments to initialize the dictionary.
-    - `**kwargs`: Keyword arguments to initialize the dictionary.
-    """
-    __slots__ = ()
-
-    def __setitem__(self, key: str, value: str, call_on_set_item_handler: bool = True) -> None:
-        """
-        Sets the value for the given key if the key is allowed.
-
-        Args:
-            key (str): The key to set the value for. Must be a string.
-            value (str): The value to set. Must be a string.
-            call_on_set_item_handler (bool): Whether to call `on_set_item` after the actual `__setitem__`.
-
-        Raises:
-            AssertionError: If the key or value is not a string.
-        """
-        assert isinstance(key, str), f"Keys for `PropertyStore` must be strings not {type(key)}"
-        assert isinstance(value, str), f"Values for `PropertyStore` must be strings not {type(value)}"
-        k = key.strip().lower()
-        super().__setitem__(k, value)
-        if call_on_set_item_handler:
-            self.on_set_item(k, value)
-
-    def __delitem__(self, key: str, call_on_delete_item_handler: bool = True) -> None:
-        """
-        Deletes a key from the property store.
-
-        Args:
-            key (str): The key to delete. Must be a string.
-            call_on_delete_item_handler (bool): Whether to call `on_delete_item` after the actual `__delitem__`.
-        """
-        k = key.strip().lower()
-        super().__delitem__(k)
-        if call_on_delete_item_handler:
-            self.on_delete_item(k)
-
-    def __repr__(self) -> str:
-        """
-        Returns a string representation of PropertyStore.
-
-        Returns:
-            str: String representation of the PropertyStore.
-        """
-        return f"<{self.__class__.__name__} {dict(self).__repr__()}>"
-
-    def update(self, data: Any = None, call_on_set_item_handler: bool = True, *args, **kwargs) -> None:
-        """
-        Updates the PropertyStore with the key/value pairs from data, ensuring setitem logic.
-
-        Args:
-            data (Any): Mapping or iterable to update from.
-            call_on_set_item_handler (bool): Whether to call `on_set_item` for each item.
-            *args, **kwargs: Additional data.
-        """
-        if data is not None:
-            if hasattr(data, 'items'):
-                items = data.items()
-            else:
-                items = data
-            for key, value in items:
-                self.__setitem__(key, value, call_on_set_item_handler)
-        for key, value in dict(*args, **kwargs).items():
-            self.__setitem__(key, value, call_on_set_item_handler)
-
-    def setdefault(self, key: str, default: Optional[str] = None, call_on_set_item_handler: bool = True) -> str:
-        """
-        Inserts key with a value of default if key is not in the dictionary.
-
-        Args:
-            key (str): The key to check.
-            default (str, optional): The default value to set if key is missing.
-            call_on_set_item_handler (bool): Whether to call `on_set_item` if setting.
-
-        Returns:
-            str: The value for the key.
-        """
-        k = key.strip().lower()
-        if k not in self:
-            self.__setitem__(k, default if default is not None else '', call_on_set_item_handler)
-            return default if default is not None else ''
-        return self[k]
-
-    def pop(self, key: str, default: Any = None) -> Any:
-        """
-        Removes the specified key and returns its value.
-        If key is not found, default is returned if provided, otherwise KeyError is raised.
-
-        Args:
-            key (str): The key to remove.
-            default (Any, optional): The value to return if key is not found.
-
-        Returns:
-            Any: The value associated with the key, or default.
-
-        Raises:
-            KeyError: If key is not found and default is not provided.
-        """
-        k = key.strip().lower()
-        if k in self:
-            value = self[k]
-            self.__delitem__(k)
-            return value
-        elif default is not None:
-            return default
-        else:
-            raise KeyError(k)
-
-    def popitem(self) -> Tuple[str, str]:
-        """
-        Removes and returns a (key, value) pair from the dictionary.
-        Pairs are returned in LIFO order.
-
-        Returns:
-            Tuple[str, str]: The removed (key, value) pair.
-
-        Raises:
-            KeyError: If the dictionary is empty.
-        """
-        try:
-            k, v = next(reversed(self.items()))
-        except StopIteration:
-            raise KeyError(f"{self.__class__.__name__} is empty")
-        self.__delitem__(k)
-        return k, v
-
-    def setdefaults(self, data: Dict[str, str]) -> None:
-        """
-        Calls setdefault on multiple items.
-
-        Args:
-            data (Dict[str, str]): The key-value pairs to set as defaults.
-        """
-        for key, value in data.items():
-            self.setdefault(key, value)
-
-    def on_set_item(self, key: str, value: Any) -> None:
-        """
-        Called after `__setitem__`.
-
-        Args:
-            key (str): The key set.
-            value (Any): The value set.
-        """
-        pass
-
-    def on_delete_item(self, key: str) -> None:
-        """
-        Called after `__delitem__`.
-
-        Args:
-            key (str): The key deleted.
-        """
-        pass
-
-
-class StyleStore(PropertyStore):
-    """
-    PropertyStore dictionary for component styling.
-    """
-
-
 class HtmlComponent:
     """
     Base class for all HTML components.
@@ -415,7 +262,7 @@ class HtmlComponent:
         self,
         element: Optional[str] = None,
         accept_inner_html: bool = False,
-        inner_html: Optional[Union[str, LiveResult, Lazy]] = None,
+        inner_html: Optional[Union[str, int, float]] = None,
         properties: Optional[Dict[str, str]] = None,
         props: Optional[Dict[str, str]] = None,
         style: Optional[Dict[str, str]] = None,
@@ -427,7 +274,7 @@ class HtmlComponent:
         Args:
             element (Optional[str]): The HTML element tag name (e.g., textarea, input, button). Can be None, but make sure element is returned by get_element method.
             accept_inner_html (bool): Whether the HTML component accepts an inner body (e.g., <strong>inner-body-here</strong>).
-            inner_html (Union[str, LiveResult, Lazy]): Inner body to add to the HTML component. Defaults to None.
+            inner_html (Union[str, int, float]): Inner html to add to the HTML component. Defaults to None.
             properties (dict, optional): Dictionary for properties to initialize the component with.
             props (dict, optional): Just same as properties argument (added for simplicity).
             style (dict, optional): Dictionary for style to initialize the component with.
@@ -437,7 +284,6 @@ class HtmlComponent:
             HtmlComponentError: If 'element' is not a string or 'inner_html' is set but 'accept_inner_html' is False.
         """
         # Note: id, bg_color, color is handled by the BasicExtension
-        
         element = element or self.get_element()
         
         assert len(element) < 24, f"HTML tags should not be longer than 24 characters. Got tag: `{element}`, len={len(element)}."
@@ -473,11 +319,21 @@ class HtmlComponent:
         self.__parent = None
         self.__root = self
         self.__render_done = False
-        self.__inner_html = inner_html or ""
         self.__uid = None
+        self.__is_loading = False
+        self.__loaded = False
+        self.__inner_html = ""
         
         # Other private attributes
-        cls = self.__class__.__name__ 
+        cls = self.__class__.__name__
+        self._mutation_version = 0
+        self._render_started = False
+        self._render_done = False
+        self._cached_rendered_output = None
+        self._cached_vdom_node = None
+        self._is_from_cache = False
+        self._is_a_copy = False
+        self._copied_from = None
         self._event_bindings = {}
         self._event_bindings_changed = False # Whether event bindings changed.
         self._on_create_check_passed = False
@@ -496,6 +352,22 @@ class HtmlComponent:
             f"_{cls}__parent",
         ] # List of attributes to ignore when enforcing Component Attribute Protection
         
+        # Container attrs are just attributes pointing to a container like a tuple, list, etc.
+        # So that when copy is used, then this container attributes won't reference to the same 
+        # container i.e. tuple/list/set .etc
+        self._copy_container_attrs = [
+            '_component_attr_protection_exceptions',
+            '_component_attr_protection_targets',
+            '_event_bindings',
+            '_document_event_bindings',
+            'fullpage_reload_headers',
+            '_freeze_exceptions',
+            '_prev_states',
+            '_temp_partial_unfreeze_disallow_attrs',
+            'compatibility_keys',
+            'kwargs',
+        ] # __style, __properties, __children are already copied independantly, no need for them to be in here.
+             
         # Add public attributes
         self.element = element
         self.accept_inner_html = accept_inner_html
@@ -504,6 +376,10 @@ class HtmlComponent:
         self.escape_on_text = kwargs.get('escape_on_text', True) # Whether to escape if modifying component text prop
         self.disable_lively = kwargs.get('disable_lively', False) # Whether to disable lively for this component
         
+        # Update inner html if available
+        if inner_html:
+            self.inner_html = inner_html
+            
         # Make some updates and assertions.
         properties = properties or {}
         props = props or {}
@@ -517,25 +393,33 @@ class HtmlComponent:
         self.__properties.update(properties or props)
         self.__style.update(style)
         
-        # Create some previous states e.g. {prev_props: (obj, "rendered_data")}
+        # Create some previous states e.g. {prev_props: (props_version, obj, "rendered_data")}
+        # Format: version, value, rendered_string
         self._prev_states = {
-          "prev_props": ({}, ""),
-          "prev_style": ({}, ""),
-          "prev_inner_html": (""),
+          "prev_props": (None, {}, ""),
+          "prev_style": (None, {}, ""),
+          "prev_inner_html": (None, ""),
+          "prev_rendered_output": (None, ""),
+          "prev_vdom_node": (None, None),
         } # Don't look at children as they may change any moment deep within the DOM tree.
         
         # Sets the previous rendered partial string, which may include style, props & inner body strings
         self._prev_partial_string = ""
         
-        # Finally, call the component entry method.
-        self.on_create() # If super().on_create() is called then _on_create_check_passed will be True.
+        # Set mutation callbacks
+        self.set_mutation_callbacks()
         
-        if not self._on_create_check_passed:
-            raise InitializationError(
-                f"Method `on_create` of component {repr(self)} was overridden somehow but `super().on_create()` was not called. "
-                "This may result in some component extensions not being properly applied or inconsistences within the component."
-              )
-          
+        # Load component or skip loading if Page component.
+        lazy = kwargs.get("lazy", False)
+        
+        if not lazy: 
+            self.load()
+        else:
+            from duck.html.components.page import Page
+            
+            if not isinstance(self, Page):
+                raise ComponentError("Lazy loading is set to True on non-page component. Lazy option is only limited to Page components.")
+            
     @property
     def properties(self):
         """
@@ -548,7 +432,10 @@ class HtmlComponent:
         
         lively_data_props = {"data-uid", "data-events", "data-document-events", "data-validate"}
         
-        if LivelyComponentSystem.is_active() and not self.disable_lively:
+        if (LivelyComponentSystem.is_active()
+            and not self.disable_lively
+            and not self.get_raw_root().disable_lively
+        ):
             current_lively_props = self.get_component_system_data_props()
             self.__properties.update(current_lively_props)
             
@@ -620,7 +507,7 @@ class HtmlComponent:
         
         Returns:
             str: An assigned component UID based on component position in component tree
-                   or a random 64-bit string.
+                   or a random string.
             
         Notes:
         - This will be auto-assigned on render or when `to_vdom` is called. These methods 
@@ -628,9 +515,12 @@ class HtmlComponent:
         - If a component is a root component, a unique ID will be generated whenever the `uid` property is accessed.
         """
         if self.isroot() and not self.__uid:
-            self.__uid = secrets.token_urlsafe(8) # Will return a 64bit uid
+            self.__uid = f"{id(self)}" # Using id() is faster than secrets.token_urlsafe(8)
+            
         if not self.__uid:
             raise ComponentError("Property `uid` is not assigned yet, `assign_component_uids` must be called first.")
+        
+        # Retuen the final UID
         return self.__uid
         
     @uid.setter
@@ -641,117 +531,37 @@ class HtmlComponent:
         self.__uid = uid
         
     @property
-    def inner_html(self):
+    def inner_html(self) -> str:
         """
         Returns the inner body (innerHTML) for the component.
         """
-        inner_html = self.__inner_html
-        
-        if isinstance(inner_html, Lazy):
-            # These objects tries to resolve live updated result
-            return str(inner_html)
-        return inner_html
+        return self.__inner_html
     
     @inner_html.setter
-    def inner_html(self, inner_html: Union[str, LiveResult, Lazy]):
+    def inner_html(self, inner_html: Union[str, int, float]):
         """
         Set the component innerHTML.
         
         Args:
-            inner_html (Union[str, LiveResult, Lazy]): This can be a string, LiveResult or Lazy object. The LiveResult
-                object lets you compute the live or the updated text instead of static text and the Lazy object is the super class
-                of the LiveResult object but it caches results by default compared to LiveResult.
-                
-                Example:
-                
-                ```py
-                from duck.utils.lazy import LiveResult
-                from duck.html.components.button import Button
-                
-                btn = Button()
-                btn.counter = 0
-                live_str = LiveResult(lambda comp: f"{comp.counter}", btn)
-                btn.inner_html = live_str
-                
-                print(btn.inner_html) # Outputs: 0
-                
-                # Increment counter
-                btn.counter += 1
-                
-                print(btn.inner_html) # Outputs: 1 instead of 0
-                
-                ```
+            inner_html (Union[str, int, float]): This can be a string, int or float. 
         """
+        # NOTE: We supported LiveResult as input but it's causing problems when we are 
+        # are caching component outputs, any modifications that can result in LiveResult to change can't
+        # be detected so this may skip on_mutation handler being called leading to 
+        # inconsistent results
         if not self.accept_inner_html:
-            raise ComponentError("This component doesn't accept inner body, use InnerComponent instance instead.")
+            raise ComponentError("This component doesn't accept inner html, use InnerComponent instance instead.")
             
-        if not isinstance(inner_html, (str, Lazy)):
-            raise ComponentError("The inner_html should be an instance of string, LiveResult or Lazy object.")
-        self.__inner_html = inner_html
+        if not isinstance(inner_html, (str, int, float)):
+            raise ComponentError("The inner_html should be an instance of string, integer or a float.")
         
-    @property
-    def render_done(self):
-        """
-        Returns if rendering is done on the component.
-        """
-        return self.__render_done
+        # Convert data to right format
+        inner_html = str(inner_html) if not isinstance(inner_html, str) else inner_html
         
-    def _get_raw_props(self):
-        """
-        Returns the component properties.
-        """
-        return self.__properties
-        
-    def get_raw_root(self) -> "Component":
-        """
-        Returns the raw root reference without evaluation,
-        even if the root is self (unlike the `root` property).
-        """
-        return self.__root
-            
-    def isroot(self) -> bool:
-        """
-        Returns a boolean on whether if the component is a root component.
-        """
-        return True if (not self.root and not self.parent) else False
-        
-    def get_element(self):
-        """
-        Fallback method to retrieve the html element tag.
-        """
-        raise NotImplementedError(f"Fallback method `get_element` is not implemented yet the 'element' argument is empty or None.")
-    
-    def on_create(self):
-        """
-        Called on component creation or initialization
-        """
-        # Set the following to True, to mark this method to have been called.
-        self._on_create_check_passed = True
-        
-    def on_parent(self, parent: "Component"):
-        """
-        Called when the component has got a parent attached.
-        """
-        pass
-    
-    def on_root_finalized(self, root: "Component"):
-        """
-        Called when the component's root element is permanently assigned.
-    
-        This method is invoked once the component is fully integrated into its
-        final root within the application's structure, and this root will
-        not change for the lifetime of the component.  Use this hook to perform
-        any final setup or initialization that requires access to the
-        fully realized root element, such as registering with the root's
-        event system, performing final layout adjustments, or establishing
-        contextual relationships within the application.
-    
-        Args:
-            root: The root element to which this component is now permanently attached.
-                  This is the final root and will not be reassigned.
-        """
-        pass
-        
+        if self.__inner_html != inner_html:
+            self.__inner_html = inner_html
+            on_mutation(self, Mutation(target=self, code=MutationCode.SET_INNER_HTML, payload={"inner_html": inner_html}))
+                
     @staticmethod
     def vdom_diff(old: VDomNode, new: VDomNode) -> List[list]:
         """
@@ -807,6 +617,7 @@ class HtmlComponent:
         if not root_component.isroot():
             raise ComponentError("Root component is required for `uid` assignment, not a child component.")
             
+        # Continue
         queue = deque()
         queue.append((root_component, root_component.uid))
         
@@ -815,10 +626,13 @@ class HtmlComponent:
         
         while queue:
             component, uid = queue.popleft()
-            component.uid = uid
             
-            # Call on_parent event.
-            if not component._on_root_finalized_called:
+            # Assign component UID
+            if component._HtmlComponent__uid != uid:
+                component.uid = uid
+            
+            # Call on_root_finalized event.
+            if not component.isroot() and not component._on_root_finalized_called:
                 component.on_root_finalized(component.root)
                 component._on_root_finalized_called = True
                 
@@ -853,38 +667,455 @@ class HtmlComponent:
                 child_uid = f"{uid}.{index}"
                 queue.append((child, child_uid))
                 
-    def to_vdom(self) -> VDomNode:
+    def is_loaded(self) -> bool:
         """
-        Converts the HtmlComponent into a virtual DOM node.
-    
-        Returns:
-            VDomNode: A virtual DOM representation of the HTML component.
+        Returns a boolean on whether if the component is loaded.
         """
-        if self.isroot():
-            # Assign component UID's
-            self.assign_component_uids(self)
-                
-        # Make sure we use copies of the real component so that further changes will impose a difference
-        try:
-            _ = self.uid # Check if uid assigned yet.
-        except ComponentError:
-            # Property uid not assigned yet
-            # This component might have been inserted after an event e.g. onclick.
-            # Reassign component tree UID's to avoid messing up the structure thereby avoiding
-            # unnecessary patches
-            root = self.root
-            if root:
-                self.assign_component_uids(root)
+        return self.__loaded
+        
+    def is_loading(self) -> bool:
+        """
+        Returns a boolean on whether if the component is loading or not.
+        """
+        return self.__is_loading
+        
+    def is_frozen(self) -> bool:
+        """
+        Returns False always (if not implemented, usually implemented FrozenComponent extension).
+        """
+        return False
+        
+    def is_a_copy(self) -> bool:
+        """
+        Returns a boolean on whether this component is a copy from another component.
+        """
+        return self._is_a_copy
+        
+    def is_from_cache(self) -> bool:
+        """
+        Returns a boolean on whether this component has been retrieved from cache.
+        """
+        return self._is_from_cache
+        
+    def _get_raw_props(self):
+        """
+        Returns the component properties.
+        """
+        return self.__properties
+        
+    def get_raw_root(self) -> "Component":
+        """
+        Returns the raw root reference without evaluation,
+        even if the root is self (unlike the `root` property).
+        """
+        return self.__root
             
-        return VDomNode(
-            tag="%s"%self.element,
-            key=self.uid,
-            props=self.props.copy(),
-            style=self.style.copy(),
-            text="%s"%self.inner_html if self.accept_inner_html else None,
-            children=[child.to_vdom() for child in getattr(self, "children", [])],
-            component=self,
-        )
+    def isroot(self) -> bool:
+        """
+        Returns a boolean on whether if the component is a root component.
+        """
+        return True if (not self.root and not self.parent) else False
+        
+    def get_element(self):
+        """
+        Fallback method to retrieve the html element tag.
+        """
+        raise NotImplementedError(f"Fallback method `get_element` is not implemented yet the 'element' argument is empty or None.")
+    
+    def set_mutation_callbacks(self):
+        """
+        This sets the callbacks that will be executed on prop/style mutation.
+        """
+        # Props mutation
+        self.props._on_set_item_func = lambda key, value: \
+            on_mutation(self, Mutation(target=self, code=MutationCode.SET_PROP, payload={"key": key, "value": value}))
+        
+        self.props._on_delete_item_func = lambda key: \
+            on_mutation(self, Mutation(target=self, code=MutationCode.DELETE_PROP, payload={"key": key}))
+        
+        # Style mutation
+        self.style._on_set_item_func = lambda key, value: \
+            on_mutation(self, Mutation(target=self, code=MutationCode.SET_STYLE, payload={"key": key, "value": value}))
+            
+        self.style._on_delete_item_func = lambda key: \
+            on_mutation(self, Mutation(target=self, code=MutationCode.DELETE_STYLE, payload={"key": key}))
+        
+    def on_mutation(self, mutation: Mutation):
+        """
+        This is called on component mutation. Either from props, style or children.
+        
+        Notes:
+        - This is only called if the component itself is a root component
+        """
+        pass
+        
+    def _on_mutation(self, mutation: Mutation):
+        """
+        Private entry method to `on_mutation` event.
+        """
+        self._mutation_version += 1
+        self.on_mutation(mutation)
+        
+    def on_create(self):
+        """
+        Called on component creation or initialization
+        """
+        # Set the following to True, to mark this method to have been called.
+        self._on_create_check_passed = True
+        
+    def on_parent(self, parent: "Component"):
+        """
+        Called when the component has got a parent attached.
+        """
+        pass
+    
+    def on_root_finalized(self, root: "Component"):
+        """
+        Called when the component's root element is permanently assigned.
+    
+        This method is invoked once the component is fully integrated into its
+        final root within the application's structure, and this root will
+        not change for the lifetime of the component.  Use this hook to perform
+        any final setup or initialization that requires access to the
+        fully realized root element, such as registering with the root's
+        event system, performing final layout adjustments, or establishing
+        contextual relationships within the application.
+    
+        Args:
+            root: The root element to which this component is now permanently attached.
+                  This is the final root and will not be reassigned.
+        """
+        pass
+    
+    def traverse(
+        self,
+        func: callable,
+        algorithm: str = "depth_first_search",
+        reverse: bool = False,
+        include_self: bool = True,
+    ) -> None:
+        """
+        Traverses the component tree and executes a callable on each node.
+    
+        Args:
+            func (callable): Function to execute on each component (takes the component as argument).
+            algorithm (str): 'depth_first_search' or 'breadth_first_search'.
+            reverse (bool): If True, DFS visits children from last to first.
+            include_self (bool): If True, traversal starts at self; otherwise, starts at children.
+    
+        Notes:
+            - Iterative traversal is used to avoid recursion limits.
+            - BFS ignores reverse.
+            - func can read or modify nodes.
+        """
+        if algorithm not in ("depth_first_search", "breadth_first_search"):
+            raise ValueError("Traversal algorithm must be 'depth_first_search' or 'breadth_first_search'")
+    
+        # Prepare initial nodes based on include_self
+        initial_nodes = [self] if include_self else ((self.children) if self.accept_inner_html else [])
+    
+        if algorithm == "depth_first_search":
+            stack = initial_nodes
+            
+            # Continue with dfs
+            while stack:
+                node = stack.pop()
+                func(node)
+    
+                if node.accept_inner_html and node.children:
+                    children = reversed(node.children) if reverse else node.children
+                    stack.extend(children)
+    
+        else:  # breadth_first_search
+            from collections import deque
+            
+            # Continue with bfs
+            queue = deque(initial_nodes)
+            
+            while queue:
+                node = queue.popleft()
+                func(node)
+    
+                if node.accept_inner_html and node.children:
+                    queue.extend(node.children)
+
+    def traverse_ancestors(self, func: callable, include_self: bool = True) -> None:
+        """
+        Traverses upward from this component to the root, executing a callable on each ancestor.
+    
+        Args:
+            func (callable): A function that takes a single argument (the component) and executes logic.
+            include_self (bool): If True, starts at the current component; 
+                                 if False, starts at the parent.
+        
+        Notes:
+        - Stops when the root component (no parent) is reached.
+        - Useful for propagating mutations, marking caches dirty, or other upward operations.
+        """
+        node = self if include_self else getattr(self, "parent", None)
+        while node is not None:
+            func(node)
+            node = getattr(node, "parent", None)
+
+    def load(self):
+        """
+        Load the component, pack all descendants (if available).
+        
+        Raises:
+            ComponentError: If this method is used on non-root component or if component `is_loading()` is True.
+        """
+        if self.__is_loading and not self.__loaded:
+            raise ComponentError("The component is already being loaded somewhere. Component `is_loading()` is True.")
+            
+        if not self.isroot():
+            raise ComponentError("This method is only applicable to root components.")
+        
+        if not self.__loaded:
+            # Finally, call the component entry method.
+            try:
+                self.__is_loading = True
+                self.on_create() # If super().on_create() is called then _on_create_check_passed will be True.
+                self.__loaded = True # Set component loaded flag immediately
+                
+                if not self._on_create_check_passed:
+                    raise InitializationError(
+                        f"Method `on_create` of component {repr(self)} was overridden somehow but `super().on_create()` was not called. "
+                        "This may result in some component extensions not being properly applied or inconsistences within the component."
+                      )
+                
+                # Maybe `ensure_freeze` was called using the FrozenComponent extension.
+                # If so, it was called to make component frozen right after load, so lets do just that.
+                ensure_freeze_callback = getattr(self, "_ensure_freeze_callback", None)
+                
+                if ensure_freeze_callback is not None and not self.is_frozen():
+                    ensure_freeze_callback()
+                
+            except Exception as e:
+                raise e # Reraise exception
+            
+            finally:
+                if not self.is_frozen():
+                    self.__is_loading = False
+                else:
+                    # Bypass frozen attr check
+                    object.__setattr__(self, "__is_loading", True)
+        else:
+            # Already loaded.
+            # Maybe `ensure_freeze` was called using the FrozenComponent extension.
+            # If so, it was called to make component frozen right after load, so lets do just that.
+            ensure_freeze_callback = getattr(self, "_ensure_freeze_callback", None)
+            if ensure_freeze_callback is not None and not self.is_frozen():
+                ensure_freeze_callback()
+                
+    def wait_for_load(self, interval: float = 0.01):
+        """
+        This waits for the component to complete loading (if component is already being loaded somewhere).
+        """
+        if not self.is_loading():
+            raise ComponentError("Component is not being loaded anywhere, use the 'load()' method.")
+        
+        while not self.is_loaded():
+           time.sleep(interval)
+       
+    async def async_wait_for_load(self, interval: float = 0.01):
+        """
+        This asynchronously waits for the component to complete loading (if component is already being loaded somewhere).
+        """
+        if not self.is_loading():
+            raise ComponentError("Component is not being loaded anywhere, use the 'load()' method.")
+            
+        while not self.is_loaded():
+            await asyncio.sleep(interval)
+           
+    def raise_if_not_loaded(self, message: str):
+        """
+        Decorator which raises an exception if component is not loaded.
+        
+        Args:
+            message (str): A custom error message for the exception.
+        
+        Raises:
+            ComponentNotLoadedError: Raised if component is not loaded.
+        """
+        if not self.__loaded:
+            raise ComponentNotLoadedError(message)
+            
+    def copied_from(self) -> Optional["HtmlComponent"]:
+        """
+        Returns the original component that this component was copied from (if applicable else None).
+        """
+        return self._copied_from
+        
+    def copy(self, shallow: bool = False) -> "HtmlComponent":
+        """
+        Returns a copy of the component.
+    
+        Notes:
+        - Props, style, children are copied.
+        - Iterative copy avoids recursion depth issues.
+        - Shallow copy allowed only on frozen components.
+        """
+        try:
+            return self._copy(shallow=shallow)
+        
+        except ComponentCopyError as e:
+            raise e # Reraise exception
+            
+        except Exception as e:
+            raise ComponentCopyError(f"Error copying component: {e}") from e
+            
+    def _copy(self, shallow: bool = False) -> "HtmlComponent":
+        """
+        Returns a copy of the component.
+    
+        Notes:
+        - Props, style, children are copied.
+        - Iterative copy avoids recursion depth issues.
+        - Shallow copy allowed only on frozen components.
+        """
+        def _copy(component):
+             cls = component.__class__
+             new_component = object.__new__(cls)
+             new_component.__dict__ = component.__dict__.copy()
+             do_freeze = lambda value: _do_freeze(value, responsible_component=component._freeze_responsible_component)
+             
+             # Copy props/style
+             is_component_frozen = component.is_frozen()
+             new_props = PropertyStore(new_component.props) if not is_component_frozen else FrozenDict(new_component.props)
+             new_style = StyleStore(new_component.style) if not is_component_frozen else FrozenDict(new_component.style)
+             
+             object.__setattr__(new_props, "_version" if is_component_frozen else "_PropertyStore__version", component.style._version)
+             object.__setattr__(new_style, "_version" if is_component_frozen else "_PropertyStore__version", component.props._version)
+             
+             object.__setattr__(
+                 new_component,
+                 "_HtmlComponent__properties",
+                 new_props,
+             )
+             
+             # Copy style
+             object.__setattr__(
+                 new_component,
+                 "_HtmlComponent__style",
+                 new_style,
+             )
+             
+             # Set other important attributes
+             object.__setattr__(new_component, "_is_a_copy", True)
+             object.__setattr__(new_component, "_copied_from", component)
+             
+             for i in component._copy_container_attrs:
+                 try:
+                     value = getattr(new_component, i)
+                 
+                 except AttributeError:
+                     continue
+                     
+                 except Exception as e:
+                     raise ComponentCopyError(f"Error resolving copy container attribute '{i}': {e}")
+                     
+                 if isinstance(value, Iterable):
+                     object.__setattr__(new_component, i, copy.copy(value))
+             
+             # Return the new component
+             if hasattr(new_component, "apply_extension"):
+                 new_component.apply_extension()
+             return new_component
+        
+        # Perform some checks     
+        if shallow:   
+            def check_frozen(c):
+                if not c.is_frozen():
+                    raise ComponentCopyError(
+                        "Shallow copy only allowed on frozen components."
+                    )
+                else:
+                    responsible_component = c._freeze_responsible_component
+                    exc_components = responsible_component._component_freeze_exceptions
+                    exc_types = responsible_component._component_freeze_exception_types
+                    
+                    if exc_components or exc_types:
+                        raise ComponentCopyError(
+                            "Shallow copy only allowed on completely frozen components. "
+                            "Found exceptions to freeze condition."
+                        )
+                    
+            # Check if component is frozen
+            check_frozen(self)
+            
+        if self.is_a_copy():
+            raise ComponentCopyError("Component is already a copy, can only copy original components.")
+        
+        # Stack for iterative copy: (original_node, copied_node)
+        stack = []
+    
+        # Copy root component
+        root_copy = _copy(self)
+        
+        if self.isroot():
+            # This is very important!!!
+            # Not updating the root to a copied one will cause issues like incorrect root leading 
+            # to issues like very slow render (because assign_component_uids keep being called many times because root_component.isroot() = False)
+            object.__setattr__(root_copy, "_HtmlComponent__root", root_copy) # Assign raw root
+            object.__setattr__(root_copy, "_HtmlComponent__parent", None) # Reset parent just in case it was mistakenly set.
+            
+            if not root_copy.is_frozen():
+                # Do not reset UID on frozen component as to prevent UID regeneration if uid is not set.
+                object.__setattr__(root_copy, "_HtmlComponent__uid", None) # Reset UID to represent new component
+            
+        if shallow:
+            return root_copy
+    
+        # Initialize stack with root
+        stack.append((self, root_copy))
+    
+        # Iterative traversal
+        while stack:
+            original, copied = stack.pop()
+            do_freeze = lambda value: _do_freeze(value, responsible_component=original._freeze_responsible_component)
+            
+            # Update copied root
+            object.__setattr__(copied, "_HtmlComponent__root", root_copy.get_raw_root()) # Assign root
+            
+            # Continue
+            if not hasattr(original, "children"):
+                continue
+    
+            # Create a list for children
+            new_children = []
+    
+            for child in original.children:
+                # Copy child node
+                child_copy = _copy(child)
+                object.__setattr__(child_copy, "_HtmlComponent__root", root_copy.get_raw_root()) # Assign root
+                object.__setattr__(child_copy, "_HtmlComponent__parent", copied) # Assign parent
+                
+                # Prepare children list for child
+                if hasattr(child, "children") and child.children:
+                    # Push child to stack to process its children later
+                    stack.append((child, child_copy))
+    
+                # Add new child to list.
+                new_children.append(child_copy)
+                
+                # Re-set mutation callbacks
+                if not child_copy.is_frozen():
+                    child_copy.set_mutation_callbacks()
+                
+            # Assign copied children list to copied parent
+            if not copied.is_frozen():
+                new_children = ChildrenList(parent=copied, initlist=new_children, skip_initlist_events=True)
+            else:
+                do_freeze(new_children)
+            
+            # Finally assign copied children
+            object.__setattr__(copied, "_InnerHtmlComponent__children", new_children)
+        
+        # Finally return root copied component
+        if not root_copy.is_frozen():
+            # Re-set mutation callbacks
+            root_copy.set_mutation_callbacks()
+        return root_copy
     
     def check_component_system_active(self, inactive_msg: str = None):
         """
@@ -1077,7 +1308,7 @@ class HtmlComponent:
         Returns:
             Dict[str, str]: A dictionary of `data-*` attributes and their corresponding values.
         """
-        data_props = {}
+        data_props = {} 
         uid = None
         
         try:
@@ -1109,23 +1340,31 @@ class HtmlComponent:
             
         return data_props
         
-    def get_css_string(self, style: Dict[str, str], add_to_prev_states: bool = False) -> str:
+    def get_css_string(self, style: StyleStore[str, str], add_to_prev_states: bool = True) -> str:
         """
         Returns a CSS style string from a dictionary of style attributes.
     
         Args:
-            style (Dict[str, str]): The style attributes (e.g., {"color": "red", "font-size": "12px"}).
+            style (StyleStore[str, str]): The style attributes (e.g., StyleStore({"color": "red", "font-size": "12px"}) ).
             add_to_prev_states (bool): If True, the resulting style string is cached in the component's previous state.
     
         Returns:
             str: The computed CSS string.
         """
-        prev_style, prev_style_string = self._prev_states.get("prev_style", ({}, ""))
+        prev_style_version, prev_style, prev_style_string = self._prev_states.get("prev_style", (None, {}, ""))
         
-        if prev_style == style:
+        try:
+            current_style_version = style._version
+        except AttributeError:
+            # Only do isinstance on attribute error to avoid checking excessively always
+            if not isinstance(props, StyleStore):
+                raise TypeError("The provided style is must be an instance of StyleStore not {type(props).__name__}.")
+            raise # Reraise exception
+             
+        if prev_style_version == current_style_version:
             return prev_style_string
     
-        css = "; ".join(f"{k}: {v}" for k, v in style.items())
+        css = ";".join(f"{k}:{v}" for k, v in style.items())
         
         if style:
             css = css.join(['style="', '"'])
@@ -1133,24 +1372,32 @@ class HtmlComponent:
             css = ""
                 
         if add_to_prev_states:
-            self._prev_states["prev_style"] = (style, css)
+            self._prev_states["prev_style"] = (style._version, style.copy(), css)
     
         return css
         
-    def get_props_string(self, props: Dict[str, str], add_to_prev_states: bool = False) -> str:
+    def get_props_string(self, props: PropertyStore[str, str], add_to_prev_states: bool = True) -> str:
         """
         Returns an HTML property string from a dictionary of attributes.
     
         Args:
-            props (Dict[str, str]): HTML attributes (e.g., {"id": "main", "class": "container"}).
+            props (PropertyStore[str, str]): HTML attributes (e.g., PropertyStore({"id": "main", "class": "container"}) ).
             add_to_prev_states (bool): If True, the resulting style string is cached in the component's previous state.
             
         Returns:
             str: A string of HTML element properties.
         """
-        prev_props, prev_props_string = self._prev_states.get("prev_props", ({}, ""))
-            
-        if prev_props == props:
+        prev_props_version, prev_props, prev_props_string = self._prev_states.get("prev_props", (None, {}, ""))
+        
+        try:
+            current_props_version = props._version
+        except AttributeError:
+            # Only do isinstance on attribute error to avoid checking excessively always
+            if not isinstance(props, PropertyStore):
+                raise TypeError("The provided props is must be an instance of PropertyStore not {type(props).__name__}.")
+            raise # Reraise exception
+                       
+        if prev_props_version == current_props_version:
             return prev_props_string
         
         props_string = " ".join(f'{k}="{v}"' for k, v in props.items())
@@ -1159,7 +1406,7 @@ class HtmlComponent:
             props_string = ""
             
         if add_to_prev_states:
-            self._prev_states["prev_props"] = (props, props_string)
+            self._prev_states["prev_props"] = (props._version, props.copy(), props_string)
         
         return props_string
         
@@ -1181,6 +1428,12 @@ class HtmlComponent:
         Returns the partial string containing the style, props & inner body (if applicable).
         """
         # Don't look at children as they may be deeply nested and doing a tree traversal may be time consuming.
+        
+        # Check if component is loaded
+        self.raise_if_not_loaded(
+            f"Component {self} is not yet loaded. "
+            f"This may mean that the component is a lazy component."
+        )
         
         if not self.has_local_updates() and self._prev_partial_string:
             return self._prev_partial_string
@@ -1213,7 +1466,7 @@ class HtmlComponent:
             
         if self.accept_inner_html:
             self._prev_partial_string = self._prev_partial_string.join(["", self.inner_html])
-            self._prev_states["prev_inner_html"] = (self.inner_html)
+            self._prev_states["prev_inner_html"] = (self._mutation_version, self.inner_html)
         
         return self._prev_partial_string 
         
@@ -1224,26 +1477,39 @@ class HtmlComponent:
         Notes:
             This doesn't look for any changes to the children but only itself.
         """
-        prev_props, _ = self._prev_states.get('prev_props', ({}, ""))
-        prev_style, _ = self._prev_states.get('prev_style', ({}, ""))
+        prev_props_version, _, __ = self._prev_states.get('prev_props', (None, {}, ""))
+        prev_style_version, _, __ = self._prev_states.get('prev_style', (None, {}, ""))
         prev_inner_html = self._prev_states.get('prev_inner_html', (""))
         
-        new_props = self.props
-        new_style = self.style
+        new_props_version = self.props._version
+        new_style_version = self.style._version
         new_inner_html = self.inner_html
         
-        if prev_props != new_props:
-            return True
-            
-        elif prev_style != new_style:
-            return True
-            
-        elif prev_inner_html != new_inner_html:
-            return True
-            
-        else:
-            return False
-            
+        return (
+            prev_props_version != new_props_version
+            or prev_style_version != new_style_version
+            or prev_inner_html != new_inner_html
+        )
+        
+    def pre_render(self) -> None:
+        """
+        Pre-renders this component and optionally its children to optimize future rendering.
+        """
+        # Start pre-rending from the bottom components upto the top.
+        # Root-only initialization
+        if self.isroot():
+            self.assign_component_uids(self)
+    
+        # Stack for explicit DFS traversal
+        stack = reversed([*getattr(self, "children", [self])])
+        
+        for child in stack:
+            if not child._render_done:
+                if child._render_started:
+                    child.pre_render()
+                else:
+                    child.render()
+                
     def to_string(self):
         """
         Returns the string representation of the HTML component.
@@ -1253,17 +1519,30 @@ class HtmlComponent:
         """
         from duck.html.components.core.system import LivelyComponentSystem
         
-        self.__render_done = False
+        # Check if component is loaded
+        self.raise_if_not_loaded(
+            f"Component {self} is not yet loaded. "
+            f"This may mean that the component is a lazy component."
+        )
+        
+        # Check if there has been any kind of mutation.
+        prev_output_version, prev_output = self._prev_states["prev_rendered_output"] 
+        
+        if prev_output_version == self._mutation_version and prev_output:
+            return prev_output
+        
+        # Continue with render
         self._on_render_start()
         
-        if (LivelyComponentSystem.is_active() and
-            self.add_to_registry and not self.disable_lively):
+        if (LivelyComponentSystem.is_active()
+            and self.add_to_registry
+            and not self.disable_lively
+        ):
             
             if self.isroot():
                 # Assign component UID's
                 self.assign_component_uids(self)
                     
-            # Make sure we use copies of the real component so that further changes will impose a difference
             try:
                 _ = self.uid # Check if uid assigned yet.
             except ComponentError:
@@ -1285,90 +1564,27 @@ class HtmlComponent:
                 output.append("/>")
                 
         output = "".join(output)
-        self.__render_done = True
+        self._on_render_done()
         
         # Finally return rendered output
+        self._prev_states["prev_rendered_output"] = (self._mutation_version, output)
+        self._cached_rendered_output = output # This is different from prev_states as it doesn't take version of output (will be used on frozen components)
         return output
-    
+        
     def _on_render_start(self):
         """
         Internal callback triggered at the beginning of component rendering.
-        
-        This is typically used internally by `pre_render` or the render system
-        to indicate that rendering has started.
         """
+        self._render_done = False
         self._render_started = True
-    
-    def pre_render(
-        self,
-        pre_render_children: bool = True,
-        deep_traversal: bool = False,
-        reverse_traversal: bool = False,
-    ) -> None:
-        """
-        Pre-renders this component and optionally its children to optimize future rendering.
-    
-        This method caches the output of `get_partial_string()` (which includes the
-        component's props, styles, and inner HTML) to avoid redundant rendering work.
-    
-        Optionally, it can also pre-render child components, either shallowly or deeply,
-        to reduce initial load time for complex component trees.
-    
-        Args:
-            pre_render_children (bool): Whether to pre-render direct children.
-            deep_traversal (bool): If True, recursively pre-renders all child components.
-                Use with caution on large trees due to performance impact.
-            reverse_traversal (bool): If True, children are pre-rendered from last to first.
-                This can help with components like `Page` that benefit from reverse warming.
-    
-        Notes:
-            Pre-rendering is most effective when scheduled in a background thread,
-            typically after receiving a request:
-    
-            Example:
-                ```py
-                from duck.html.components.page import Page
-                from duck.shortcuts import to_response
-    
-                def home(request):
-                    page = Page(request=request)
-                    background_thread.submit_task(
-                        lambda: page.pre_render(deep_traversal=True, reverse_traversal=True)
-                    )
-                    return to_response(page)
-                ```
-        """
-        if self.isroot():
-            # Assign component UID's
-            self.assign_component_uids(self)
         
-        # Pre-render self (style, props, inner body)
-        _ = self.get_partial_string()
-    
-        if self.accept_inner_html and pre_render_children:
-            children = self.children.copy()
-    
-            if reverse_traversal:
-                children = reversed(children)
-    
-            for child in children:
-                if self._render_started and self.render_done:
-                    # Rendering already started elsewhere; stop to avoid duplication.
-                    break
-    
-                if deep_traversal:
-                    child.pre_render(
-                        pre_render_children=True,
-                        deep_traversal=True,
-                        reverse_traversal=reverse_traversal,
-                    )
-                else:
-                    _ = child.get_partial_string()
-    
-        # Reset render state so as to detect if was render method started elsewhere. 
-        # Usually, render is done at this point
+    def _on_render_done(self):
+        """
+        Internal callback triggered at the end of component rendering.
+        """
+        self._render_done = True
         self._render_started = False
-                    
+        
     def render(self) -> str:
         """
         Render the component to produce html.
@@ -1376,6 +1592,51 @@ class HtmlComponent:
         output = self.to_string()
         return output
         
+    def to_vdom(self) -> VDomNode:
+        """
+        Converts the HtmlComponent into a virtual DOM node.
+    
+        Returns:
+            VDomNode: A virtual DOM representation of the HTML component.
+        """
+        prev_node_version, prev_node = self._prev_states["prev_vdom_node"]
+        
+        if prev_node_version == self._mutation_version and prev_node:
+            if not prev_node.key != self.uid:
+                prev_node.key = self.uid
+            return prev_node
+            
+        if self.isroot():
+            # Assign component UID's
+            self.assign_component_uids(self)
+                
+        # Make sure we use copies of the real component so that further changes will impose a difference
+        try:
+            _ = self.uid # Check if uid assigned yet.
+        except ComponentError:
+            # Property uid not assigned yet
+            # This component might have been inserted after an event e.g. onclick.
+            # Reassign component tree UID's to avoid messing up the structure thereby avoiding
+            # unnecessary patches
+            root = self.root
+            if root:
+                self.assign_component_uids(root)
+            
+        node = VDomNode(
+            tag="%s"%self.element,
+            key=self.uid,
+            props=self.props.copy(),
+            style=self.style.copy(),
+            text="%s"%self.inner_html if self.accept_inner_html else None,
+            children=[child.to_vdom() for child in getattr(self, "children", [])],
+            component=self,
+        )
+        
+        # Record node and return it
+        self._prev_states["prev_vdom_node"] = (self._mutation_version, node)
+        self._cached_vdom_node = node # This is different from prev_states as it doesn't take version of node (will be used on frozen components)
+        return node
+    
     def force_set_component_attr(self, key: str, value: Any):
         """
         Forcefully sets an attribute on the component, bypassing attribute protection.
@@ -1436,18 +1697,38 @@ class HtmlComponent:
         ):
             self._component_attr_protection_targets[key] = value
         
-    def __str__(self) -> str:
-        return self.__repr__()
-
-    def __repr__(self) -> str:
-        return (
-            f"<[{self.__class__.__name__} element='{self.element}' "
-            f"children={len(self.children)}]>" if hasattr(self, "children") 
-            else f"<[{self.__class__.__name__} element='{self.element}']>" 
-        )
+    def __copy__(self):
+        return self.copy()
         
+    def __repr__(self) -> str:
+        truncated_inner_html = smart_truncate(str(self.inner_html), cap=8)
+        
+        # Get component UID
+        # UID may be assigned by the following statements
+        if not self.is_frozen():
+            uid = self.__uid or (self.uid if self.isroot() else None)
+        else:
+            with self.temp_partial_unfreeze(unfreeze_descendants=False):
+                uid = self.__uid or (self.uid if self.isroot() else None)
+                
+        # Build component string repr
+        first_part = f"<[{self.__class__.__name__}{' copy' if self.is_a_copy() else ''} uid='{uid}', element='{self.element}', inner_html='{truncated_inner_html}'"
+        children = getattr(self, "children", None)
+                
+        if children is not None:
+            return first_part + " children=%d]>"%(len(children)) 
+        else:
+            return first_part + "]>"
+            
+    __str__ = __repr__ # Assign __str__ as well
 
-class NoInnerHtmlComponent(BasicExtension, StyleCompatibilityExtension, HtmlComponent):
+
+class NoInnerHtmlComponent(
+    FreezeableComponentExtension,
+    BasicExtension,
+    StyleCompatibilityExtension,
+    HtmlComponent,
+):
     """
     This is the HTML component with no Inner Body.
 
@@ -1461,7 +1742,6 @@ class NoInnerHtmlComponent(BasicExtension, StyleCompatibilityExtension, HtmlComp
     Notes:
     - The html components that fall in this category are usually HTML Input elements.
     """
-
     def __init__(
         self,
         element: Optional[str] = None,
@@ -1480,7 +1760,12 @@ class NoInnerHtmlComponent(BasicExtension, StyleCompatibilityExtension, HtmlComp
         )
 
 
-class InnerHtmlComponent(BasicExtension, StyleCompatibilityExtension, HtmlComponent):
+class InnerHtmlComponent(
+    FreezeableComponentExtension,
+    BasicExtension,
+    StyleCompatibilityExtension,
+    HtmlComponent,
+):
     """
     This is the HTML component with Inner Body presence.
 
@@ -1501,22 +1786,21 @@ class InnerHtmlComponent(BasicExtension, StyleCompatibilityExtension, HtmlCompon
     Notes:
     - The html components that fall in this category are usually basic HTML elements.
     """
-
     def __init__(
         self,
         element: Optional[str] = None,
         properties: Optional[Dict[str, str]] = None,
         props: Optional[Dict[str, str]] = None,
         style: Optional[Dict[str, str]] = None,
-        inner_html: Optional[Union[str, LiveResult, Lazy]] = None,
+        inner_html: Optional[Union[str, str, float]] = None,
         children: Optional[List["HtmlComponent"]] = None,
         **kwargs,
     ):
-        from duck.html.components.core.children import ChildrenList
-        
         # Initialize the children list
-        self.children = ChildrenList(parent=self)
+        # Do not automatically call on_new_child events before super().__init__; this is causing errors somehow.
+        self.__children = ChildrenList(parent=self, initlist=children or [], skip_initlist_events=True)
         
+        # Super initialization
         super().__init__(
             element,
             accept_inner_html=True,
@@ -1527,9 +1811,18 @@ class InnerHtmlComponent(BasicExtension, StyleCompatibilityExtension, HtmlCompon
             **kwargs,
         )
         
-        # Add children.
-        self.children.extend(children or [])
+        # Validate every init child manually
+        for child in children or []:
+            # Do not check if component is loaded, esp for lazy components like Pages
+            self.__children.on_new_child(child, component_loaded_check=False) # Validate child
         
+    @property
+    def children(self) -> ChildrenList[HtmlComponent]:
+        """
+        Returns the component children.
+        """
+        return self.__children
+         
     def add_child(self, child: HtmlComponent):
         """
         Adds a child component to this HTML component.

@@ -363,6 +363,7 @@ class App:
         start_asyncio_event_loop: bool = True,
         recreate_managers: bool = False,
         start_automations_event_loop: bool = False,
+        start_component_bg_threadpool: bool = False,
     ):
         """
         Starts or restarts background workers, e.g. `AsyncioLoopManager` & `ThreadPoolManager`.
@@ -373,6 +374,7 @@ class App:
             start_asyncio_event_loop (bool): Whether to start asyncio event loop either in `WSGI` or `ASGI` environment.
             recreate_managers (bool): Whether to recreate managers for the current thread and all it's descendents. Defaults to False.
             start_automations_event_loop (bool): Whether to start a dedicated event loop for running automations. Defaults to False.
+            start_component_bg_threadpool (bool): Whether to start the background threadpool manager for HTML components rendering, assistance, etc. Defaults to False.
             
         Notes:
         - This is usually useful when starting new process. Background workers like the request handling threadpool and asyncio loop's 
@@ -393,6 +395,16 @@ class App:
             loop_manager = get_or_create_loop_manager(id="automations-loop-manager")
             loop_manager.start()
             
+        if start_component_bg_threadpool:
+            component_bg_manager = get_or_create_thread_manager(id="component-bg-worker")
+            component_bg_manager.start(
+                task_type="component-task",
+                max_workers=3,
+                daemon=True,
+                thread_name_prefix="component-bg-worker",
+            )
+        
+        # GENERAL SYNC/ASYNC MANGERS
         if recreate_managers:
             if not SETTINGS['ASYNC_HANDLING']:
                 # In WSGI, reassign loop manager/thread manager for this worker thread and its descendents
@@ -404,7 +416,7 @@ class App:
                 # Reassign new loop manager for this worker thread and all descendent threads
                 get_or_create_loop_manager(force_create=True)
                     
-        # Reinitialize asyncio/threadpool manager
+        # REINITIALIZE or START asyncio/threadpool managers
         if SETTINGS['ASYNC_HANDLING']:
             if start_asyncio_event_loop:
                 loop_manager = get_or_create_loop_manager(strictly_get=False)
@@ -427,7 +439,7 @@ class App:
             if _start_bg_event_loop and start_asyncio_event_loop:
                 loop_manager = get_or_create_loop_manager(strictly_get=False)
                 loop_manager.start()
-    
+        
     @staticmethod
     def check_ssl_credentials():
         """
@@ -1080,7 +1092,11 @@ class App:
             )
         
         # Start background event loop or threadpool if needed
-        type(self).start_background_workers(self, start_automations_event_loop=True)
+        type(self).start_background_workers(
+            self,
+            start_automations_event_loop=True,
+            start_component_bg_threadpool=True,
+        )
         
         if not SETTINGS['ASYNC_HANDLING']:
             if self.start_bg_event_loop_if_wsgi:

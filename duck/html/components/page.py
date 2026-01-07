@@ -196,13 +196,22 @@ class Page(InnerComponent):
     and analytics support.
     """
 
-    def __init__(self, request = None, disable_lively: bool = False, *args, **kwargs):
+    def __init__(
+        self,
+        request,
+        disable_lively: bool = False,
+        lazy: bool = True,
+        *args,
+        **kwargs
+    ):
         """
         Initialize the Page component.
         
         Args:
             request (HttpRequest): The target HTTP request.
             disable_lively (bool): This disables `Lively` components for the page. Defaults to False.
+            lazy (bool): This makes the page not aggressively load the page tree on initialization but let the 
+                system decide the right time to load the page. Defaults to True.
         """
         self._request = request
         self._document_event_bindings: Dict[Union[Callable, EventHandlerChain], Set[HtmlComponent]] = {}
@@ -211,15 +220,15 @@ class Page(InnerComponent):
         self.disable_lively = disable_lively
         self.fullpage_reload = False # Set this to enable full page reload.
         self.fullpage_reload_headers = ["set-cookie"] # Headers that requires fullpage reload.
-        super().__init__(*args, disable_lively=disable_lively, **kwargs)
+        
+        # Super initialization
+        super().__init__(*args, disable_lively=disable_lively, lazy=lazy, **kwargs)
 
     @property
     def request(self) -> "HttpRequest":
         """
         Returns the request object, raises if missing.
         """
-        from duck.http.request import HttpRequest # Import module typing definations
-        
         request = self._request
         
         if not request:
@@ -240,9 +249,7 @@ class Page(InnerComponent):
             RequestNotFoundError:  If the request is not in kwargs or kwargs['context'] (if used in templates).
         """
         # This method overrides the default get_request_or_raise to avoid recursion error when called within the `request` property.
-        from duck.http.request import HttpRequest
-        
-        request: HttpRequest = getattr(self, "_request", None) or self.kwargs.get('request')
+        request = getattr(self, "_request", None) or self.kwargs.get('request')
         
         if not request:
             # Μaybe this component is used in a template.
@@ -258,9 +265,9 @@ class Page(InnerComponent):
     def get_element(self) -> str:
         return "html"
           
-    def to_string(self):
+    def render(self):
         # Override to_string to include doctype declaration.
-        return "<!DOCTYPE html>" + super().to_string()
+        return "<!DOCTYPE html>" + super().render()
         
     def document_bind(
         self,
@@ -408,8 +415,14 @@ class Page(InnerComponent):
         
     def on_create(self):
         from duck.html.components.core.system import LivelyComponentSystem
+        
+        # Super create
         super().on_create()
         
+        # Set default page ID
+        self.id = "page-root"
+        
+        # Validate request
         _ = self.request  # Validate request presence
         
         # Add private attributes for storing components, etc.
@@ -424,7 +437,7 @@ class Page(InnerComponent):
         
         # Base html lang attribute
         self.props["lang"] = "en"
-
+        
         # Core html structure
         self.head = to_component("", "head")
         self.body = to_component("", "body")
@@ -433,7 +446,7 @@ class Page(InnerComponent):
         self.body.style["flex-direction"] = "column"
         
         meta = lambda **kwargs: to_component("", "meta", no_closing_tag=True, **kwargs)
-
+        
         # Basic meta tags
         self.charset = meta(props={"charset": "UTF-8"})
         self.viewport = meta(props={"name": "viewport", "content": "width=device-width, initial-scale=1.0"})
@@ -441,7 +454,7 @@ class Page(InnerComponent):
         self.keywords = meta(props={"name": "keywords", "content": ""})
         self.robots = meta(props={"name": "robots", "content": "index, follow"})
         self.lang_http_equiv = meta(props={"http-equiv": "Content-Language", "content": "en"})
-
+        
         # Title and favicon placeholder
         self.title = to_component("", "title")
         self.favicons: List[Component] = []  # support multiple favicons
@@ -465,15 +478,15 @@ class Page(InnerComponent):
             self.title,
         ])
         
+        
+        # Expose the component UID via JS
+        # This next line should be first before adding LivelyScripts for these scripts to
+        # be able to resolve the Page UID.
+        self.page_uid_script = self.add_script(inline=f"window.PAGE_UID=document.getElementById(`{self.id}`).dataset.uid;")
         if self.disable_lively:
             # Disable Lively scripts and other Lively components.
             return
             
-        # Expose the component UID via JS
-        # This next line should be first before adding LivelyScripts for these scripts to
-        # be able to resolve the Page UID.
-        self.add_script(inline=f"window.PAGE_UID='{self.uid}';")
-        
         # Add base css style to be used by lively system
         self.base_css = Style(
             inner_html="""
@@ -562,9 +575,7 @@ class Page(InnerComponent):
         # Set banner content.
         self.unsupported_browser_banner.set_content(self.unsupported_browser_info)
         
-        # Add container to store unsupported browser banner html
-        self.unsupported_browser_banner_container = Container(id="unsupported-browser-banner-container")
-        #self.unsupported_browser_banner_container.add_child(self.unsupported_browser_banner)
+        # Add unsupported browser banner
         self.add_to_body(self.unsupported_browser_banner)
         
         if LivelyComponentSystem.is_active():
@@ -576,7 +587,6 @@ class Page(InnerComponent):
                   const unsupportedBrowserBanner = document.getElementById(`{self.unsupported_browser_banner.id}`);
                   setTimeout(() => {{
                     if (!window.LIVELY_SCRIPT_COMPATIBLE && window.receivedFullLivelyJs) {{
-                      console.log("Not supported");
                       openModal(unsupportedBrowserBanner);
                     }}
                   }}, 10); // Delay a little bit
@@ -585,6 +595,11 @@ class Page(InnerComponent):
             )
             
     def add_child(self, child):
+        try:
+            from duck.logging import logger
+        except Exception:
+            from duck.logging import console as logger
+            
         head = getattr(self, 'head', None)
         body = getattr(self, "body", None)
         

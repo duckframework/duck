@@ -33,6 +33,8 @@ class URLPattern(dict):
     A custom dictionary to represent a URL pattern.
     It allows easy access to URL, handler, name, and methods.
     """
+    
+    __slots__ = ()
 
     def __init__(self, url: str, handler: Callable, name: Optional[str], methods: List[str], regex: bool = False):
         super().__init__()

@@ -127,7 +127,10 @@ class HtmlComponentTemplateTag(TemplateTag):
                 
                 try:
                     # return the MarkupSafe string
-                    return mark_safe(root_tag.component_cls(*args, **kwargs).to_string())
+                    component = root_tag.component_cls(*args, **kwargs)
+                    if not component.is_loaded():
+                        component.load()
+                    return mark_safe(component.render())
                 except Exception as e:
                     raise HtmlComponentError(f"Error invoking html component '{root_tag.tagname}': {e} ")
 
@@ -208,7 +211,10 @@ class HtmlComponentTemplateTag(TemplateTag):
         """
         @mark_safe
         def jinja2_tag_wrapper(*args, **kwargs):
-                return self.component_cls(*args, **kwargs).to_string()
+                component = self.component_cls(*args, **kwargs)
+                if not component.is_loaded():
+                    component.load()
+                return component.render()
         environment.globals[self.tagname] = jinja2_tag_wrapper
 
 

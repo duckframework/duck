@@ -27,6 +27,7 @@ from duck.contrib.websockets import (
     OpCode,
     CloseCode,
 )
+from duck.html.components.extensions.frozen import FreezeableComponentError
 from duck.html.components.core.force_update import (
     ForceUpdate,
     ForceUpdateError,
@@ -355,14 +356,18 @@ class EventHandler:
         force_updates_patchlist = [] # List of force updates patches already sent to client.
         is_event_handler_chain = isinstance(event_handler, EventHandlerChain)
         
-        if not is_event_handler_chain:
-            # Execute event handler
-            # Convert handler to async (if handler is synchronous) in case it is doing long tasks to avoid blocking event loop
-            event_handler_coro = convert_to_async_if_needed(event_handler)(component, event_name, value, self.ws_view)
-            event_handler_execution_results[event_handler] = await event_handler_coro
-        else:
-            event_handler_chain = event_handler
-            event_handler_execution_results = await event_handler_chain.async_execute((component, event_name, value, self.ws_view), restart=False)
+        try:
+            if not is_event_handler_chain:
+                # Execute event handler
+                # Convert handler to async (if handler is synchronous) in case it is doing long tasks to avoid blocking event loop
+                event_handler_coro = convert_to_async_if_needed(event_handler)(component, event_name, value, self.ws_view)
+                event_handler_execution_results[event_handler] = await event_handler_coro
+            else:
+                event_handler_chain = event_handler
+                event_handler_execution_results = await event_handler_chain.async_execute((component, event_name, value, self.ws_view), restart=False)
+        
+        except FreezeableComponentError as e:
+            raise FreezeableComponentError(f"{e}. This may be a result of caching a non-static dynamic component.")
             
         async def on_force_update_patch(patch):
             """
@@ -443,7 +448,7 @@ class EventHandler:
         # Flag that DOMContentLoaded was executed so as to avoid repeated loads if page is revisited esp in backward navigation
         if is_document_event and event_name == "DOMContentLoaded":
             component._domcontentloaded_event_called = True
-
+                
         # If REPLACE_PROPS patch was sent for the current component, reset _event_bindings_changed
         if resolved_component_props_patch_sent:
             # Props patches are definately sent by this time if there were changes to event bindings.
@@ -463,7 +468,7 @@ class EventHandler:
                        
             # Props/events now synced with client, reset the event bindings changed flag.
             resolved_component._event_bindings_changed = False
-            
+                
     async def handle_js_execution_result(self, data: List[Any]):
         """
         Process a JavaScript execution result.
@@ -559,10 +564,12 @@ class EventHandler:
                         if isinstance(response, ComponentResponse):
                             # This is easy to diff
                             next_component = response.component
+                            if not next_component.is_loaded():
+                                await convert_to_async_if_needed(next_component.load)()
                     
                     # Check if next component has been set somehow e.g. from ComponentResponse
                     if next_component:
-                        # Set dummy response and request
+                        # Set dummy response and request (for logging)
                         request = HttpRequest(
                             client_address=self.ws_view.request.client_address, 
                             client_socket=self.ws_view.request.client_socket, 

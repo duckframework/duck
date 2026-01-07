@@ -26,6 +26,10 @@ from duck.utils.threading import async_to_sync_future
 from duck.contrib.sync import convert_to_async_if_needed
 
 
+# TODO: Implement file caching (only on reads, on_write: just open the actual file descriptor).
+# FILE_CACHE = InMemoryCache(maxkeys=1024)
+
+
 def to_async_fileio_stream(fileio_stream: "FileIOStream") -> "AsyncFileIOStream":
     """
     Converts file_io_stream to async file io stream if not already async.
