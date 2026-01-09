@@ -34,6 +34,13 @@ class ComponentNotLoadedError(HtmlComponentError):
   """
 
 
+class FrozenComponentError(HtmlComponentError):
+    """
+    Raised on attempts to mutate frozen components or data.
+    """
+    pass
+
+
 class NoRootError(HtmlComponentError):
     """
     Exception raised for errors when an html component has no root component.

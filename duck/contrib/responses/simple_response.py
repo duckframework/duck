@@ -11,6 +11,7 @@ from duck.settings import SETTINGS
 from duck.storage import duck_storage
 from duck.utils.safemarkup import mark_safe
 from duck.utils.path import joinpaths
+from duck.contrib.responses.template_response import template_response as simple_response # Default template response has better styling, use that instead
 
 
 FAVICON = os.getenv("SIMPLE_RESPONSE_DEFAULT_ICON") or joinpaths("/" + str(SETTINGS["STATIC_URL"]), "/ducksite/duck-favicon.png")
@@ -88,7 +89,7 @@ def _make_simple_response(
     return response
 
 
-def simple_response(
+def _simple_response(
     response_class: Type[HttpResponse],
     title: str = None,
     heading: str = None,

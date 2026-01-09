@@ -27,20 +27,20 @@ def static_component(
     skip_cache_attr: str = "skip_cache",
     on_cache_result: Optional[Callable] = None,
     return_copy: bool = True,
-    **extra_cached_component_kwargs,
 ):
     """
     Decorator for declaring static components.  
     
     Example:
     ```py
-    @static_compoment(cache_targets=["text"])
+    @static_compoment()
     class MyStaticButton(Button):
         pass
     
     btn = MyStaticButton(text="hello world") # New instance
-    btn.is_frozen() # True when component has finished being frozen
+    btn.is_frozen() # True
     btn.is_from_cache() # False for the first time
+    btn.is_a_copy() # True if not isinstance of Page component
     
     btn = MyStaticButton(text="hello world") 
     btn.is_from_cache() # True
@@ -60,7 +60,6 @@ def static_component(
         return_copy=return_copy,
         freeze=True,
         _no_caching=not use_caching,
-        **extra_cached_component_kwargs,
     )
 
 
@@ -77,8 +76,9 @@ def StaticComponent(component_cls: Type, **static_options):
     ) # Returns function for retrieving or creating the button instance.
     
     btn = statc_btn_func(id="my-btn", text="Hello world")
-    btn.is_from_cache() # Returns True or False
+    btn.is_from_cache() # Returns False for the first time and True otherwise
     btn.is_a_copy() # Returns True by default.
+    btn.is_a_copy() # True if not isinstance of Page component
     ``` 
     """
     return static_component(**static_options)(component_cls)

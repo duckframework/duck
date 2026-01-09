@@ -870,7 +870,6 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
                 break  # No more data to read
             
             yield chunk
-            
             remaining -= len(chunk)
     
     async def _async_get_range_stream(self) -> AsyncGenerator:

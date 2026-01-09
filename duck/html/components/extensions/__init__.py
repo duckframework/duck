@@ -30,6 +30,7 @@ btn = MyButton()
 btn.style["background-color"] == "red"  # Outputs: True
 ```
 """
+# NOTE: In the future we need to use a max of 2 extensions just to avoid Method Resolution Order (MRO) overhead.
 from typing import Optional, Any, Union
 
 

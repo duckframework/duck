@@ -59,7 +59,6 @@ def get_debug_error_as_html(exception: Exception, request: Optional = None):
     """
     Returns the exception as html (only if DEBUG=True, else None).
     """
-    
     if not SETTINGS["DEBUG"]:
         # return None immediately
         return
@@ -114,15 +113,10 @@ def get_timeout_error_response(timeout: Optional[Union[int, float]]) -> HttpRequ
         
     """
     if SETTINGS["DEBUG"]:
-        body = "<p>Client sent nothing in expected time it was suppose to!</p>"
-        
+        body = "<p>Client sent nothing in expected time it was suppose to!</p>"    
         if timeout:
             body = "<p>Client sent nothing in expected time it was suppose to!</p><div>Timeout: ({timeout} seconds)</div>"
-        
-        response = template_response(
-            HttpRequestTimeoutResponse,
-            body=body,
-        )
+        response = template_response(HttpRequestTimeoutResponse, body=body)
     else:
         response = simple_response(HttpRequestTimeoutResponse)
     
@@ -139,13 +133,10 @@ def get_server_error_response(exception: Exception, request: Optional = None):
     
     if SETTINGS["DEBUG"]:
         body = get_debug_error_as_html(exception, request)
-        response = template_response(
-            HttpServerErrorResponse,
-            body=body,
-        )
-        return response
+        response = template_response(HttpServerErrorResponse, body=body)
     else:
         response = simple_response(HttpServerErrorResponse)
+    return response
 
 
 def get_bad_gateway_error_response(exception: Optional[Exception], request: Optional = None):
@@ -162,10 +153,7 @@ def get_bad_gateway_error_response(exception: Optional[Exception], request: Opti
     
     if SETTINGS["DEBUG"]:
         body = get_debug_error_as_html(exception, request)
-        response = template_response(
-            HttpBadGatewayResponse,
-            body=body,
-        )
+        response = template_response(HttpBadGatewayResponse, body=body)
     else:
         response = simple_response(HttpBadGatewayResponse)
     return response
@@ -197,7 +185,6 @@ def get_404_error_response(request: HttpRequest):
             
             # Replace < and > in route with allowed html signs (if present)
             route = route.replace('>', "&gt;").replace('<', "&lt;")
-            
             body += f"""\n
             <div class='route' >
                 <strong>{route}</strong> [name='{name}']
@@ -227,10 +214,7 @@ def get_404_error_response(request: HttpRequest):
         body += style
         
         # Create an http template response
-        response = template_response(
-            HttpNotFoundResponse,
-            body=body,
-        )
+        response = template_response(HttpNotFoundResponse, body=body)
     else:
         body = None
         response = simple_response(HttpNotFoundResponse, body=body)
@@ -253,11 +237,7 @@ def get_method_not_allowed_error_response(request: HttpRequest, route_info: Opti
             body = f'<p>Specified Method not allowed</p><div class="allowed-methods"> Allowed Methods: {[m.upper() for m in route_info["methods"]]}'
         else:
             body = "<p>Specified Method not allowed</p>"
-        
-        response = template_response(
-            HttpMethodNotAllowedResponse,
-            body=body,
-        )
+        response = template_response(HttpMethodNotAllowedResponse, body=body)
     else:
         body = None
         response = simple_response(HttpMethodNotAllowedResponse, body=body)
@@ -276,11 +256,11 @@ def get_bad_request_error_response(exception: Exception, request: Optional[HttpR
         request.META["DEBUG_MESSAGE"] = f"Bad Request: {request.path}"
     
     response_cls = HttpBadRequestResponse
+    ref = f"<p><b>Reference:</b> {exception}</p>"
     body = (
         "<p>Bad request, there is an error in request.</p><p>"
         "You might need to reconstruct request in right format</p>"
     )
-    ref = f"<p><b>Reference:</b> {exception}</p>"
     
     if isinstance(exception, RequestSyntaxError):
         response_cls = HttpBadRequestSyntaxResponse

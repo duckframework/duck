@@ -1,0 +1,13 @@
+sphinx
+myst-parser
+myst-parser[linkify]
+sphinx_copybutton
+sphinx_design
+sphinx-tabs
+sphinxcontrib-mermaid
+sphinxcontrib-napoleon
+readthedocs-sphinx-search
+sphinxawesome-theme
+sphinx_autodoc_typehints
+sphinx-multiversion
+git+https://github.com/digreatbrian/autodocx.git

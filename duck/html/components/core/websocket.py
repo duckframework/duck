@@ -27,7 +27,6 @@ from duck.contrib.websockets import (
     OpCode,
     CloseCode,
 )
-from duck.html.components.extensions.frozen import FreezeableComponentError
 from duck.html.components.core.force_update import (
     ForceUpdate,
     ForceUpdateError,
@@ -356,19 +355,15 @@ class EventHandler:
         force_updates_patchlist = [] # List of force updates patches already sent to client.
         is_event_handler_chain = isinstance(event_handler, EventHandlerChain)
         
-        try:
-            if not is_event_handler_chain:
-                # Execute event handler
-                # Convert handler to async (if handler is synchronous) in case it is doing long tasks to avoid blocking event loop
-                event_handler_coro = convert_to_async_if_needed(event_handler)(component, event_name, value, self.ws_view)
-                event_handler_execution_results[event_handler] = await event_handler_coro
-            else:
-                event_handler_chain = event_handler
-                event_handler_execution_results = await event_handler_chain.async_execute((component, event_name, value, self.ws_view), restart=False)
+        if not is_event_handler_chain:
+            # Execute event handler
+            # Convert handler to async (if handler is synchronous) in case it is doing long tasks to avoid blocking event loop
+            event_handler_coro = convert_to_async_if_needed(event_handler)(component, event_name, value, self.ws_view)
+            event_handler_execution_results[event_handler] = await event_handler_coro
+        else:
+            event_handler_chain = event_handler
+            event_handler_execution_results = await event_handler_chain.async_execute((component, event_name, value, self.ws_view), restart=False)
         
-        except FreezeableComponentError as e:
-            raise FreezeableComponentError(f"{e}. This may be a result of caching a non-static dynamic component.")
-            
         async def on_force_update_patch(patch):
             """
             Action called when new patch found as a result of a force update.

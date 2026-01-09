@@ -70,6 +70,11 @@ And more — see [feature list](https://duckframework.xyz/features)
 
 ---
 
+## TODO:
+- Need to cythonize some of the project parts for improved speed esp., components.
+
+---
+
 ## 🦆 Fun Facts
 
 - The **Duck** official website is powered by the **Duck** framework itself—showcasing a true "dogfooding" approach!

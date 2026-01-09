@@ -173,8 +173,6 @@ from duck.html.components.extensions import (
     BasicExtension,
     StyleCompatibilityExtension,
 )
-from duck.html.components.extensions.frozen import FreezeableComponent as FreezeableComponentExtension
-from duck.html.components.extensions.frozen import do_freeze as _do_freeze, FrozenDict
 from duck.html.components.core.props import PropertyStore, StyleStore
 from duck.html.components.core.children import ChildrenList
 from duck.html.components.core.vdom import VDomNode
@@ -195,11 +193,15 @@ from duck.html.components.core.exceptions import (
     ComponentAttributeProtection,
     ComponentCopyError,
     ComponentNotLoadedError,
+    FrozenComponentError,
 )
 
 
 # Patten for matching an html tag/element.
 ELEMENT_PATTERN = re.compile(r"\b[a-zA-Z0-9]+\b")
+
+
+# TODO: Need to improve component load(). It's slow, especially for huge component trees like Page component tree
 
 
 def quote(html: Optional[str] = None, element: str = 'span', no_closing_tag: bool = False, **kwargs) -> Union["InnerComponent", "NoInnerComponent"]:
@@ -323,14 +325,14 @@ class HtmlComponent:
         self.__is_loading = False
         self.__loaded = False
         self.__inner_html = ""
+        self.__is_frozen: bool = False
         
         # Other private attributes
         cls = self.__class__.__name__
-        self._mutation_version = 0
+        self._mutation_version = 0 # Global mutation version
+        self._children_structure_mutation_version = 0 # Mutation version for the children structure/position
         self._render_started = False
         self._render_done = False
-        self._cached_rendered_output = None
-        self._cached_vdom_node = None
         self._is_from_cache = False
         self._is_a_copy = False
         self._copied_from = None
@@ -361,9 +363,7 @@ class HtmlComponent:
             '_event_bindings',
             '_document_event_bindings',
             'fullpage_reload_headers',
-            '_freeze_exceptions',
             '_prev_states',
-            '_temp_partial_unfreeze_disallow_attrs',
             'compatibility_keys',
             'kwargs',
         ] # __style, __properties, __children are already copied independantly, no need for them to be in here.
@@ -401,6 +401,7 @@ class HtmlComponent:
           "prev_inner_html": (None, ""),
           "prev_rendered_output": (None, ""),
           "prev_vdom_node": (None, None),
+          "prev_uid_assignment_mutation_version": (None, None), # version, uid
         } # Don't look at children as they may change any moment deep within the DOM tree.
         
         # Sets the previous rendered partial string, which may include style, props & inner body strings
@@ -436,18 +437,27 @@ class HtmlComponent:
             and not self.disable_lively
             and not self.get_raw_root().disable_lively
         ):
+            # Update lively props
             current_lively_props = self.get_component_system_data_props()
-            self.__properties.update(current_lively_props)
             
+            # Update lively props without trigger on_mutation handler
+            # Useful if componenent is frozen, avoids FrozenComponentError.
+            self.__properties.update(current_lively_props, call_on_set_item_handler=False)
+            
+            if self.is_frozen():
+                return self.__properties
+                
             # Remove data-* props if not present anymore.
             for prop in lively_data_props:
                 if prop not in current_lively_props and prop in self.__properties.keys():
                     # Delete prop from __properties
                     del self.__properties[prop]
+                    
         else:
-            for prop in lively_data_props:
-                if prop in self.__properties.keys():
-                    del self.__properties[prop]
+            if not self.is_frozen():
+                for prop in lively_data_props:
+                    if prop in self.__properties.keys():
+                        del self.__properties[prop]
         return self.__properties
 
     @property
@@ -617,6 +627,15 @@ class HtmlComponent:
         if not root_component.isroot():
             raise ComponentError("Root component is required for `uid` assignment, not a child component.")
             
+        prev_uid_assignment_mutation_version, prev_uid = root_component._prev_states["prev_uid_assignment_mutation_version"]
+        
+        if (
+            prev_uid_assignment_mutation_version is root_component._children_structure_mutation_version
+            and prev_uid == root_component.uid
+        ):
+            # Do nothing because the children structure didn't change, no new child/no delete child
+            return
+            
         # Continue
         queue = deque()
         queue.append((root_component, root_component.uid))
@@ -630,7 +649,7 @@ class HtmlComponent:
             # Assign component UID
             if component._HtmlComponent__uid != uid:
                 component.uid = uid
-            
+                
             # Call on_root_finalized event.
             if not component.isroot() and not component._on_root_finalized_called:
                 component.on_root_finalized(component.root)
@@ -667,6 +686,9 @@ class HtmlComponent:
                 child_uid = f"{uid}.{index}"
                 queue.append((child, child_uid))
                 
+        # Record the uid assignment action
+        root_component._prev_states["prev_uid_assignment_mutation_version"] = (root_component._children_structure_mutation_version, root_component.uid)
+    
     def is_loaded(self) -> bool:
         """
         Returns a boolean on whether if the component is loaded.
@@ -681,10 +703,17 @@ class HtmlComponent:
         
     def is_frozen(self) -> bool:
         """
-        Returns False always (if not implemented, usually implemented FrozenComponent extension).
+        Returns boolean on whether if the component is frozen or not.
         """
-        return False
-        
+        if self.parent:
+            return (
+                self.__is_frozen
+                or self.parent.is_frozen()
+                or self.root.is_frozen()
+            )
+        else:
+            return self.__is_frozen
+            
     def is_a_copy(self) -> bool:
         """
         Returns a boolean on whether this component is a copy from another component.
@@ -753,7 +782,18 @@ class HtmlComponent:
         """
         Private entry method to `on_mutation` event.
         """
+        if self.is_frozen():
+            raise FrozenComponentError(f"Mutation not allowed on frozen component: \n{mutation}")
+            
+        # TODO: Use better fine-grained mutation versions instead of this global one
+        # For example children_mutation_version, props_mutation_version & style_mutation_version
         self._mutation_version += 1
+        
+        if mutation.code in {MutationCode.INSERT_CHILD, MutationCode.DELETE_CHILD}:
+            if mutation.payload["parent"] is self:
+                self._children_structure_mutation_version += 1
+        
+        # Call the customizable mutation handler
         self.on_mutation(mutation)
         
     def on_create(self):
@@ -853,6 +893,7 @@ class HtmlComponent:
         - Useful for propagating mutations, marking caches dirty, or other upward operations.
         """
         node = self if include_self else getattr(self, "parent", None)
+        
         while node is not None:
             func(node)
             node = getattr(node, "parent", None)
@@ -894,11 +935,8 @@ class HtmlComponent:
                 raise e # Reraise exception
             
             finally:
-                if not self.is_frozen():
-                    self.__is_loading = False
-                else:
-                    # Bypass frozen attr check
-                    object.__setattr__(self, "__is_loading", True)
+                self.__is_loading = False
+                
         else:
             # Already loaded.
             # Maybe `ensure_freeze` was called using the FrozenComponent extension.
@@ -977,15 +1015,13 @@ class HtmlComponent:
              cls = component.__class__
              new_component = object.__new__(cls)
              new_component.__dict__ = component.__dict__.copy()
-             do_freeze = lambda value: _do_freeze(value, responsible_component=component._freeze_responsible_component)
              
              # Copy props/style
-             is_component_frozen = component.is_frozen()
-             new_props = PropertyStore(new_component.props) if not is_component_frozen else FrozenDict(new_component.props)
-             new_style = StyleStore(new_component.style) if not is_component_frozen else FrozenDict(new_component.style)
+             new_props = PropertyStore(new_component.props)
+             new_style = StyleStore(new_component.style)
              
-             object.__setattr__(new_props, "_version" if is_component_frozen else "_PropertyStore__version", component.style._version)
-             object.__setattr__(new_style, "_version" if is_component_frozen else "_PropertyStore__version", component.props._version)
+             object.__setattr__(new_props, "_PropertyStore__version", component.style._version)
+             object.__setattr__(new_style, "_PropertyStore__version", component.props._version)
              
              object.__setattr__(
                  new_component,
@@ -1007,7 +1043,6 @@ class HtmlComponent:
              for i in component._copy_container_attrs:
                  try:
                      value = getattr(new_component, i)
-                 
                  except AttributeError:
                      continue
                      
@@ -1029,16 +1064,6 @@ class HtmlComponent:
                     raise ComponentCopyError(
                         "Shallow copy only allowed on frozen components."
                     )
-                else:
-                    responsible_component = c._freeze_responsible_component
-                    exc_components = responsible_component._component_freeze_exceptions
-                    exc_types = responsible_component._component_freeze_exception_types
-                    
-                    if exc_components or exc_types:
-                        raise ComponentCopyError(
-                            "Shallow copy only allowed on completely frozen components. "
-                            "Found exceptions to freeze condition."
-                        )
                     
             # Check if component is frozen
             check_frozen(self)
@@ -1072,7 +1097,6 @@ class HtmlComponent:
         # Iterative traversal
         while stack:
             original, copied = stack.pop()
-            do_freeze = lambda value: _do_freeze(value, responsible_component=original._freeze_responsible_component)
             
             # Update copied root
             object.__setattr__(copied, "_HtmlComponent__root", root_copy.get_raw_root()) # Assign root
@@ -1099,24 +1123,55 @@ class HtmlComponent:
                 new_children.append(child_copy)
                 
                 # Re-set mutation callbacks
-                if not child_copy.is_frozen():
-                    child_copy.set_mutation_callbacks()
+                child_copy.set_mutation_callbacks()
                 
             # Assign copied children list to copied parent
-            if not copied.is_frozen():
-                new_children = ChildrenList(parent=copied, initlist=new_children, skip_initlist_events=True)
-            else:
-                do_freeze(new_children)
+            new_children = ChildrenList(parent=copied, initlist=new_children, skip_initlist_events=True)
             
             # Finally assign copied children
             object.__setattr__(copied, "_InnerHtmlComponent__children", new_children)
         
         # Finally return root copied component
-        if not root_copy.is_frozen():
-            # Re-set mutation callbacks
-            root_copy.set_mutation_callbacks()
+        # Re-set mutation callbacks
+        root_copy.set_mutation_callbacks()
         return root_copy
     
+    def freeze(self):
+        """
+        Freeze the component.
+        """
+        self.raise_if_not_loaded("Cannot freeze component which is not loaded yet, use `ensure_freeze()` instead.")
+        self.__is_frozen = True
+        
+    def ensure_freeze(self, *args, **kwargs):
+        """
+        This works just like `freeze()` but does not raise an exception if component is not yet loaded.  
+        
+        It ensures that `freeze` is called whenever the component is loaded (if not already loaded) or 
+        just freeze the component right away if component is already loaded.
+        """
+        # TODO: This must be implemented in the future.
+        if self.is_frozen():
+            return
+        
+        def ensure_freeze():
+            """
+            This just freezes the component and provide a reference for debugging 
+            when `load()` fails because of this function. 
+            """
+            self.freeze(*args, **kwargs)
+            
+        if self.is_loaded():
+            self.freeze(*args, **kwargs)
+        else:
+            # Load is not called yet or already loading.
+            self._ensure_freeze_callback = ensure_freeze
+             
+            if self.is_loaded() and not self.is_frozen():
+                # Component already loaded, maybe component was loading already 
+                # but it was about to finish that it didn't see the _ensure_freeze_callback attribute.
+                self.freeze(*args, **kwargs)
+        
     def check_component_system_active(self, inactive_msg: str = None):
         """
         Checks if the component system responsible for `WebSocket` communication
@@ -1525,6 +1580,10 @@ class HtmlComponent:
             f"This may mean that the component is a lazy component."
         )
         
+        # The following line triggers a mutation if root UID has been altered
+        if self.isroot():
+            _ = self.props # updates the props with new uid if uid changed.
+            
         # Check if there has been any kind of mutation.
         prev_output_version, prev_output = self._prev_states["prev_rendered_output"] 
         
@@ -1568,7 +1627,6 @@ class HtmlComponent:
         
         # Finally return rendered output
         self._prev_states["prev_rendered_output"] = (self._mutation_version, output)
-        self._cached_rendered_output = output # This is different from prev_states as it doesn't take version of output (will be used on frozen components)
         return output
         
     def _on_render_start(self):
@@ -1601,10 +1659,14 @@ class HtmlComponent:
         """
         prev_node_version, prev_node = self._prev_states["prev_vdom_node"]
         
-        if prev_node_version == self._mutation_version and prev_node:
-            if not prev_node.key != self.uid:
-                prev_node.key = self.uid
-            return prev_node
+        if (
+            prev_node_version == self._mutation_version
+            and prev_node 
+            and prev_node.key == self.uid
+        ):
+           # Only return prev_node if uid==key, trying to patch prev_node.key is 
+           # causing issues
+           return prev_node
             
         if self.isroot():
             # Assign component UID's
@@ -1634,7 +1696,6 @@ class HtmlComponent:
         
         # Record node and return it
         self._prev_states["prev_vdom_node"] = (self._mutation_version, node)
-        self._cached_vdom_node = node # This is different from prev_states as it doesn't take version of node (will be used on frozen components)
         return node
     
     def force_set_component_attr(self, key: str, value: Any):
@@ -1705,12 +1766,8 @@ class HtmlComponent:
         
         # Get component UID
         # UID may be assigned by the following statements
-        if not self.is_frozen():
-            uid = self.__uid or (self.uid if self.isroot() else None)
-        else:
-            with self.temp_partial_unfreeze(unfreeze_descendants=False):
-                uid = self.__uid or (self.uid if self.isroot() else None)
-                
+        uid = self.__uid or (self.uid if self.isroot() else None)
+        
         # Build component string repr
         first_part = f"<[{self.__class__.__name__}{' copy' if self.is_a_copy() else ''} uid='{uid}', element='{self.element}', inner_html='{truncated_inner_html}'"
         children = getattr(self, "children", None)
@@ -1724,7 +1781,6 @@ class HtmlComponent:
 
 
 class NoInnerHtmlComponent(
-    FreezeableComponentExtension,
     BasicExtension,
     StyleCompatibilityExtension,
     HtmlComponent,
@@ -1761,7 +1817,6 @@ class NoInnerHtmlComponent(
 
 
 class InnerHtmlComponent(
-    FreezeableComponentExtension,
     BasicExtension,
     StyleCompatibilityExtension,
     HtmlComponent,

@@ -23,6 +23,13 @@ from duck.utils.threading.threadpool import get_or_create_thread_manager
 DEFAULT_CACHE_BACKEND = InMemoryCache(maxkeys=2048)
 
 
+# NOTE: Whilst we are rendering component in background, computing vdom or
+# rendering different component whilst tasks are being executed in background results 
+# in increased latency because of background tasks being executed by another thread.
+
+# In general, computing becomes slower if busy background threads exist (not doing I/O)
+
+
 class ComponentCachingError(Exception):
     """
     Raised upon component caching error.
@@ -50,8 +57,6 @@ def cached_component(
     skip_cache_attr: str = "skip_cache",
     on_cache_result: Optional[Callable] = None,
     freeze: bool = False,
-    freeze_exceptions: Optional[List["HtmlComponent"]] = None,
-    freeze_type_exceptions: Optional[List[Type]] = None,
     return_copy: bool = True,
     _no_caching: bool = False,
 ):
@@ -77,14 +82,12 @@ def cached_component(
         on_cache_result (Optional[Callable]): This is a callable that can be executed upon receiving a result from cache. If some 
             data needs to be reinitialized, you can do this here.
        freeze (bool): Whether to freeze cached components. Defaults to True. This enables fast re-rendering.
-       freeze_exceptions (Optional[HtmlComponent]): This is a list of components to exclude when freezing. These can be dynamic parts 
-           of a component. You can use this to partially freeze cached components.
-       freeze_type_exceptions (Optional[List[Type]]): Instead of excluding component instances, you can exclude components by their type. 
-           This does the same as `cache_freeze_exceptions` but it targets component types rather than individual component instances.
-        returns_copy (bool): Whether to return a copy of the original cached component. This enables separation of concerns and avoids ComponentError 
-            when the component wants to be added to a new component tree. Defaults to True. This returns a copy only if component exist in cache.
+       returns_copy (bool): Whether to return a copy of the original cached component. This enables separation of concerns and avoids ComponentError 
+            when the component wants to be added to a new component tree. Defaults to True. This is only looked at if `freeze=False` and the component class 
+            is not a subclass of `Page` component. All static pages (frozen) will not be returned as copies.
     """
-    from duck.html.components import HtmlComponent, ComponentCopyError
+    from duck.html.components import Component, ComponentCopyError
+    from duck.html.components.page import Page
     
     if targets and ignore_args:
         raise ComponentCachingError("When 'targets' argument is supplied, only keys in the targets list are used. Argument 'ignore_args' is not applicable.")
@@ -152,7 +155,7 @@ def cached_component(
         return (resolved_args, resolved_kwargs)
         
     def decorator(component_cls: Type):
-        assert issubclass(component_cls, HtmlComponent), f"Component class must be a subclass of Component. Got {component_cls}."
+        assert issubclass(component_cls, Component), f"Component class must be a subclass of HtmlComponent. Got {component_cls}."
         
         @wraps(decorator)
         def wrapper(*component_args, **component_kwargs):
@@ -165,6 +168,7 @@ def cached_component(
             except KeyError as e:
                 raise KeyError("Error making cache key: {e}. Try using argument `targets` with simpler keys like 'id' or just utilize the 'namespace' argument.")
              
+            
             # Retrieve existing component from cache.
             resolved = cached = cache_backend.get(cache_key)
              
@@ -181,16 +185,20 @@ def cached_component(
                 # Freeze component if needed
                 if freeze:
                     # Ensure component is frozen
-                    resolved.ensure_freeze(exceptional_components=freeze_exceptions, exceptional_types=freeze_type_exceptions)
+                    resolved.ensure_freeze()
             
             else:
                 # This is from cache
                 if not resolved._is_from_cache:
                     resolved._is_from_cache = True
                 
-            # Continue    
+            # Continue
             if return_copy: # Return a copy to avoid altering the original component
                 original_component = resolved
+                
+                if original_component.is_frozen() and issubclass(component_cls, Page):
+                    # For all static page components, never return a copy
+                    return original_component
                 
                 if original_component.is_loading():
                     original_component.wait_for_load()
@@ -208,19 +216,17 @@ def cached_component(
                     resolved = resolved.copy()
                 
                 if not cached:
+                    # The original component is not cached yet.
                     # If we are returning a copy, make sure we do component load, pre_render & more to the original component
                     # so that the next time the component is retrieved, it's faster, no need to load the component again.
                     is_loaded = original_component.is_loaded()
                     is_frozen = original_component.is_frozen()
-                    
-                    # Using `render` on frozen component is a crutial step because FrozenComponent `render` updates the _cached_rendered_output which is 
-                    # very beneficial to frozen components in terms of speed.
                     pre_render = original_component.pre_render
                     render = original_component.render
                     
                     # For loaded components, submit tasks independantly (more granular for keeping threads mostly free)
                     # but for components not yet loaded, bulk tasks load() followed by other tasks (more busy threads because of many bulk tasks)
-                    tasks = [render if freeze or is_frozen else pre_render, original_component.to_vdom]
+                    tasks = [render if freeze or is_frozen else pre_render, lambda: original_component.to_vdom]
                     component_threadpool_manager = get_or_create_thread_manager(id="component-bg-worker", strictly_get=True)
                     
                     if not is_loaded:
@@ -232,12 +238,13 @@ def cached_component(
                         for task in tasks:
                             component_threadpool_manager.submit_task(task, task_type="component-task")
                     else:
-                        def execute_bulk_tasks():
+                        def execute_batched_tasks():
+                            # Execute tasks as a batch
                             for task in tasks:
                                 task()
                         
                         # Submit one bulked task
-                        component_threadpool_manager.submit_task(execute_bulk_tasks, task_type="component-task")
+                        component_threadpool_manager.submit_task(execute_batched_tasks, task_type="component-task")
                         
             # Finally return component
             if cached and on_cache_result:
@@ -245,6 +252,8 @@ def cached_component(
                 on_cache_result(resolved)
             
             # Finally return resolved component
+            if freeze:
+                resolved.ensure_freeze()  
             return resolved             
         return wrapper
     return decorator
@@ -264,7 +273,7 @@ def CachedComponent(component_cls: Type, **cache_options):
     ) # Returns function for retrieving or creating the button instance.
     
     btn = cached_btn_func(id="my-btn", text="Hello world")
-    btn.is_from_cache() # Returns either True or False
+    btn.is_from_cache() # Returns False for the first time and True otherwise
     btn.is_a_copy() # Returns True by default.
     ``` 
     """

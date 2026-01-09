@@ -111,7 +111,15 @@ from typing import (
 )
 
 from duck.utils.threading.patch import get_parent_thread
+from duck.exceptions.all import SettingsError
+from duck.utils.performance import exec_time
 
+
+try:
+    from duck.logging import logger
+except SettingsError:
+    from duck.logging import console as logger
+    
 
 REGISTRY = {}
 
@@ -323,11 +331,12 @@ class ThreadPoolManager:
                     t.daemon = True
         else:
             raise RuntimeError("Thread pool already active or running.")
-            
+    
     def submit_task(
         self,
         task: Callable,
         task_type: Optional[str] = None,
+        log_exception: bool = True,
     ) -> concurrent.futures.Future:
         """
         Submit a task to the threadpool.
@@ -336,7 +345,9 @@ class ThreadPoolManager:
             task (Callable): Callable to execute.
             task_type (Optional[str]): Type/flag of this task. If manager was initialized with
                 a specific allowed task_type, this must match or raise UnknownTaskError.
-
+            log_exception (bool): Whether to log exception immediately after it happens. Set this to False, if 
+                you are using `future.result()` or `future.exception()` later in your code.
+            
         Raises:
             UnknownTaskError: If task_type mismatches the pool's allowed type.
             RuntimeError: If the thread pool is None/not running.
@@ -350,8 +361,19 @@ class ThreadPoolManager:
         if self._task_type is not None:
             if task_type != self._task_type:
                 raise UnknownTaskError(task_type, self._task_type)
-
-        future = pool.submit(task)
+        
+        def wrapped_task():
+            try:
+                return task()
+            except Exception as e:
+                # Log exception already if 
+                if log_exception:
+                    logger.log(f"Error executing threadpool task '{task}': {e}", level=logger.WARNING)
+                    logger.log_exception(e)
+                raise e # Re-raise exception
+        
+        # Submit wrapped task instead.
+        future = pool.submit(wrapped_task)
         return future
         
     def get_pool(self) -> concurrent.futures.ThreadPoolExecutor:

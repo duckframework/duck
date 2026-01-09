@@ -151,7 +151,7 @@ class MicroApp:
         def start_server_wrapper(*args, **kw):
             try:
                 self.server.start_server(*args, **kw)
-            except KeyboardInterrrupt:
+            except KeyboardInterrupt:
                 pass
                 
         if not self.duck_server_thread or not self.duck_server_thread.is_alive():

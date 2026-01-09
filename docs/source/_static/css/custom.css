@@ -1,0 +1,4 @@
+body, html {
+  text-wrap: pretty;
+  max-width: 100% !important;
+}
