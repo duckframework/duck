@@ -1,1 +1,1 @@
-Repository for Duck framework Docs.
+# Directory for Duck framework Docs

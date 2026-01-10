@@ -10,7 +10,7 @@ Deploying your **Duck** web application is simple, fast, and beginner-friendly �
 
 ---
 
-### 🧠 Prerequisites  
+## 🧠 Prerequisites  
 
 ```{note}
 **Required Python version:** `>= 3.10` (recommended: **3.12+**)  
@@ -157,7 +157,7 @@ Before going live, make sure your application is optimized and secure:
   But also, don't forget to set it in `SYSTEMD_EXEC_COMMAND` in `settings.py` if you are explicilty using `duck runserver` 
   instead of `web/main.py`.
   
-- **Use workers:**
+- **Use workers for scalling:**
   ```python
   # From command line
   duck runserver --workers auto # Or just specify number of workers.
@@ -165,19 +165,20 @@ Before going live, make sure your application is optimized and secure:
   
   ```python
   # From web/main.py
-  app = App(..., workers=os.cpu_count() or 4, force_https_workers=2)
+  app = App(..., workers=os.cpu_count() or 4, force_https_workers=4)
   ```
   
-  The above examples runs the server using worker processes, thus, utilizing 
-  the available CPU cores. This improves overall performance. As this brings more benefits, it 
-  also uses more system resources as some background threads will be restarted in each process.
+  The above examples runs the server using worker threads, thus, utilizing. This improves overall, performance. As this brings more benefits, it 
+  also uses more system resources. By default, worker threads are used for synchronization between workers but if you prefer processes instead and your app 
+  does not require worker synchronization, you can use worker processes instead. This can be enabled by providing the `force_worker_processes` argument. The 
+  same can be applied to force https redirect app using argument `force_https_force_worker_processes`.
 
 - **Turn off debug mode:**  
   ```python
   DEBUG = False
   ```
   
-- **Silence unnecessary logs:**  
+- **Silence unnecessary logs (optional):**  
   ```python
   SILENT = True
   LOG_TO_FILE = True

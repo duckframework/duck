@@ -1,6 +1,4 @@
 """
-RequestsLimitMiddleware
-
 High-performance rate-limiting middleware using InMemoryCache expiry-based
 counters.
 

@@ -33,9 +33,10 @@ Once you open your browser at the specified URL, you should see something simila
 
 After executing the `duck runserver` command, your terminal should display output like the examples below:
 
-![Duck local website terminal](./_static/images/duck-terminal.jpg)
+![Duck local website terminal](_static/images/duck-terminal.jpg)
 
-## Port Conflicts:
+## Port Conflicts
+
 If the server fails to start due to a port conflict, check if the port is already in use by another service. You can specify an alternative port by passing the -p <port> argument:
 
 ```sh

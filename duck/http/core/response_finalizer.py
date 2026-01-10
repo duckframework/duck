@@ -210,9 +210,13 @@ class ResponseFinalizer:
     @log_failsafe
     def do_set_extra_headers(self, response, request) -> None:
         """
-        Sets last final extra headers like Date.
+        Sets last final extra headers like Date & Cache-Control.
         """
         response.set_header("date", gmt_date())
+        
+        if SETTINGS['DEBUG']:
+            if "cache-control" not in response.headers:
+                response.set_header("cache-control", "no-cache")
         
     @log_failsafe
     def do_content_compression(self, response, request) -> None:

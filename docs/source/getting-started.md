@@ -129,5 +129,3 @@ failure in the tests. **Duck** `runtests` command can also be used for testing c
 
 > If you have encountered an error with `duck runtests` command on a compatible python environment (`python3.10+`). Do not hesitate to open an [issue](https://github.com/duckframework/duck/issues) so that
 > we will get the issue fixed right away. 
-
----

@@ -14,7 +14,7 @@ from duck.utils.safemarkup import mark_safe
 
 # METADATA
 DUCK_HOMEPAGE = "https://duckframework.xyz"
-DUCK_PACKAGE_RELATIVE_PATH = "../duck/duck"
+DUCK_PACKAGE_RELATIVE_PATH = "../../duck/duck"
 DUCK_PACKAGE_PATH = pathlib.Path(DUCK_PACKAGE_RELATIVE_PATH).resolve()
 
 
@@ -36,7 +36,7 @@ def add_head_tags(app, pagename, templatename, context, doctree):
 # Entry point to sphinx
 def setup(app):
     app.connect("html-page-context", add_head_tags)
-    app.add_css_file("/_static/css/custom.css")
+    app.add_css_file("_static/css/custom.css")
 
 
 # -- Project information -----------------------------------------------------
@@ -65,9 +65,12 @@ extensions = [
 
 
 # Sphinx multiversion configuration
-smv_tag_whitelist = r'^v\d+\.\d+\.\d+$'
-smv_branch_whitelist = r'^main$'
-smv_remote_whitelist = None # Use local repo instead.
+smv_tag_whitelist = r'^v\d+\.\d+(\.\d+)?$'
+smv_branch_whitelist = r'^(main|stable)$'
+smv_remote_whitelist = r'^origin$'
+
+# Where versions are mounted
+smv_released_pattern = r'^tags/v\d+\.\d+(\.\d+)?$'
 
 
 # Napoleon configuration
@@ -90,7 +93,7 @@ napoleon_config = {
 
 # Autodocx Configuration
 autodocx_packages = [
-    str(DUCK_PACKAGE_PATH),  # Path to your source package
+    str(DUCK_PACKAGE_RELATIVE_PATH),  # Path to your source package
 ]
 
 autodocx_output_dir = "api"  # Where autodocx should store generated docs
