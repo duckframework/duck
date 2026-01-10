@@ -43,7 +43,7 @@ jobs:
       # Build multiversion docs
       - name: Build Sphinx multiversion docs
         run: |
-          sphinx-multiversion docs docs/build/html
+          sphinx-multiversion docs/source docs/build/html
 
       # Upload Pages artifact
       - name: Upload GitHub Pages artifact
