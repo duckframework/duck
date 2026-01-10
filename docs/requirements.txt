@@ -10,4 +10,5 @@ readthedocs-sphinx-search
 sphinxawesome-theme
 sphinx_autodoc_typehints
 sphinx-multiversion
+git+https://github.com/duckframework/duck.git
 git+https://github.com/digreatbrian/autodocx.git
