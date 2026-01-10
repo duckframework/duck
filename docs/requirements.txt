@@ -1,4 +1,5 @@
 sphinx
+astroid
 myst-parser
 myst-parser[linkify]
 sphinx_copybutton
