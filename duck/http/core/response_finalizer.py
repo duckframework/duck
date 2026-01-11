@@ -215,7 +215,10 @@ class ResponseFinalizer:
         response.set_header("date", gmt_date())
         
         if SETTINGS['DEBUG']:
-            if "cache-control" not in response.headers:
+            cache_control = response.get_header("cache-control")
+            default_cache_control = SECURITY_HEADERS.get("Cache-Control")
+            
+            if not cache_control or cache_control is default_cache_control:
                 response.set_header("cache-control", "no-cache")
         
     @log_failsafe

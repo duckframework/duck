@@ -430,6 +430,10 @@ class TransactionThreadPool:
             AssertionError: If the returned thread from `get_thread` is dead/not running.
         """
         thread = self.get_thread(context_id)
+        
+        if not thread.is_alive():
+            thread = self.get_thread(context_id) # Re-fetch thread.
+        
         assert thread.is_alive(), f"Expected a running thread, but got a dead thread."
         return thread.submit(func, *args, **kwargs)
 

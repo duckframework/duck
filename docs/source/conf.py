@@ -14,7 +14,7 @@ from duck.utils.safemarkup import mark_safe
 
 # METADATA
 DUCK_HOMEPAGE = "https://duckframework.xyz"
-DUCK_PACKAGE_RELATIVE_PATH = "../../duck/duck"
+DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
 DUCK_PACKAGE_PATH = pathlib.Path(DUCK_PACKAGE_RELATIVE_PATH).resolve()
 
 
@@ -93,7 +93,7 @@ napoleon_config = {
 
 # Autodocx Configuration
 autodocx_packages = [
-    str(DUCK_PACKAGE_RELATIVE_PATH),  # Path to your source package
+    DUCK_PACKAGE_RELATIVE_PATH + "/duck",  # Path to your source package
 ]
 
 autodocx_output_dir = "api"  # Where autodocx should store generated docs
