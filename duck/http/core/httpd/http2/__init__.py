@@ -265,17 +265,15 @@ class BaseHTTP2Server(BaseServer):
                 # Execute function synchronously in current thread
                 result = func()
                 future.set_result(result)
-                
+                protocol.sync_queue.task_done()
+                    
             except queue.Empty:
                 continue
             
             except Exception as e:
                 future.set_exception(e)
                 logger.log_exception(e)
-            
-            finally:
-                if not protocol.sync_queue.is_empty():
-                    protocol.sync_queue.task_done()
+                protocol.sync_queue.task_done()
                 
     # ASYNCHRONOUS IMPLEMENTATIONS
      

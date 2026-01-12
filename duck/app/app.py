@@ -310,7 +310,7 @@ class App:
                 no_logs=not enable_force_https_logs,
                 workers=force_https_workers,
                 force_worker_processes=force_https_force_worker_processes,
-            )  # Create https redirect mivro application.
+            )  # Create https redirect micro application.
             
             # Set the process safe state for the force https app. 
             self.force_https_process_safe_running_state = multiprocessing.Value('i', 0)
@@ -635,7 +635,6 @@ class App:
         """
         Starts Django server and use Duck as reverse proxy server for Django.
         """
-        
         # We were starting Django in new process but we shouldn't because it isolates 
         # memory spaces which may make using Lively component system at Django side difficult.
         # If we used a new process, synchronization between django process and main process Lively Component System registry 
@@ -676,6 +675,8 @@ class App:
             # Restart background workers
             # Recreate managers recreates and attaches new managers fot the current 
             # thread and all its descendents.
+            
+            # This only restarts asyncio/threadpool manager.
             App.start_background_workers(self, recreate_managers=True)
             
             # Start the microapp
@@ -1056,6 +1057,14 @@ class App:
         """
         Runs the Duck application.
         """
+        # Fine tune threadpool for executing sync_to_async calls (Only in ASGI because in WSGI, the app is already flooding with many Threads).
+        from duck.contrib.sync.smart_async import _TRANSACTION_THREAD_POOL
+                
+        default_sync_to_async_workers = _TRANSACTION_THREAD_POOL.max_threads
+                
+        # Update max_threads according to app workers
+        _TRANSACTION_THREAD_POOL.max_threads = (default_sync_to_async_workers * self.workers) if self.workers else default_sync_to_async_workers
+                
         # App is not in reload state, continue
         bold_start = "\033[1m"
         bold_end = "\033[0m"
@@ -1092,12 +1101,29 @@ class App:
             )
         
         # Start background event loop or threadpool if needed
-        type(self).start_background_workers(
-            self,
-            start_automations_event_loop=True,
-            start_component_bg_threadpool=True,
-        )
-        
+        if self.workers:
+            # We are using workers, so eventloop or threadpool will be
+            # started by httpd.httpd.start_server.start_server_loop_in_worker.
+            
+            # Only start automations asyncio loop (if applicable) that will be run in background outside worker
+            App.start_background_workers(
+                self,
+                start_threadpool=False,
+                start_asyncio_event_loop=False,
+                start_automations_event_loop=True,    
+            )
+        else:
+            # No worker processes/threads will be responsible for starting the threads/asyncio loop manager for us
+            # Start everything that needs to be started
+            _async = SETTINGS['ASYNC_HANDLING']
+            
+            App.start_background_workers(
+                self,
+                start_automations_event_loop=True,
+                start_threadpool=not _async,
+                start_asyncio_event_loop=_async or (not _async and self.start_bg_event_loop_if_wsgi), 
+            )
+            
         if not SETTINGS['ASYNC_HANDLING']:
             if self.start_bg_event_loop_if_wsgi:
                 # Started asyncio loop in background
@@ -1111,15 +1137,7 @@ class App:
                     "This may prevent protocols like `HTTP/2` or `WebSockets` from working correctly\n",
                     level=logger.WARNING,
                 )
-        else:
-            # Fine tune threadpool for executing sync_to_async calls (Only in ASGI because in WSGI, the app is already flooding with many Threads).
-            from duck.contrib.sync.smart_async import _TRANSACTION_THREAD_POOL
-                
-            sync_to_async_workers = _TRANSACTION_THREAD_POOL.max_threads
-                
-            # Update max_threads according to app workers
-            _TRANSACTION_THREAD_POOL.max_threads = (sync_to_async_workers * self.workers) if self.workers else sync_to_async_workers
-                
+        
         if SETTINGS['ENABLE_COMPONENT_SYSTEM']:
             # Components are enabled
             logger.log(

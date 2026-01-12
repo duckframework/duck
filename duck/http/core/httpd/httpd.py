@@ -280,7 +280,7 @@ class BaseServer:
         def start_server_loop_in_worker(
             idx: int,
             healthcheck_obj: HeartbeatHealthCheck,
-            restart_background_workers: bool = False,
+            restart_background_workers: bool = True,
         ):
             """
             Starts server loop in a worker.
@@ -288,7 +288,7 @@ class BaseServer:
             Args:
                 idx (int): The process/thread index.
                 healthcheck_obj (HeartbeatHealthCheck): Object to update/flag a heartbeat at interval.
-                restart_background_workers (bool): These are background threads that are used by the app. Defaults to False and 
+                restart_background_workers (bool): These are background threads that are used by the app. Defaults to True and 
                     may only need to be restarted in new processes.
             """
             from duck.app import App
@@ -299,6 +299,8 @@ class BaseServer:
                 # Restart background workers
                 # Recreate managers recreates and attaches new managers fot the current 
                 # thread and all its descendents.
+                
+                # The following only restarts the threadpool/asyncio loop manager.
                 App.start_background_workers(self.application, recreate_managers=True)
             
             # Now start server loop

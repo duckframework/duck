@@ -8,17 +8,15 @@ from duck import (
     __author__,
     __email__,
 )
-from duck.html.components.page import Page
-from duck.utils.safemarkup import mark_safe
 
 
 # METADATA
 DUCK_HOMEPAGE = "https://duckframework.xyz"
-DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
+DUCK_PACKAGE_RELATIVE_PATH = "../../"
 DUCK_PACKAGE_PATH = pathlib.Path(DUCK_PACKAGE_RELATIVE_PATH).resolve()
 
 
-# Ensure Sphinx finds your package
+# Ensure Sphinx finds the package
 sys.path.insert(0, str(DUCK_PACKAGE_PATH))
 
 
@@ -26,10 +24,6 @@ def add_head_tags(app, pagename, templatename, context, doctree):
     """
     Adds head tags to the <head>.
     """
-    # dummy_request = HttpRequest()
-    # p = Page(dummy_request, disable_lively=True)
-    # p.set_title("Duck Framework | Documentatiom")
-    #context["metatags"] = mark_safe(p.head.render())
     pass
 
 
@@ -137,12 +131,15 @@ myst_list_indent = 4
 # Make sure TOC tree entries are included
 myst_heading_anchors = 3  # Allows anchor links for headings and includes them in the TOC
 
+
 # -- Autosummary Configuration --
 autosummary_generate = True
+
 
 # -- Templates & Exclusions --
 templates_path = ["_templates"]
 exclude_patterns = ["*/projects/*/backend/*", "_build", "Thumbs.db", ".DS_Store"]
+
 
 # -- Options for HTML output -------------------------------------------------
 html_theme = "sphinxawesome_theme"
@@ -156,6 +153,12 @@ html_theme_options = {
     "main_nav_links": {
         "Go Home": DUCK_HOMEPAGE,
     }
+}
+
+html_sidebars = {
+    '**': [
+        'versioning.html',
+    ],
 }
 
 # Add buttons at the bottom (footer) of the page
