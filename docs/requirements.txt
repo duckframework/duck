@@ -1,4 +1,4 @@
-astroid>=3.3.9
+astroid==3.3.9
 sphinx>=8.2.3
 myst-parser>=4.0.1
 myst-parser[linkify]>=2.0.3
