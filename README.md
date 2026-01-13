@@ -66,7 +66,8 @@ And more — see [feature list](https://duckframework.xyz/features)
 9. ~~**Worker Processes** – Use of worker processes to utilize all available CPU cores for improved request handling.~~
 10. **Complete Reverse Proxy Server** – **Duck** only acts as reverse proxy for  Django only. Need to make Duck a full-fledged reverse proxy server with optional sticky sessions.
 11. ~~**Component Mutation Observer** – Need to build an optional component mutation observer for keeping track of child changes for fastest re-render (~75x fast on unchanged children).~~
-12. **...and more** – [Request a feature](./feature_request.md)
+12. **MCP (Model Context Protocol) Server** – Need to make it easy for creating MCP servers for easy AI communication. 
+13. **...and more** – [Request a feature](./feature_request.md)
 
 ---
 

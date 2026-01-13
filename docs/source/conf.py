@@ -12,12 +12,7 @@ from duck import (
 
 # METADATA
 DUCK_HOMEPAGE = "https://duckframework.xyz"
-DUCK_PACKAGE_RELATIVE_PATH = "../../"
-DUCK_PACKAGE_PATH = pathlib.Path(DUCK_PACKAGE_RELATIVE_PATH).resolve()
-
-
-# Ensure Sphinx finds the package
-sys.path.insert(0, str(DUCK_PACKAGE_PATH))
+DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
 
 
 def add_head_tags(app, pagename, templatename, context, doctree):
@@ -35,7 +30,7 @@ def setup(app):
 
 # -- Project information -----------------------------------------------------
 project = "Duck"
-copyright = f"2025, Duck Framework"
+copyright = f"2026, Duck Framework"
 author = __author__
 release = __version__
 email = __email__
@@ -87,7 +82,7 @@ napoleon_config = {
 
 # Autodocx Configuration
 autodocx_packages = [
-    DUCK_PACKAGE_RELATIVE_PATH + "/duck",  # Path to your source package
+    DUCK_PACKAGE_RELATIVE_PATH,  # Path to your source package
 ]
 
 autodocx_output_dir = "api"  # Where autodocx should store generated docs
@@ -153,12 +148,6 @@ html_theme_options = {
     "main_nav_links": {
         "Go Home": DUCK_HOMEPAGE,
     }
-}
-
-html_sidebars = {
-    '**': [
-        'versioning.html',
-    ],
 }
 
 # Add buttons at the bottom (footer) of the page
