@@ -6,7 +6,7 @@ import pathlib
 
 # METADATA
 DUCK_HOMEPAGE = "https://duckframework.xyz"
-DUCK_PACKAGE_RELATIVE_PATH = "../../duckx"
+DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
 
 
 # Ensure sphinx finds our package
@@ -51,9 +51,11 @@ def on_context(app, pagename, templatename, context, doctree):
     """
     Hook called when page has context.
     """
+    print(context)
+    raise
     # Get the versions provided by Sphinx Multiversion
     raw_versions = context.get('versions')  # Retrieve raw `versions` dictionary
-
+    
     # Prepare the versions list
     context['version_list'] = prepare_versions(raw_versions)
    
