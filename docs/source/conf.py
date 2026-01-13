@@ -3,16 +3,22 @@ import sys
 import json
 import pathlib
 
+
+# METADATA
+DUCK_HOMEPAGE = "https://duckframework.xyz"
+DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
+
+
+# Ensure sphinx finds our package
+sys.path.insert(0, os.path.abspath("../../"))
+
+
+# The following imports should succeed if source directory for duck is included in sys.path
 from duck import (
     __version__,
     __author__,
     __email__,
 )
-
-
-# METADATA
-DUCK_HOMEPAGE = "https://duckframework.xyz"
-DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
 
 
 def add_head_tags(app, pagename, templatename, context, doctree):
@@ -60,6 +66,9 @@ smv_remote_whitelist = r'^origin$'
 
 # Where versions are mounted
 smv_released_pattern = r'^tags/v\d+\.\d+(\.\d+)?$'
+smv_rewrite_config = {
+    "main": "latest",  # Rewrite 'main' branch to 'latest'
+}
 
 
 # Napoleon configuration
@@ -82,7 +91,7 @@ napoleon_config = {
 
 # Autodocx Configuration
 autodocx_packages = [
-    DUCK_PACKAGE_RELATIVE_PATH,  # Path to your source package
+    DUCK_PACKAGE_RELATIVE_PATH,  # Path to our source package
 ]
 
 autodocx_output_dir = "api"  # Where autodocx should store generated docs

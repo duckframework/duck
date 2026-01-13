@@ -49,6 +49,7 @@ jobs:
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
+          # Upload from docs/build/html
           path: docs/build/html
 
   deploy:

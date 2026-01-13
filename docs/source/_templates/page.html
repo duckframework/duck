@@ -1,0 +1,26 @@
+{% extends "!page.html" %}
+
+{{ super() }}
+
+{% block extrahead %}
+
+{%- set version_list = [] -%}
+
+{%- for version in versions.values() %}
+  {# Map the Version object attributes to a standard dictionary #}
+  {%- set _ = version_list.append({
+    'name': version.name,
+    'url': version.url,
+    'version': version.version,
+    'release': version.release,
+    'is_released': version.is_released
+  }) -%}
+{%- endfor -%}
+
+<script id="version-list" type="application/json">
+  {{ version_list | tojson | safe}}
+</script>
+
+<script src="_static/js/version-picker.js" defer></script>
+
+{% endblock %}
