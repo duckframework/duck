@@ -6,7 +6,7 @@ import pathlib
 
 # METADATA
 DUCK_HOMEPAGE = "https://duckframework.xyz"
-DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
+DUCK_PACKAGE_RELATIVE_PATH = "../../duckx"
 
 
 # Ensure sphinx finds our package
@@ -21,16 +21,46 @@ from duck import (
 )
 
 
-def add_head_tags(app, pagename, templatename, context, doctree):
+# Function to prepare the versions list
+def prepare_versions(versions):
     """
-    Adds head tags to the <head>.
-    """
-    pass
+    Processes the versions dictionary into a list for template consumption.
 
+    Args:
+        versions (dict): The raw versions dictionary from sphinx-multiversion.
+
+    Returns:
+        list[dict]: A list of dictionaries containing version details.
+    """
+    version_list = []
+
+    if versions:  # Check if 'versions' is defined and not empty
+        for version in versions.values():
+            version_list.append({
+                'name': version.get('name', ""),  # Use `get()` to safely access attributes
+                'url': version.get('url', ""),
+                'version': version.get('version', ""),
+                'release': version.get('release', ""),
+                'is_released': version.get('is_released', False),
+            })
+    
+    return version_list
+
+
+def on_context(app, pagename, templatename, context, doctree):
+    """
+    Hook called when page has context.
+    """
+    # Get the versions provided by Sphinx Multiversion
+    raw_versions = context.get('versions')  # Retrieve raw `versions` dictionary
+
+    # Prepare the versions list
+    context['version_list'] = prepare_versions(raw_versions)
+   
 
 # Entry point to sphinx
 def setup(app):
-    app.connect("html-page-context", add_head_tags)
+    app.connect("html-page-context", on_context)
     app.add_css_file("_static/css/custom.css")
 
 

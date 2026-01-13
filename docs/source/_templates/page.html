@@ -1,0 +1,13 @@
+{% extends "!page.html" %}
+
+{{ super() }}
+
+{% block extrahead %}
+
+<script id="version-list" type="application/json">
+  {{ version_list | tojson | safe }}
+</script>
+
+<script src="_static/js/version-picker.js" defer></script>
+
+{% endblock %}
