@@ -6,7 +6,7 @@ import pathlib
 
 # METADATA
 DUCK_HOMEPAGE = "https://duckframework.xyz"
-DUCK_PACKAGE_RELATIVE_PATH = "../../../duck"
+DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
 
 
 # Ensure sphinx finds our package
@@ -66,9 +66,9 @@ smv_remote_whitelist = r'^origin$'
 
 # Where versions are mounted
 smv_released_pattern = r'^tags/v\d+\.\d+(\.\d+)?$'
-smv_rewrite_config = {
-    "main": "latest",  # Rewrite 'main' branch to 'latest'
-}
+#smv_rewrite_config = {
+#    "main": "latest",  # Rewrite 'main' branch to 'latest'
+#}
 
 
 # Napoleon configuration
