@@ -4,16 +4,10 @@
 
 {% block extrahead %}
 
-{%- for version in versions -%}
-
-  {{ version }}
-
-{% endfor -%}
-
 <script id="version-list" type="application/json">
   {{ version_list | tojson | safe }}
 </script>
 
-<script src="_static/js/version-picker.js" defer></script>
+<script src={{ pathto("_static/js/version-picker.js", 1) }} defer></script>
 
 {% endblock %}

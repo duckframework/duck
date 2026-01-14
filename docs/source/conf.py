@@ -9,9 +9,9 @@ DUCK_HOMEPAGE = "https://duckframework.xyz"
 DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
 
 
-# Ensure sphinx finds our package
-#sys.path.insert(0, os.path.abspath("../../"))
-
+# WARNING: Never use sys.path.insert() method for making Duck discoverable, its not compatible with 
+# sphinx-multiversion and may result in some tags/branches being excluded in final built docs.
+ 
 
 # The following imports should succeed if source directory for duck is included in sys.path
 from duck import (
