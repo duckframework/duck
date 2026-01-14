@@ -54,7 +54,8 @@ def on_context(app, pagename, templatename, context, doctree):
     raw_versions = context.get('versions')  # Retrieve raw `versions` dictionary
     
     # Prepare the versions list
-    context['version_list'] = prepare_versions(raw_versions)
+    if raw_versions:
+        context['version_list'] = prepare_versions(raw_versions)
    
 
 # Entry point to sphinx
@@ -94,7 +95,7 @@ smv_branch_whitelist = r'^(main|stable)$'
 smv_remote_whitelist = r'^origin$'
 
 # Where versions are mounted
-smv_released_pattern = r'^tags/v\d+\.\d+(\.\d+)?$'
+#smv_released_pattern = r'^tags/v\d+\.\d+(\.\d+)?$'
 smv_rewrite_config = {
     "main": "latest",  # Rewrite 'main' branch to 'latest'
 }

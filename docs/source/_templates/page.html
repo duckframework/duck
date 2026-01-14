@@ -4,6 +4,8 @@
 
 {% block extrahead %}
 
+{{ versions }}
+
 <script id="version-list" type="application/json">
   {{ version_list | tojson | safe }}
 </script>
