@@ -35,13 +35,12 @@ def prepare_versions(versions):
     version_list = []
 
     if versions:  # Check if 'versions' is defined and not empty
-        for version in versions.values():
+        for version in versions:
             version_list.append({
-                'name': version.get('name', ""),  # Use `get()` to safely access attributes
-                'url': version.get('url', ""),
-                'version': version.get('version', ""),
-                'release': version.get('release', ""),
-                'is_released': version.get('is_released', False),
+                'name': version.name,
+                'url': version.url,
+                'version': version.version,
+                'release': version.release,
             })
     
     return version_list
@@ -51,8 +50,6 @@ def on_context(app, pagename, templatename, context, doctree):
     """
     Hook called when page has context.
     """
-    print(context)
-    raise
     # Get the versions provided by Sphinx Multiversion
     raw_versions = context.get('versions')  # Retrieve raw `versions` dictionary
     
