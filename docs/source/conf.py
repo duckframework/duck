@@ -10,7 +10,7 @@ DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
 
 
 # Ensure sphinx finds our package
-sys.path.insert(0, os.path.abspath("../../"))
+#sys.path.insert(0, os.path.abspath("../../"))
 
 
 # The following imports should succeed if source directory for duck is included in sys.path
