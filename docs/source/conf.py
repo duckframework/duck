@@ -54,8 +54,7 @@ def on_context(app, pagename, templatename, context, doctree):
     raw_versions = context.get('versions')  # Retrieve raw `versions` dictionary
     
     # Prepare the versions list
-    if raw_versions:
-        context['version_list'] = prepare_versions(raw_versions)
+    context['version_list'] = prepare_versions(raw_versions)
    
 
 # Entry point to sphinx
