@@ -95,9 +95,9 @@ smv_remote_whitelist = r'^origin$'
 
 # Where versions are mounted
 smv_released_pattern = r'^tags/v\d+\.\d+(\.\d+)?$'
-smv_rewrite_config = {
-    "main": "latest",  # Rewrite 'main' branch to 'latest'
-}
+#smv_rewrite_config = {
+#    "main": "latest",  # Rewrite 'main' branch to 'latest'
+#}
 
 
 # Napoleon configuration
