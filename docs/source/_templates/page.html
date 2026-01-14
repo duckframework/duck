@@ -4,7 +4,11 @@
 
 {% block extrahead %}
 
-{{ versions }}
+{{%- for version in versions -%}}
+
+  {{ version }}
+
+{% endfor -%}
 
 <script id="version-list" type="application/json">
   {{ version_list | tojson | safe }}

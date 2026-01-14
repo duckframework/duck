@@ -13,9 +13,9 @@ permissions:
   pages: write
   id-token: write
 
-#concurrency:
-#  group: pages
-#  cancel-in-progress: false
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -43,7 +43,7 @@ jobs:
       # Build multiversion docs
       - name: Build Sphinx multiversion docs
         run: |
-          sphinx-multiversion docs/source docs/build/html
+          sphinx-multiversion docs/source docs/build/html --verbose
 
       # Upload Pages artifact
       - name: Upload GitHub Pages artifact
