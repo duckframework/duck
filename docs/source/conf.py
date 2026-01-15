@@ -83,6 +83,8 @@ extensions = [
 smv_tag_whitelist = r'^.*$'  # Match all tags
 smv_branch_whitelist = r'^(main|stable)$'
 smv_remote_whitelist = r'^origin$'
+smv_latest_version = "main"
+smv_latest_version_name = "latest"
 
 
 # Napoleon configuration
