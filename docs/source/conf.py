@@ -1,74 +1,65 @@
 import os
+import ast
 import sys
 import json
 import pathlib
+import subprocess
+import datetime
 
 
 # METADATA
 DUCK_HOMEPAGE = "https://duckframework.xyz"
 DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
 
-
-# WARNING: Never use sys.path.insert() method for making Duck discoverable, its not compatible with 
-# sphinx-multiversion and may result in some tags/branches being excluded in final built docs.
- 
-
-# The following imports should succeed if source directory for duck is included in sys.path
-from duck import (
-    __version__,
-    __author__,
-    __email__,
+# Path to the duck package's __init__.py
+DUCK_INIT_PATH = (
+    pathlib.Path(__file__).resolve().parent / DUCK_PACKAGE_RELATIVE_PATH / "__init__.py"
 )
 
 
-# Function to prepare the versions list
-def prepare_versions(versions):
-    """
-    Processes the versions dictionary into a list for template consumption.
-
-    Args:
-        versions (dict): The raw versions dictionary from sphinx-multiversion.
-
-    Returns:
-        list[dict]: A list of dictionaries containing version details.
-    """
-    version_list = []
-
-    if versions:  # Check if 'versions' is defined and not empty
-        for version in versions:
-            version_list.append({
-                'name': version.name,
-                'url': version.url,
-                'version': version.version,
-                'release': version.release,
-            })
-    
-    return version_list
-
-
-def on_context(app, pagename, templatename, context, doctree):
-    """
-    Hook called when page has context.
-    """
-    # Get the versions provided by Sphinx Multiversion
-    raw_versions = context.get('versions')  # Retrieve raw `versions` dictionary
-    
-    # Prepare the versions list
-    context['version_list'] = prepare_versions(raw_versions)
-   
-
 # Entry point to sphinx
 def setup(app):
-    app.connect("html-page-context", on_context)
-    app.add_css_file("_static/css/custom.css")
+    pass
+
+
+def read_metadata_from_init(init_path):
+    """
+    Reads and extracts metadata variables (e.g., __version__, __author__, __email__)
+    from the duck/__init__.py file as string values.
+
+    Args:
+        init_path (pathlib.Path): The file path of the package's __init__.py file.
+
+    Returns:
+        dict: A dictionary containing metadata like __version__, __author__, and __email__.
+    """
+    metadata = {}
+    with open(init_path, "r", encoding="utf-8") as f:
+        for line in f:
+            # Look for __<name>__ = '<value>'
+            if line.startswith("__") and "=" in line:
+                try:
+                    # Parse the line into an abstract syntax tree (AST) for safety
+                    node = ast.parse(line).body[0]
+                    if isinstance(node, ast.Assign):
+                        key = node.targets[0].id
+                        value = node.value.s  # Extract the string value
+                        metadata[key] = value
+                except Exception:
+                    pass  # Skip malformed lines
+    return metadata
 
 
 # -- Project information -----------------------------------------------------
+
+# Extract metadata from duck/__init__.py
+metadata = read_metadata_from_init(DUCK_INIT_PATH)
 project = "Duck"
-copyright = f"2026, Duck Framework"
-author = __author__
-release = __version__
-email = __email__
+copyright = f"{datetime.datetime.now().year}, Duck Framework"
+author = metadata.get("__author__", "Brian Musakwa")
+release = metadata.get("__version__", "")
+email = metadata.get("__email__", "digreatbrian@gmail.com")
+favicon_url = DUCK_HOMEPAGE + "/favicon.ico"
 
 
 # -- General configuration ---------------------------------------------------
@@ -92,12 +83,6 @@ extensions = [
 smv_tag_whitelist = r'^.*$'  # Match all tags
 smv_branch_whitelist = r'^(main|stable)$'
 smv_remote_whitelist = r'^origin$'
-
-# Where versions are mounted
-#smv_released_pattern = r'^tags/v\d+\.\d+(\.\d+)?$'
-smv_rewrite_config = {
-    "main": "latest",  # Rewrite 'main' branch to 'latest'
-}
 
 
 # Napoleon configuration
@@ -177,6 +162,7 @@ exclude_patterns = ["*/projects/*/backend/*", "_build", "Thumbs.db", ".DS_Store"
 # -- Options for HTML output -------------------------------------------------
 html_theme = "sphinxawesome_theme"
 html_static_path = ["_static"]
+html_css_files = ["css/custom.css"]
 html_theme_options = {
     "logo_light": "_static/images/duck-logo.png",
     "logo_dark": "_static/images/duck-logo.png",

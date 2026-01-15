@@ -1,13 +1,19 @@
+{# This template extends Sphinx's awesome theme default page.html template #}
 {% extends "!page.html" %}
 
-{{ super() }}
-
+{# Include the content of the parent template in the relevant blocks #}
 {% block extrahead %}
+    {{ super() }}
 
-<script id="version-list" type="application/json">
-  {{ version_list | tojson | safe }}
-</script>
+    {# Add a JSON-encoded version list for use by JavaScript #}
+    <script id="version-list" type="application/json">
+        [
+          {% for version in versions %}
+          {"name": "{{ version.name }}", "url": "{{ version.url }}"},
+          {% endfor %}
+        ]
+    </script>
 
-<script src={{ pathto("_static/js/version-picker.js", 1) }} defer></script>
-
+    {# Link to the version-picker JavaScript. Pathto ensures proper handling of static paths. #}
+    <script src="{{ pathto('_static/js/version-picker.js', 1) }}" defer></script>
 {% endblock %}
