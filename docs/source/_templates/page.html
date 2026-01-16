@@ -7,11 +7,18 @@
 
     {# Add a JSON-encoded version list for use by JavaScript #}
     <script id="version-list" type="application/json">
-        [
-          {% for version in versions %}
-          {"name": "{{ version.name }}", "url": "{{ version.url }}"},
-          {% endfor %}
-        ]
+        {% set v=[] %} {# Set empty versions list #}
+        
+        {% if versions is defined %}
+          {%- for version in versions -%}
+            {# Append versions dictionary, we use append(...) or "" to avoid adding None to the evaluated statement #}
+            {{ v.append({"name": version.name, "url": version.url}) or "" }}
+          {%- endfor -%}
+        {% endif %}
+        
+        {# Add versions JSON to template #}
+        {{ v | tojson | safe}}
+        
     </script>
 
     {# Link to the version-picker JavaScript. Pathto ensures proper handling of static paths. #}

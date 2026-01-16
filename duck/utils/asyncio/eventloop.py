@@ -205,7 +205,7 @@ def get_or_create_loop_manager(
             # Manager namespace found
             manager = managers.get(id, None)
             if manager is None and not strictly_get:
-                manager = AsyncioLoopManager(thread)
+                manager = AsyncioLoopManager(thread, _id=id)
                 managers[id] = manager
             return manager
 
@@ -226,9 +226,17 @@ def get_or_create_loop_manager(
     # If resolution failed (root), create a new entry
     if manager is None:
         if strictly_get:
-            raise ManagerNotFound("Strict getting of manager is True yet the manager cannot be resolved.")
-        manager = AsyncioLoopManager(current)
-        REGISTRY[current.ident] = {id: manager}
+            raise ManagerNotFound(f"Strict getting of manager is True yet the manager with id '{id}' could not be resolved. Current thread: {current}.")
+        
+        # Create new manager
+        manager = AsyncioLoopManager(current, _id=id)
+        
+        try:
+            managers = REGISTRY[current.ident]
+            managers[id] = manager
+        except KeyError:
+            # Registry has no target key
+            managers = REGISTRY[current.ident] = {id: manager}
     return manager
 
 
@@ -273,18 +281,19 @@ class AsyncioLoopManager:
     This is the list of created instances.
     """
     
-    def __init__(self, creator_thread: Optional[threading.Thread] = None):
+    def __init__(self, creator_thread: Optional[threading.Thread] = None, _id: Optional[Union[str, int]] = None):
         """
         Initialize the threadpool.
         
         Args:
             creator_thread (Optional[threading.Thread]): This is the thread responsible for this manager.'
+            _id (Union[str, int]): A custom Unique Identifier for the manager.
         """
         self._creator_thread = creator_thread
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
         self._task_type: Optional[str] = None
-        self._id = id(self)
+        self._id = _id or "default-%s"%id(self)
         AsyncioLoopManager.__instances.append(self)
         
     @classmethod
@@ -324,7 +333,7 @@ class AsyncioLoopManager:
             self._thread = threading.Thread(target=run_loop, daemon=True)
             self._thread.start()
         else:
-            raise RuntimeError("Asyncio loop is not None and event loop's thread is alive.")
+            raise RuntimeError("Cannot start, asyncio event loop is already running.")
             
     def submit_task(
         self, 

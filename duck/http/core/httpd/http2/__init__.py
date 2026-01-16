@@ -217,7 +217,7 @@ class BaseHTTP2Server(BaseServer):
         from duck.http.core.httpd.http2.event_handler import EventHandler
         
         # Assume client supports HTTP/2
-        loop_manager = get_or_create_loop_manager(strictly_get=True) # loop manager must be already running
+        loop_manager = get_or_create_loop_manager(id="request-handling-eventloop-manager", strictly_get=True) # loop manager must be already running
         event_loop = loop_manager.get_event_loop()
         
         protocol = H2Protocol(
@@ -239,7 +239,7 @@ class BaseHTTP2Server(BaseServer):
         
         # Submit coroutine for sending/receiving data asynchronously
         # but we create a loop for executing synchronous tasks out of async context, in the current thread.
-        loop_manager.submit_task(coro) # Fire and forget task
+        loop_manager.submit_task(coro, task_type="request-handling-task") # Fire and forget task
         
         # Wait for protocol to start but for limited time
         wait_time_interval = .1

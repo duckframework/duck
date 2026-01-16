@@ -153,7 +153,7 @@ class App:
         disable_ipc_handler: bool = False,
         skip_setup: bool = False,
         enable_force_https_logs: bool = False,
-        start_bg_event_loop_if_wsgi: bool = True,
+        start_bg_eventloop_if_wsgi: bool = True,
         process_name: str = "duck-server",
         workers: Optional[int] = None,
         force_https_workers: Optional[int] = None,
@@ -178,7 +178,7 @@ class App:
             disable_ipc_handler (bool): If True, disables setup of inter-process communication handlers. Defaults to False.
             skip_setup (bool): If True, skips setting up Duck environment, e.g. setting up urlpatterns and blueprints.
             enable_force_https_logs (bool): If True, force https microapp logs will be outputed to console. Defaults to False.
-            start_bg_event_loop_if_wsgi (bool): If True, it starts an event loop in background thread for offloading coroutines in `WSGI` environment.
+            start_bg_eventloop_if_wsgi (bool): If True, it starts a request handling event loop in background thread for offloading coroutines in `WSGI` environment.
                 This is useful for running asynchronous protocols like `HTTP/2` and `WebSockets` even in `WSGI` environment.
             process_name (str): The name of the process for this application. Defaults to "duck-server".
             workers (Optional[int]): Number of workers to use. None will disable workers.
@@ -245,7 +245,7 @@ class App:
         self.disable_signal_handler = disable_signal_handler
         self.disable_ipc_handler = disable_ipc_handler
         self.skip_setup = skip_setup
-        self.start_bg_event_loop_if_wsgi = start_bg_event_loop_if_wsgi
+        self.start_bg_eventloop_if_wsgi = start_bg_eventloop_if_wsgi
         self.process_name = process_name or "duck-server"
         self.workers = workers
         self.force_https_workers = force_https_workers
@@ -359,87 +359,81 @@ class App:
     @staticmethod
     def start_background_workers(
         application: Union['App', 'MicroApp'],
-        start_threadpool: bool = True,
-        start_asyncio_event_loop: bool = True,
+        start_request_handling_threadpool_manager,
+        start_request_handling_eventloop_manager,
+        start_component_threadpool_manager: bool = True,
+        start_automations_eventloop_manager: bool = False,
         recreate_managers: bool = False,
-        start_automations_event_loop: bool = False,
-        start_component_bg_threadpool: bool = False,
     ):
         """
         Starts or restarts background workers, e.g. `AsyncioLoopManager` & `ThreadPoolManager`.
         
         Args:
             application (Union['App', 'MicroApp']): The target application.
-            start_threadpool (bool): Whether to start request handling threadpool in `WSGI` environment.
-            start_asyncio_event_loop (bool): Whether to start asyncio event loop either in `WSGI` or `ASGI` environment.
+            start_request_handling_threadpool_manager (bool): Whether to start request handling threadpool in `WSGI` environment. This is only valid in WSGI environment only.
+            start_request_handling_eventloop_manager (bool): Whether to start asyncio event loop either in `WSGI` or `ASGI` environment.
+            start_component_threadpool_manager (bool): Whether to start the background threadpool manager for HTML components rendering, assistance, etc. Defaults to True.
+            start_automations_eventloop_manager (bool): Whether to start a dedicated event loop for running automations. Defaults to False.
             recreate_managers (bool): Whether to recreate managers for the current thread and all it's descendents. Defaults to False.
-            start_automations_event_loop (bool): Whether to start a dedicated event loop for running automations. Defaults to False.
-            start_component_bg_threadpool (bool): Whether to start the background threadpool manager for HTML components rendering, assistance, etc. Defaults to False.
+                This argument doesn't affect argument `start_automations_eventloop_manager`. Argument `recreate_managers` only applies to 
+                every other manager except the automations eventloop manager.
             
         Notes:
-        - This is usually useful when starting new process. Background workers like the request handling threadpool and asyncio loop's 
-           thread.
+        - This is usually useful when starting new worker processes/threads.
         - Use methods `get_or_create_loop_manager` and `get_or_create_thread_manager` to create new managers before this function if 
           new managers are needed.
         - This only focus on default `AsyncioLoopManager` & `ThreadPoolManager`.
-        - The thread manager is only run in `WSGI` mode but loop manager can be run in any environment.
+        - The thread manager is only run in `WSGI` mode but loop manager can be run in any environment (ASGI or WSGI).
          """
         from duck.utils.threading import get_max_workers
-         
+        
+        _async = SETTINGS['ASYNC_HANDLING']
+        start_bg_eventloop_if_wsgi = getattr(application, "start_bg_eventloop_if_wsgi", True)
+        max_threadpool_workers = get_max_workers()
+        
+        if _async and start_request_handling_threadpool_manager:
+            raise ApplicationError("Argument 'start_request_handling_threadpool_manager' can only be True in a WSGI environment.")
+        
+        if not _async and start_request_handling_eventloop_manager and not start_bg_eventloop_if_wsgi:
+            raise ApplicationError("Argument 'start_request_handling_threadpool_manager' can only be True if app's `start_bg_eventloop_if_wsgi` is set to True.")
+            
         if multiprocessing.parent_process() != None:
-            # Not in main process
+            # Not in main process; this is a child process.
             # Reset asyncio event loop
             set_asyncio_loop()
         
-        if start_automations_event_loop:
-            loop_manager = get_or_create_loop_manager(id="automations-loop-manager")
-            loop_manager.start()
-            
-        if start_component_bg_threadpool:
-            component_bg_manager = get_or_create_thread_manager(id="component-bg-worker")
-            component_bg_manager.start(
-                task_type="component-task",
-                max_workers=3,
+        # This block is not affected by recreate managers.
+        if start_automations_eventloop_manager:
+            loop_manager = get_or_create_loop_manager(id="automations-eventloop-manager")
+            loop_manager.start() # Do not restrict task types for automations
+        
+        # Start component threadpool manager    
+        if start_component_threadpool_manager:
+            component_threadpool_manager = get_or_create_thread_manager(id="component-threadpool-manager", force_create=recreate_managers)
+            component_threadpool_manager.start(
+                task_type="component-task", # Restrict task to only `component-task` type.
+                max_workers=int(max_threadpool_workers / 2),
                 daemon=True,
-                thread_name_prefix="component-bg-worker",
+                thread_name_prefix="component-task",
             )
-        
-        # GENERAL SYNC/ASYNC MANGERS
-        if recreate_managers:
-            if not SETTINGS['ASYNC_HANDLING']:
-                # In WSGI, reassign loop manager/thread manager for this worker thread and its descendents
-                get_or_create_thread_manager(force_create=True)
-                start_bg_event_loop = getattr(application, "start_bg_event_loop_if_wsgi", True)
-                if start_bg_event_loop:
-                    get_or_create_loop_manager(force_create=True)
-            else:
-                # Reassign new loop manager for this worker thread and all descendent threads
-                get_or_create_loop_manager(force_create=True)
-                    
-        # REINITIALIZE or START asyncio/threadpool managers
-        if SETTINGS['ASYNC_HANDLING']:
-            if start_asyncio_event_loop:
-                loop_manager = get_or_create_loop_manager(strictly_get=False)
-                loop_manager.start()
             
-        else:
-            _start_bg_event_loop = getattr(application, "start_bg_event_loop_if_wsgi", True)
-                
-            # Reinitialize threadpool manager
-            if start_threadpool:
-                thread_manager = get_or_create_thread_manager(strictly_get=False)
-                max_workers = get_max_workers()
-                thread_manager.start(
-                    max_workers=max_workers,
+        # In WSGI environment
+        if not _async:
+            if start_request_handling_threadpool_manager:
+                # Start request handling threadpool
+                request_handling_threadpool_manager = get_or_create_thread_manager(id="request-handling-threadpool-manager", force_create=recreate_managers)
+                request_handling_threadpool_manager.start(
+                    task_type="request-handling-task", # Restrict task to only `request-handling-task` type.
+                    max_workers=max_threadpool_workers,
                     daemon=True,
-                    thread_name_prefix="request-handler",
-                    task_type="request-handling",
-                 )
-                    
-            if _start_bg_event_loop and start_asyncio_event_loop:
-                loop_manager = get_or_create_loop_manager(strictly_get=False)
-                loop_manager.start()
-        
+                    thread_name_prefix="request-handling-task",
+                )
+            
+        # In any environment WSGI/ASGI
+        if start_request_handling_eventloop_manager:
+            request_handling_loop_manager = get_or_create_loop_manager(id="request-handling-eventloop-manager", force_create=recreate_managers)
+            request_handling_loop_manager.start(task_type="request-handling-task") # Restrict to only request handling tasks
+                
     @staticmethod
     def check_ssl_credentials():
         """
@@ -676,12 +670,12 @@ class App:
             # Recreate managers recreates and attaches new managers fot the current 
             # thread and all its descendents.
             
-            # This only restarts asyncio/threadpool manager.
+            # This only restarts request handling threadpool/eventloop manager plus component threadpool manager
             App.start_background_workers(self, recreate_managers=True)
             
             # Start the microapp
             self.force_https_app.on_app_start = lambda: setattr(process_safe_running_state, 'value', int(self.force_https_app.server.running))
-            self.force_https_app.run(run_forever=True) # This is blocking
+            self.force_https_app.run(run_forever=True) # This is blocking; run_forever=True is blocking.
             
         if self.enable_https and self.force_https:
             # Log something if applicable.
@@ -1102,38 +1096,42 @@ class App:
         
         # Start background event loop or threadpool if needed
         if self.workers:
-            # We are using workers, so eventloop or threadpool will be
+            # We are using workers, so eventloops or threadpools will be
             # started by httpd.httpd.start_server.start_server_loop_in_worker.
             
             # Only start automations asyncio loop (if applicable) that will be run in background outside worker
             App.start_background_workers(
                 self,
-                start_threadpool=False,
-                start_asyncio_event_loop=False,
-                start_automations_event_loop=True,    
+                start_request_handling_threadpool_manager=False,
+                start_request_handling_eventloop_manager=False,
+                start_component_threadpool_manager=False,
+                start_automations_eventloop_manager=True,    
             )
         else:
             # No worker processes/threads will be responsible for starting the threads/asyncio loop manager for us
             # Start everything that needs to be started
             _async = SETTINGS['ASYNC_HANDLING']
+            start_bg_eventloop_if_wsgi = getattr(self, "start_bg_eventloop_if_wsgi", True)
+            start_eventloop = _async or (not _async and start_bg_eventloop_if_wsgi)
             
             App.start_background_workers(
                 self,
-                start_automations_event_loop=True,
-                start_threadpool=not _async,
-                start_asyncio_event_loop=_async or (not _async and self.start_bg_event_loop_if_wsgi), 
+                start_request_handling_threadpool_manager=not _async,
+                start_request_handling_eventloop_manager=start_eventloop,
+                start_component_threadpool_manager=True,
+                start_automations_eventloop_manager=True,    
             )
             
         if not SETTINGS['ASYNC_HANDLING']:
-            if self.start_bg_event_loop_if_wsgi:
+            if self.start_bg_eventloop_if_wsgi:
                 # Started asyncio loop in background
                 logger.log(
-                    "Background event loop started",
+                    "Background event loop scheduled",
                     level=logger.DEBUG,
                 )
             else:
                 logger.log(
-                    "App argument `start_bg_event_loop_if_wsgi` is set to False. "
+                    "App argument `start_bg_eventloop_if_wsgi` is set to False. "
                     "This may prevent protocols like `HTTP/2` or `WebSockets` from working correctly\n",
                     level=logger.WARNING,
                 )

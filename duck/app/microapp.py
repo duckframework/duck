@@ -237,9 +237,10 @@ class MicroApp:
                 immediately after starting the background thread.
         """
         self.start_server()
+        
         while run_forever:
-            time.sleep(1)
-                
+            time.sleep(2)
+            
     def stop(self):
         """
         Stops the current running micro-application.

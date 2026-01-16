@@ -189,7 +189,7 @@ def get_or_create_thread_manager(
             # Manager namespace found
             manager = managers.get(id)
             if manager is None and not strictly_get:
-                manager = ThreadPoolManager(thread)
+                manager = ThreadPoolManager(thread, _id=id)
                 managers[id] = manager
             return manager
 
@@ -211,9 +211,17 @@ def get_or_create_thread_manager(
     # If resolution failed (root), create a new entry
     if manager is None:
         if strictly_get:
-            raise ManagerNotFound("Strict getting of manager is True yet the manager cannot be resolved.")
-        manager = ThreadPoolManager(current)
-        REGISTRY[current.ident] = {id: manager}
+            raise ManagerNotFound(f"Strict getting of manager is True yet the manager with id '{id}' could not be resolved. Current thread: {current}.")
+        
+        # Create new manager
+        manager = ThreadPoolManager(current, _id=id)
+        
+        try:
+            managers = REGISTRY[current.ident]
+            managers[id] = manager
+        except KeyError:
+            # Registry has no target key
+            managers = REGISTRY[current.ident] = {id: manager}
     return manager
 
 
@@ -256,19 +264,20 @@ class ThreadPoolManager:
     """
     This is the list of created instances.
     """
-    def __init__(self, creator_thread: Optional[threading.Thread] = None):
+    def __init__(self, creator_thread: Optional[threading.Thread] = None, _id: Optional[Union[str, int]] = None):
         """
         Initialize the threadpool.
         
         Args:
             creator_thread (Optional[threading.Thread]): This is the thread responsible for this manager.'
+            _id (Union[str, int]): A custom Unique Identifier for the manager.
         """
         self._creator_thread = creator_thread
         self._pool: Optional[concurrent.futures.ThreadPoolExecutor] = None
         self._max_workers: Optional[int] = None
         self._daemon: Optional[bool] = None
         self._task_type: Optional[str] = None
-        self._id = id(self)
+        self._id = _id or "default-%s"%id(self)
         ThreadPoolManager.__instances.append(self)
     
     @classmethod

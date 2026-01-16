@@ -32,6 +32,7 @@ document.addEventListener("DOMContentLoaded", function () {
   dropdown.style.padding = "5px";
   dropdown.style.background = "transparent";
   dropdown.style.borderLeft = "1px solid #ddd";
+  dropdown.style.color = "#ddd";
   
   // Populate the dropdown with versions from Sphinx's context
   versions.forEach(version => {

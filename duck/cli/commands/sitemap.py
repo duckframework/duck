@@ -96,7 +96,7 @@ class SitemapCommand:
                 "params": [
                     click.Option(("-su", "--server-url"), is_flag=False, default=None, help="The server URL. If not provided, it will be resolved automatically."),
                     click.Option(("-f", "--filepath"), is_flag=False, default=None, help="The filepath for the sitemap. If not provided, default will be used."),
-                    click.Option(("-s", "--save"), is_flag=True, default=True, help="Whether to save the sitemap to file."),
+                    click.Option(("-s", "--save"), is_flag=False, default=True, help="Whether to save the sitemap to file."),
                     click.Option(("-extra", "--extra-urls"), is_flag=False, default=None, help="Comma-separated extra URLs/paths to add to sitemap."),
                     click.Option(("-e", "--exclude"), is_flag=False, default=None, help="Comma-separated regex patterns to exclude from final URLs."),
                     click.Option(("-p", "--priority"), is_flag=False, default=0.5, help="Default priority. Defaults to 0.5."),

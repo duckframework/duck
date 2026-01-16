@@ -291,17 +291,29 @@ class BaseServer:
                 restart_background_workers (bool): These are background threads that are used by the app. Defaults to True and 
                     may only need to be restarted in new processes.
             """
+            # NOTE: This is run in new thread everytime it's called by worker thread manager
             from duck.app import App
-            from duck.utils.threading.threadpool import get_or_create_thread_manager
-            from duck.utils.asyncio.eventloop import get_or_create_loop_manager
             
             if restart_background_workers:
                 # Restart background workers
                 # Recreate managers recreates and attaches new managers fot the current 
                 # thread and all its descendents.
+                _async = SETTINGS['ASYNC_HANDLING']
+                start_bg_eventloop_if_wsgi = getattr(self.application, "start_bg_eventloop_if_wsgi", True)
                 
-                # The following only restarts the threadpool/asyncio loop manager.
-                App.start_background_workers(self.application, recreate_managers=True)
+                # This only restarts request handling threadpool/eventloop manager plus component threadpool manager
+                _async = SETTINGS['ASYNC_HANDLING']
+                start_bg_eventloop_if_wsgi = getattr(self, "start_bg_eventloop_if_wsgi", True)
+                start_eventloop = _async or (not _async and start_bg_eventloop_if_wsgi)
+                
+                App.start_background_workers(
+                    self,
+                    start_request_handling_threadpool_manager=not _async,
+                    start_request_handling_eventloop_manager=start_eventloop,
+                    start_component_threadpool_manager=True,
+                    start_automations_eventloop_manager=False,
+                    recreate_managers=True,
+                )
             
             # Now start server loop
             self.start_server_loop(interval_fn=lambda: healthcheck_obj.update_heartbeat(idx))

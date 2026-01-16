@@ -227,7 +227,7 @@ def cached_component(
                     # For loaded components, submit tasks independantly (more granular for keeping threads mostly free)
                     # but for components not yet loaded, bulk tasks load() followed by other tasks (more busy threads because of many bulk tasks)
                     tasks = [render if freeze or is_frozen else pre_render, lambda: original_component.to_vdom]
-                    component_threadpool_manager = get_or_create_thread_manager(id="component-bg-worker", strictly_get=True)
+                    component_threadpool_manager = get_or_create_thread_manager(id="component-threadpool-manager", strictly_get=True)
                     
                     if not is_loaded:
                         tasks.insert(0, original_component.load) # If freeze=True, component will be freezed on load()

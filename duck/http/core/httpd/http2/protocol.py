@@ -232,10 +232,10 @@ class H2Protocol:
         )
         
         # Return synchronous future.
-        loop_manager = get_or_create_loop_manager(strictly_get=True)
+        loop_manager = get_or_create_loop_manager(id="request-handling-eventloop-manager", strictly_get=True)
         
         if return_future:
-            future = loop_manager.submit_task(coro, return_sync_future=True)
+            future = loop_manager.submit_task(coro, return_sync_future=True, task_type="request-handling-task")
             return future
             
         # Fire and forget task

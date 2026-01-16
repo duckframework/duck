@@ -249,8 +249,8 @@ class RequestProcessor:
                     
                     # Submit the coroutine to queue
                     response_coro = async_view_wrapper(view.run)()
-                    loop_manager = get_or_create_loop_manager(strictly_get=True)
-                    future: SyncFuture = loop_manager.submit_task(response_coro, return_sync_future=True)
+                    loop_manager = get_or_create_loop_manager(id="request-handling-eventloop-manager", strictly_get=True)
+                    future: SyncFuture = loop_manager.submit_task(response_coro, return_sync_future=True, task_type="request-handling-task")
                     
                     # Wait for response from coroutine.
                     # TODO: This is slow and doesnt free the thread until coroutine finishes. 

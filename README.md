@@ -5,7 +5,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/duckframework/duck?style=social)](https://github.com/duckframework/duck/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/duckframework/duck?style=social)](https://github.com/duckframework/duck/network/members)
 [![License](https://img.shields.io/github/license/duckframework/duck)](https://github.com/duckframework/duck/blob/main/LICENSE)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/duckframework/duck/python-package.yml?branch=main)](https://github.com/duckframework/duck/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/duckframework/duck/docs.yml?branch=main)](https://github.com/duckframework/duck/actions)
 [![Open Issues](https://img.shields.io/github/issues/duckframework/duck)](https://github.com/duckframework/duck/issues)
 [![Contributors](https://img.shields.io/github/contributors/duckframework/duck)](https://github.com/duckframework/duck/graphs/contributors)
 [![HTTPS](https://img.shields.io/badge/HTTPS-supported-brightgreen.svg)](#)
@@ -185,7 +185,7 @@ duck runserver -dj
 ## Duck Official Site
 
 Visit: [https://duckframework.xyz](https://duckframework.xyz)    
-Docs: [https://duckframework.xyz/documentation](https://duckframework.xyz/documentation)
+Docs: [https://docs.duckframework.xyz](https://docs.duckframework.xyz)
 
 ---
 

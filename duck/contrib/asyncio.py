@@ -11,13 +11,15 @@ The utility functions ensure compatibility with both synchronous and asynchronou
 """
 import asyncio
 
-from typing import Coroutine, Union
+from typing import Coroutine, Union, Optional
 
 from duck.utils.asyncio.eventloop import get_or_create_loop_manager, SyncFuture
 
 
 def run_on_available_loop(
-    coro: Coroutine, return_sync_future: bool = False
+    coro: Coroutine,
+    id: Optional[str] = None,
+    return_sync_future: bool = False,
 ) -> Union["SyncFuture", asyncio.Future]:
     """
     Submit an asynchronous coroutine to an available asyncio event loop.
@@ -28,6 +30,7 @@ def run_on_available_loop(
 
     Args:
         coro (Coroutine): The coroutine to schedule for execution.
+        id (Optional[str]): The asyncio loop manager ID.
         return_sync_future (bool): If True, wraps the result in a `SyncFuture` to allow blocking 
                                    operations in synchronous contexts.
 
@@ -45,7 +48,7 @@ def run_on_available_loop(
         >>> future = run_on_available_loop(my_coroutine())
         >>> print(future.result())  # Blocks until the coroutine completes
     """
-    event_loop = get_available_event_loop()
+    event_loop = get_available_event_loop(id=id)
 
     if event_loop is not None and event_loop.is_running():
         # Schedule the coroutine on the event loop
@@ -67,7 +70,7 @@ def run_on_available_loop(
         raise RuntimeError("Event loop is None or not running.")
 
 
-def get_available_event_loop() -> asyncio.AbstractEventLoop:
+def get_available_event_loop(id: Optional[str] = None) -> asyncio.AbstractEventLoop:
     """
     Retrieve an available asyncio event loop depending on the application's execution context.
 
@@ -80,11 +83,12 @@ def get_available_event_loop() -> asyncio.AbstractEventLoop:
     
     Raises:
         RuntimeError: If no loop is found.
+        ManagerNotFound: If asyncio loop manager with the provided id is not found.
         
     Example:
         >>> loop = get_available_event_loop()
         >>> print(loop.is_running())  # Check if the event loop is running
     """    
     # Retrieve the loop from the AsyncioLoopManager in non-async contexts
-    loop_manager = get_or_create_loop_manager(strictly_get=True)
+    loop_manager = get_or_create_loop_manager(id=id, strictly_get=True)
     return loop_manager.get_event_loop()

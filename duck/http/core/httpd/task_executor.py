@@ -83,8 +83,10 @@ class RequestHandlingExecutor:
             
             async def request_handler_wrapper(task):
                 create_task(task)
-            loop_manager = get_or_create_loop_manager(strictly_get=True)
-            future = loop_manager.submit_task(request_handler_wrapper(task))
+                
+            # Get manager and submit task
+            loop_manager = get_or_create_loop_manager(id="request-handling-eventloop-manager", strictly_get=True)
+            future = loop_manager.submit_task(request_handler_wrapper(task), task_type="request-handling-task")
         else:
             if SETTINGS['ASYNC_HANDLING']:
                 raise RuntimeError(
@@ -93,8 +95,8 @@ class RequestHandlingExecutor:
                 )
                 
             # Submit blocking or CPU-bound task to the thread pool
-            thread_manager = get_or_create_thread_manager(strictly_get=True)
-            future = thread_manager.submit_task(task, task_type="request-handling")
+            threadpool_manager = get_or_create_thread_manager(id="request-handling-threadpool-manager", strictly_get=True)
+            future = threadpool_manager.submit_task(task, task_type="request-handling-task")
             
         # Attach name and callback for error handling
         future.name = getattr(task, 'name', repr(task))
