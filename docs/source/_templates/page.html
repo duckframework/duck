@@ -12,9 +12,13 @@
         {% if versions is defined %}
           {%- for version in versions -%}
             {# Append versions dictionary, we use append(...) or "" to avoid adding None to the evaluated statement #}
-            {{ v.append({"name": version.name, "url": version.url}) or "" }}
+            {%- if version.name == "main" -%}
+              {{ v.append({"name": "latest", "url": version.url}) or "" }}
+            {%- else -%}
+              {{ v.append({"name": version.name, "url": version.url}) or "" }}
+            {%- endif -%}
           {%- endfor -%}
-        {% endif %}
+        {%- endif -%}
         
         {# Add versions JSON to template #}
         {{ v | tojson | safe}}
