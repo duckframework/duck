@@ -73,6 +73,7 @@ And more — see [feature list](https://duckframework.xyz/features)
 
 ## TODO:
 - Need to cythonize some of the project parts for improved speed esp., components.
+- Need to make **Duck** fully async, especially in component & templates (currently at 89% async compatible, need to enable strictness for component rendering in async mode).
 
 ---
 

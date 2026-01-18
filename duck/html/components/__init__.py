@@ -169,6 +169,7 @@ from typing import (
 )
 
 from duck.utils.string import smart_truncate
+from duck.contrib.sync import convert_to_async_if_needed
 from duck.html.components.extensions import (
     BasicExtension,
     StyleCompatibilityExtension,
@@ -613,13 +614,15 @@ class HtmlComponent:
         await VDomNode.diff_and_act(action, old, new)
         
     @staticmethod
-    def assign_component_uids(root_component: "Component", base_uid: str = "0") -> None:
+    def assign_component_uids(root_component: "Component", base_uid: str = "0", force: bool = False) -> None:
         """
         Assigns deterministic UIDs to the entire component tree using a non-recursive traversal.
     
         Args:
             root_component (HtmlComponent): The root component to start from.
             base_uid (str): The base UID for the root (default is "0").
+            force (bool): Whether to force assign component uid's. By default, if no children structure mutation has happened, 
+                no uid assignment is done. This argument overrides this behavior. Defaults to False. 
         """
         from duck.logging import logger
         from duck.html.components.core.system import LivelyComponentSystem
@@ -630,7 +633,8 @@ class HtmlComponent:
         prev_uid_assignment_mutation_version, prev_uid = root_component._prev_states["prev_uid_assignment_mutation_version"]
         
         if (
-            prev_uid_assignment_mutation_version is root_component._children_structure_mutation_version
+            not force
+            and prev_uid_assignment_mutation_version is root_component._children_structure_mutation_version
             and prev_uid == root_component.uid
         ):
             # Do nothing because the children structure didn't change, no new child/no delete child
@@ -945,6 +949,12 @@ class HtmlComponent:
             if ensure_freeze_callback is not None and not self.is_frozen():
                 ensure_freeze_callback()
                 
+    async def async_load(self):
+        """
+        Load the component asynchronously.
+        """
+        await convert_to_async_if_needed(self.load)()
+        
     def wait_for_load(self, interval: float = 0.01):
         """
         This waits for the component to complete loading (if component is already being loaded somewhere).
@@ -1610,9 +1620,11 @@ class HtmlComponent:
                 # Reassign component tree UID's to avoid messing up the structure thereby avoiding
                 # unnecessary patches
                 root = self.root
-                if root:
-                    self.assign_component_uids(root)
                 
+                if root:
+                    # Use force assign component UID's to make sure self.uid is set nomatter what.
+                    self.assign_component_uids(root, force=True)
+                    
         # Do some staff
         output = [self.get_partial_string()]
         
@@ -1650,6 +1662,12 @@ class HtmlComponent:
         output = self.to_string()
         return output
         
+    async def async_render(self) -> str:
+        """
+        Asynchronously render component.
+        """
+        return await convert_to_async_if_needed(self.render)()
+        
     def to_vdom(self) -> VDomNode:
         """
         Converts the HtmlComponent into a virtual DOM node.
@@ -1681,8 +1699,10 @@ class HtmlComponent:
             # Reassign component tree UID's to avoid messing up the structure thereby avoiding
             # unnecessary patches
             root = self.root
+            
             if root:
-                self.assign_component_uids(root)
+                # Use force assign component UID's to make sure self.uid is set nomatter what.
+                self.assign_component_uids(root, force=True)
             
         node = VDomNode(
             tag="%s"%self.element,
@@ -1698,6 +1718,12 @@ class HtmlComponent:
         self._prev_states["prev_vdom_node"] = (self._mutation_version, node)
         return node
     
+    async def async_to_vdom(self) -> VDomNode:
+        """
+        Asynchronously convert component to `VDOMNode`.
+        """
+        return await convert_to_async_if_needed(self.to_vdom)()
+        
     def force_set_component_attr(self, key: str, value: Any):
         """
         Forcefully sets an attribute on the component, bypassing attribute protection.

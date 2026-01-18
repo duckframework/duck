@@ -1404,7 +1404,7 @@ class ComponentResponse(StreamingHttpResponse):
                 if self.component.is_loading():
                     await self.component.async_wait_for_load()
                 else:
-                    await convert_to_async_if_needed(self.component.load)()
-            self._rendered_component = await convert_to_async_if_needed(self.component.render)()
+                    await self.component.async_load()
+            self._rendered_component = await self.component.async_render()
         yield self._rendered_component.encode('utf-8')
     
