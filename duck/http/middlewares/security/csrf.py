@@ -252,7 +252,7 @@ class CSRFMiddleware(BaseMiddleware):
 
         if not (parsed_good_origin.host == parsed_request_origin.host
                 and parsed_good_origin.scheme == parsed_request_origin.scheme):
-            raise OriginError("Bad Origin header specified")
+            raise OriginError(f"Bad Origin header specified. Good origin '{parsed_good_origin.to_str()}' but got '{parsed_request_origin.to_str()}'.")
         return True
 
     @classmethod
