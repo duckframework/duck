@@ -48,7 +48,7 @@ class RequestsLimitMiddleware(BaseMiddleware):
     Duration in seconds defining the time window for request counting.
     """
     
-    max_requests: int = 200
+    max_requests: int = 500
     """
     Maximum number of allowed requests within the `requests_delay` window.
     """
