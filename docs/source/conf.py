@@ -19,8 +19,9 @@ DUCK_INIT_PATH = (
 
 # Entry point to sphinx
 def setup(app):
-    pass
-
+    def on_html_page_context(app, template_name, template, context, _):
+        context["DUCK_HOMEPAGE"] = DUCK_HOMEPAGE
+    app.connect("html-page-context", on_html_page_context)
 
 def read_metadata_from_init(init_path):
     """

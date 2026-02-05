@@ -483,6 +483,7 @@ class Page(InnerComponent):
         # This next line should be first before adding LivelyScripts for these scripts to
         # be able to resolve the Page UID.
         self.page_uid_script = self.add_script(inline=f"window.PAGE_UID=document.getElementById(`{self.id}`).dataset.uid;")
+        
         if self.disable_lively:
             # Disable Lively scripts and other Lively components.
             return

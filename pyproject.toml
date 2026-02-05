@@ -71,7 +71,7 @@ keywords = [
 Homepage = "https://duckframework.xyz"
 Source = "https://github.com/duckframework/duck"
 Issues = "https://github.com/duckframework/duck/issues"
-Documentation = "https://duckframework.xyz/documentation"
+Documentation = "https://docs.duckframework.xyz"
 Funding = "https://duckframework.xyz/contribute"
 
 [project.entry-points.console_scripts]

@@ -27,4 +27,29 @@
 
     {# Link to the version-picker JavaScript. Pathto ensures proper handling of static paths. #}
     <script src="{{ pathto('_static/js/version-picker.js', 1) }}" defer></script>
+    
+    {# Head tags inherited from Duck's HomePage #}
+    <meta name="description" content="Duck is a powerful, open-source, full-fledged Python-based web server, framework, and reverse proxy designed for building modern, customizable web applications — from small sites to large-scale platforms." data-uid="0.0.2"/>
+    <meta name="robots" content="index, follow" data-uid="0.0.3"/>
+    <meta name="keywords" content="Duck Framework, Python web framework, NodeJS alternative, Django alternative, Flask alternative, Web development, Python backend, Full-stack development, Secure web apps, Scalable web applications" data-uid="0.0.4"/>
+    <meta http-equiv="Content-Language" content="en" data-uid="0.0.5"/>
+    <meta name="author" content="Brian Musakwa (Duck Framework)" data-uid="0.0.13"/>
+    <meta property="og:description" content="Duck is a powerful, open-source, full-fledged Python-based web server, framework, and reverse proxy designed for building modern, customizable web applications — from small sites to large-scale platforms." data-uid="0.0.20"/>
+    <meta property="og:url" content="{{DUCK_HOMEPAGE}}" data-uid="0.0.21"/>
+    <meta property="og:image" content="{{DUCK_HOMEPAGE}}/static/images/og-image.png" data-uid="0.0.22"/>
+    <meta property="og:type" content="website" data-uid="0.0.23"/>
+    <meta property="og:site_name" content="Duck Framework" data-uid="0.0.24"/>
+    <meta name="twitter:card" content="summary_large_image" data-uid="0.0.25"/>
+    <meta name="twitter:title" content="Duck Framework Documentation" data-uid="0.0.26"/>
+    <meta name="twitter:description" content="Duck is a powerful, open-source, full-fledged Python-based web server, framework, and reverse proxy designed for building modern, customizable web applications — from small sites to large-scale platforms." data-uid="0.0.27"/>
+    
+    <link rel="icon" href="{{DUCK_HOMEPAGE}}/static/images/favicon/favicon-96x96.png" type="image/png" sizes="96x96" data-uid="0.0.14"/>
+    <link rel="icon" href="{{DUCK_HOMEPAGE}}/static/images/favicon/favicon.svg" type="image/svg+xml" data-uid="0.0.15"/>
+    <link rel="shortcut icon" href="{{DUCK_HOMEPAGE}}/static/images/favicon/favicon.ico" type="image/png" data-uid="0.0.16"/>
+    <link rel="apple-touch-icon" href="{{DUCK_HOMEPAGE}}/static/images/favicon/apple-touch-icon.png" type="image/png" sizes="180x180" data-uid="0.0.17"/>
+    <link rel="manifest" href="{{DUCK_HOMEPAGE}}/static/images/favicon/site.webmanifest" type="image/png" data-uid="0.0.18"/>
+    <link rel="canonical" href="{{DUCK_HOMEPAGE}}" data-uid="0.0.29"/>
+    
+    <script type="application/ld+json" data-uid="0.0.28">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Duck Framework", "description": "Duck is a powerful, open-source, full-fledged Python-based web server, framework, and reverse proxy designed for building modern, customizable web applications — from small sites to large-scale platforms.", "author": {"@type": "organization", "name": "Duck Framework"}, "applicationCategory": "Web Development Framework", "operatingSystem": "Cross-platform", "image": "{{DUCK_HOMEPAGE}}/static/images/og-image.png"}</script>
+    
 {% endblock %}

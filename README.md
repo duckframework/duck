@@ -26,15 +26,15 @@
 **It simplifies web development with:**
 
 1. **Built-in HTTPS support** for secure connections  
-2. **Native HTTP/2 support** with **HTTP/1** backward compatibility [link](https://duckframework.xyz/documentation/https-and-http2.html)  
-3. Hassle-free **free SSL certificate generation** with **automatic renewal** [link](https://duckframework.xyz/documentation/free-ssl-certificate.html)  
+2. **Native HTTP/2 support** with **HTTP/1** backward compatibility [link](https://docs.duckframework.xyz/main/https-and-http2.html)  
+3. Hassle-free **free SSL certificate generation** with **automatic renewal** [link](https://docs.duckframework.xyz/main/free-ssl-certificate.html)  
 4. **Lively Component System** — with `VDom Diffing` (support for fast UI's) 
 5. **WebSocket support** — modern websocket implementation with `per-message compression`.
-6. Built-in [task automation](https://duckframework.xyz/documentation/automations.html) — no need for [cron jobs](https://en.m.wikipedia.org/wiki/Cron)  
+6. Built-in [task automation](/automations.html) — no need for [cron jobs](https://en.m.wikipedia.org/wiki/Cron)  
 7. Automatic **content compression** using `gzip`, `deflate` or `brotli`
 8. Support for **chunked transfer encoding**  
 9. Easy integration with existing **Django** projects using `django-add`  
-10. Organized routing with **Duck** [`Blueprints`](https://duckframework.xyz/documentation/blueprint.html)
+10. Organized routing with **Duck** [`Blueprints`](https://docs.duckframework.xyz/main/blueprint.html)
 11. Full support for **async views** or asynchronous code even in `WSGI` environment
 12. Dynamic project generation with `makeproject` (`mini`, `normal`, or `full`)  
 13. Runs on both `WSGI` and `ASGI` environments, can even run `async` protocols like `HTTP/2` or `WebSockets` on `WSGI`.  
@@ -47,8 +47,8 @@
 20. Comes with built-in web development tools and helpers  
 21. Log management with `duck logs` and file-based logging by default  
 22. Real-time system monitoring for CPU, RAM, Disk usage, and I/O activity with `duck monitor`
-23. Easily generate app sitemap using command [`duck sitemap`](https://duckframework.xyz/documentation/sitemap.html) or just use 
-       the builtin blueprint [`duck.etc.apps.essentials.blueprint.Sitemap`](https://duckframework.xyz/documentation/sitemap.html) for dynamic cached sitemap serving.
+23. Easily generate app sitemap using command [`duck sitemap`](https://docs.duckframework.xyz/main/sitemap.html) or just use 
+       the builtin blueprint [`duck.etc.apps.essentials.blueprint.Sitemap`](https://docs.duckframework.xyz/main/sitemap.html) for dynamic cached sitemap serving.
 24. Highly **customizable** to fit any use case  
 
 And more — see [feature list](https://duckframework.xyz/features)
@@ -142,7 +142,7 @@ duck runserver   # or: python3 web/main.py
 
 This starts the server at **http://localhost:8000**   
 
-**Duck** serves a basic site by default — explore more at [Documentation](https://duckframework.xyz/documentation)
+**Duck** serves a basic site by default — explore more at [Documentation](https://docs.duckframework.xyz/main)
 
 > By default, Duck compresses streaming responses (like large downloads or video).  
 > To disable this behavior, set `compress_streaming_responses` to `False`.
@@ -163,7 +163,7 @@ Unlike `nginx` setups, **Duck** simplifies this with a few commands.
 - Auto-compressed responses  
 - Resumable large downloads  
 - Fast and Reactive Lively components - for beautiful & responsive UI.
-- [Free SSL with renewal](https://duckframework.xyz/documentation/free-ssl-certificate.html)
+- [Free SSL with renewal](https://docs.duckframework.xyz/main/free-ssl-certificate.html)
 - and more
 
 ### Usage

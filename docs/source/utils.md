@@ -227,7 +227,7 @@ This module handles URLs gracefully, even those without a scheme, addressing lim
 #### Example Usage:
 
 ```py
-from urlcrack import URL
+from duck.utils.urlcrack import URL
     
 url_obj = URL('duckframework.xyz/some/path?query=something#resource')
 

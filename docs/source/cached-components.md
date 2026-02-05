@@ -276,7 +276,7 @@ btn.is_from_cache()  # False on first call
 
 ---
 
-# Static Component Utilities
+## Static Component Utilities
 
 **Module:** `duck.html.components.utils.static`
 
