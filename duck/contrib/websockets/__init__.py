@@ -278,8 +278,10 @@ class WebSocketView(View):
         try:
             CSRFMiddleware._check_origin_ok(self.request)
         except OriginError as e:
-            response = (template_response if SETTINGS['DEBUG'] else simple_response)(HttpBadRequestResponse)
-            self.request.META["DEBUG_MESSAGE"] = str(e)
+            err = str(e)
+            body = None if not SETTINGS['DEBUG'] else f"Error: {err}"
+            response = (template_response if SETTINGS['DEBUG'] else simple_response)(HttpBadRequestResponse, body=body)
+            self.request.META["DEBUG_MESSAGE"] = err
             await self._response_handler.async_send_response(response, self.sock, request=self.request)
             return
             
