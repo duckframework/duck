@@ -15,7 +15,8 @@ document.addEventListener("DOMContentLoaded", function () {
   versionPicker.style.position = "fixed";
   versionPicker.style.bottom = "80px";
   versionPicker.style.right = "20px";
-  versionPicker.style.backgroundColor = "#ffffff";
+  versionPicker.style.backgroundColor = "black";
+  versionPicker.style.color = "#ffffff";
   versionPicker.style.border = "1px solid #ddd";
   versionPicker.style.padding = "4.5px";
   versionPicker.style.borderRadius = "5px";
