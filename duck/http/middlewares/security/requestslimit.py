@@ -16,7 +16,6 @@ This design provides:
 - Minimal memory footprint
 - Very high request throughput
 """
-
 from duck.http.middlewares import BaseMiddleware
 from duck.settings import SETTINGS
 from duck.shortcuts import simple_response, template_response
