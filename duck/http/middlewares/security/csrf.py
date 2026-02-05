@@ -246,13 +246,13 @@ class CSRFMiddleware(BaseMiddleware):
         parsed_request_origin = URL(request_origin)
         
         if parsed_request_origin.port:
-            # there is port in origin header
+            # There is port in origin header
             if parsed_request_origin.port != parsed_good_origin.port:
                 raise OriginError("Port specified in Origin header is not allowed")
 
-        if not (parsed_good_origin.host == parsed_request_origin.host
-                and parsed_good_origin.scheme == parsed_request_origin.scheme):
-            raise OriginError(f"Bad Origin header specified. Good origin '{parsed_good_origin.to_str()}' but got '{parsed_request_origin.to_str()}'.")
+        if (parsed_good_origin.host != parsed_request_origin.host
+                and parsed_good_origin.scheme != parsed_request_origin.scheme):
+            raise OriginError(f"Bad Origin header. Good origin '{parsed_good_origin.to_str()}' but got '{parsed_request_origin.to_str()}'.")
         return True
 
     @classmethod
@@ -273,20 +273,16 @@ class CSRFMiddleware(BaseMiddleware):
             
         parsed_good_referer = URL(request.host)
         parsed_good_referer.scheme = request.scheme
-        
         parsed_request_referer = URL(request_referer)
 
         if parsed_request_referer.port:
-            # there is port in referer header
+            # There is port in referer header
             if parsed_request_referer.port != parsed_good_referer.port:
-                raise RefererError(
-                    "Port specified in Referer header is not allowed")
+                raise RefererError("Port specified in Referer header is not allowed")
 
-        if not (parsed_good_referer.host == parsed_request_referer.host
-                and parsed_good_referer.scheme
-                == parsed_request_referer.scheme):
-            raise RefererError("Bad Referer header specified")
-
+        if (parsed_good_referer.host != parsed_request_referer.host
+                or parsed_good_referer.scheme != parsed_request_referer.scheme):
+            raise RefererError(f"Bad Referer header. Good referer '{parsed_good_referer.to_str()}' but got '{parsed_request_referer.to_str()}'.")
         return True
 
     @classmethod
@@ -297,7 +293,6 @@ class CSRFMiddleware(BaseMiddleware):
         Raises:
                 CSRFCookieError: This is raised if there is any issue with the CSRF cookie sent by the client.
         """
-
         csrf_secret_from_cookie = request.META.get("CSRF_COOKIE")
 
         if not csrf_secret_from_cookie:
@@ -307,14 +302,12 @@ class CSRFMiddleware(BaseMiddleware):
             )
 
         if not len(csrf_secret_from_cookie) == CSRF_SECRET_LENGTH:
-            cls.debug_message: str = (
-                "CSRFMiddleware: CSRF cookie length invalid")
+            cls.debug_message: str = "CSRFMiddleware: CSRF cookie length invalid"
             raise CSRFCookieError("CSRF Cookie length invalid")
 
         if SETTINGS["CSRF_USE_SESSIONS"]:
             csrf_secret_from_session = request.SESSION.get(CSRF_SESSION_KEY)
-            if (csrf_secret_from_session and
-                    not csrf_secret_from_cookie == csrf_secret_from_session):
+            if (csrf_secret_from_session and not csrf_secret_from_cookie == csrf_secret_from_session):
                 cls.debug_message: str = "CSRFMiddleware: CSRF cookie mismatch"
                 raise CSRFCookieError(
                     "CSRF Cookie mismatch. CSRF Cookie not matching csrf cookie from session"
@@ -343,10 +336,8 @@ class CSRFMiddleware(BaseMiddleware):
 
     @classmethod
     def process_response(cls, response, request):
-        # [print(i, j) for i, j in request.META.items()]
-        
         if request.META.get("CSRF_COOKIE_NEEDS_UPDATE"):
-            # csrf cookie needs to be sent to client
+            # Csrf cookie needs to be sent to client
             csrf_secret = request.META.get("CSRF_COOKIE")
             csrf_cookie_name = SETTINGS["CSRF_COOKIE_NAME"]
             csrf_cookie_domain = SETTINGS["CSRF_COOKIE_DOMAIN"] or Meta.get_metadata("DUCK_SERVER_DOMAIN")
