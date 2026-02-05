@@ -368,7 +368,7 @@ class Request:
             if self.application.enable_https:
                 return True
         else:
-            return True if SETTINGS["ENABLE_HTTPS"] else False
+            return True if SETTINGS["ENABLE_HTTPS"] or Meta.get_metadata('DUCK_SERVER_PROTOCOL') == "https" else False
         return False
     
     @property
