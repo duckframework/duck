@@ -105,8 +105,9 @@ class Article(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 ```
 
-Run migrations with:
+Create and run migrations:
 ```bash
+duck makemigrations
 duck migrate
 ```
 

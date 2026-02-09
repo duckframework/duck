@@ -61,7 +61,7 @@ Your Django project now runs with Duck! 🎉
 
 Before integrating:
 
-- ✅ Django 3.2 or higher
+- ✅ Django 3.2 or higher (Django 4.x recommended)
 - ✅ At least one Django urlpattern defined
 - ✅ Django project in working state
 - ✅ Python 3.10 or higher

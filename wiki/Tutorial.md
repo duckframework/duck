@@ -52,7 +52,7 @@ Visit `http://localhost:8000` - you should see the Duck welcome page!
 
 ### Define the Model
 
-Edit `web/models.py` (create if it doesn't exist):
+Edit or create `web/models.py` in your project root directory:
 
 ```python
 from django.db import models

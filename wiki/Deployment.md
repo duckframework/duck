@@ -53,12 +53,13 @@ CSRF_COOKIE_SECURE = True
 WORKERS = 4  # Number of CPU cores
 
 # Database (for production)
+# IMPORTANT: Use environment variables for sensitive data in production!
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'your_db_name',
         'USER': 'your_db_user',
-        'PASSWORD': 'your_db_password',
+        'PASSWORD': 'your_db_password',  # Use os.environ.get('DB_PASSWORD') in production
         'HOST': 'localhost',
         'PORT': '5432',
     }

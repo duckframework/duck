@@ -112,7 +112,7 @@ Duck Framework is packed with powerful features designed to make web development
 ### Auto-Reload
 - File change detection
 - Automatic server restart
-- DuckSight hot reload (coming soon)
+- DuckSight hot reload (in development)
 - Fast development cycle
 
 ### Project Generation

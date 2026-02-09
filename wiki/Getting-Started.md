@@ -278,7 +278,6 @@ python3 web/main.py
 
 - [Full Documentation](https://docs.duckframework.xyz)
 - [Examples Repository](https://github.com/duckframework/duck-examples)
-- [Video Tutorials](https://www.youtube.com/c/duckframework)
 - [Community Forum](https://github.com/duckframework/duck/discussions)
 
 ---
