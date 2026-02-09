@@ -15,10 +15,12 @@
 | Section | Description |
 |---------|-------------|
 | [🎯 Getting Started](Getting-Started) | Install Duck and create your first project |
+| [📖 Tutorial](Tutorial) | Build a complete blog application step-by-step |
 | [✨ Features](Features) | Explore Duck's powerful capabilities |
 | [📚 Documentation](https://docs.duckframework.xyz) | Complete technical documentation |
 | [🔧 Configuration](Configuration) | Configure your Duck application |
 | [🎨 Components](Components) | Learn about Lively Components |
+| [🔗 Django Integration](Django-Integration) | Integrate with existing Django projects |
 | [🚢 Deployment](Deployment) | Deploy your app to production |
 | [🤝 Contributing](Contributing) | Help improve Duck Framework |
 | [❓ FAQ](FAQ) | Frequently asked questions |
@@ -57,7 +59,7 @@ Duck Framework combines the best of modern web development:
 
 ### New to Duck?
 1. Start with [Getting Started](Getting-Started) to install and create your first project
-2. Follow the [Tutorial](Tutorial) to build a simple application
+2. Follow the [Tutorial](Tutorial) to build a complete blog application
 3. Explore [Features](Features) to see what Duck can do
 
 ### Coming from Django?

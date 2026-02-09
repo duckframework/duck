@@ -8,13 +8,14 @@ The wiki includes the following pages:
 
 1. **[Home](Home.md)** - Welcome page with overview and quick links
 2. **[Getting Started](Getting-Started.md)** - Installation and first project guide
-3. **[Features](Features.md)** - Comprehensive list of Duck's features
-4. **[Configuration](Configuration.md)** - How to configure your Duck application
-5. **[Components](Components.md)** - Guide to Lively Components system
-6. **[Django Integration](Django-Integration.md)** - Integrate Duck with Django projects
-7. **[Deployment](Deployment.md)** - Deploy Duck to production
-8. **[Contributing](Contributing.md)** - How to contribute to Duck
-9. **[FAQ](FAQ.md)** - Frequently asked questions
+3. **[Tutorial](Tutorial.md)** - Build a complete blog application step-by-step
+4. **[Features](Features.md)** - Comprehensive list of Duck's features
+5. **[Configuration](Configuration.md)** - How to configure your Duck application
+6. **[Components](Components.md)** - Guide to Lively Components system
+7. **[Django Integration](Django-Integration.md)** - Integrate Duck with Django projects
+8. **[Deployment](Deployment.md)** - Deploy Duck to production
+9. **[Contributing](Contributing.md)** - How to contribute to Duck
+10. **[FAQ](FAQ.md)** - Frequently asked questions
 
 ## 🚀 Publishing to GitHub Wiki
 
