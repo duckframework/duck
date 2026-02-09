@@ -81,6 +81,9 @@ extensions = [
 
 
 # Sphinx multiversion configuration
+# Note: The GitHub Actions workflow must trigger on BOTH branches AND tags
+# for sphinx-multiversion to build docs for all versions correctly.
+# See docs/README.md and .github/workflows/docs.yml for details.
 smv_tag_whitelist = r'^.*$'  # Match all tags
 smv_branch_whitelist = r'^(main|stable)$'
 smv_remote_whitelist = r'^origin$'
