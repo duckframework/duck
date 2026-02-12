@@ -49,7 +49,7 @@ jobs:
       run: |
         VERSION="${{ steps.extract_version.outputs.version }}"
         echo "Installing duckframework==$VERSION from TestPyPI..."
-        python3 -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ duckframework==$VERSION
+        python3 -m pip install --extra-index-url https://test.pypi.org/simple/ duckframework==$VERSION
     
     - name: Verify installed version matches tag
       run: |
