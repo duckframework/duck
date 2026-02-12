@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=77.0.3", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "duckframework"
 version = "1.0.1"
 description = "**Duck** is a powerful, open-source, full-fledged Python-based **web server**, **framework**, and **reverse proxy** designed for building modern, customizable web applications — from small sites to large-scale platforms."
 readme = "README.md"
-license = { text = "BSD-3-Clause" }
+license = "BSD-3-Clause"
+license-files = ["LICENSE", "AUTHORS.md"]
 authors = [
     { name = "Brian Musakwa", email = "digreatbrian@gmail.com" },
 ]
@@ -33,7 +34,6 @@ dependencies = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -82,18 +82,3 @@ version = {attr = "duck.__version__"}
 
 [tool.setuptools.packages.find]
 include = ["duck*"]
-
-[tool.setuptools.package-data]
-"*" = ["LICENSE", "AUTHORS.md"]
-
-# IMPORTANT: Must use license-files = [] to prevent License-File metadata generation.
-# With setuptools 68.1.2, any other configuration (license-files = ["LICENSE"],
-# or omitting the setting) causes setuptools to generate old-style License-File
-# metadata fields that are incompatible with Metadata-Version 2.4 validators.
-# 
-# License information is provided via:
-# 1. SPDX identifier in metadata (license = { text = "BSD-3-Clause" })
-# 2. Files in source distribution (via MANIFEST.in)
-# 3. Files in wheel (via package-data above)
-[tool.setuptools]
-license-files = []
