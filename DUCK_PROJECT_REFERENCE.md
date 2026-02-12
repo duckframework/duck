@@ -347,6 +347,7 @@ setproctitle
 
 ### CLI Commands
 - `duck makeproject <name> [--mini|--full]`: Create new project
+- `duck makeblueprint <name>`: Create new blueprint
 - `duck runserver`: Run development server
 - `duck django-add <path>`: Integrate Django project
 - `duck runtests`: Run test suite
@@ -354,6 +355,8 @@ setproctitle
 - `duck logs`: View application logs
 - `duck sitemap`: Generate sitemap
 - `duck collectstatic`: Collect static files
+- `duck service`: Manage systemd service
+- `duck ssl_gen`: Generate SSL certificates
 
 ## Best Practices
 
