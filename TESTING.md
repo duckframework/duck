@@ -36,8 +36,9 @@ duck --version
 
 Expected output:
 ```
-Duck/1.0.1 Python/3.x.x
+Duck/X.Y.Z Python/3.x.x
 ```
+*Note: Version numbers will vary based on your installation.*
 
 ### 2. View Available Commands
 

@@ -80,8 +80,9 @@ class TestBaseServer(unittest.TestCase):
         if cls._app and cls._app.started:
             try:
                 cls._app.stop()
-            except Exception:
-                pass  # Ignore errors during cleanup
+            except (AttributeError, RuntimeError) as e:
+                # Ignore errors if server is already stopped or app object is invalid
+                pass
             
 
 # Set dynamic testing settings

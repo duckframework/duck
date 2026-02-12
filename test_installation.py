@@ -82,7 +82,7 @@ def main():
         "Check duck help command"
     ))
     
-    # Test 3: Check if duck can be run as a module
+    # Test 3: Verify duck can be executed as a Python module
     results.append(run_command(
         [sys.executable, "-m", "duck", "--version"],
         "Check duck module execution"
