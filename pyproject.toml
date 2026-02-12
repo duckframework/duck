@@ -86,10 +86,14 @@ include = ["duck*"]
 [tool.setuptools.package-data]
 "*" = ["LICENSE", "AUTHORS.md"]
 
-# Disable automatic license file inclusion to prevent License-File metadata
-# which causes validation errors with Metadata-Version 2.4 and PyPI uploads.
-# License information is provided via the SPDX identifier above.
-# LICENSE and AUTHORS.md files are included via MANIFEST.in for source distribution
-# and as package data for wheel distribution.
+# IMPORTANT: Must use license-files = [] to prevent License-File metadata generation.
+# With setuptools 68.1.2, any other configuration (license-files = ["LICENSE"],
+# or omitting the setting) causes setuptools to generate old-style License-File
+# metadata fields that are incompatible with Metadata-Version 2.4 validators.
+# 
+# License information is provided via:
+# 1. SPDX identifier in metadata (license = { text = "BSD-3-Clause" })
+# 2. Files in source distribution (via MANIFEST.in)
+# 3. Files in wheel (via package-data above)
 [tool.setuptools]
 license-files = []
