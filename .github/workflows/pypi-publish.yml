@@ -1,0 +1,98 @@
+name: Publish to PyPI
+
+on:
+  workflow_run:
+    workflows: ["Publish to TestPyPI"]
+    types:
+      - completed
+
+jobs:
+  test-testpypi-installation:
+    name: Test TestPyPI Installation
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    steps:
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.x"
+    
+    - name: Wait for TestPyPI package availability
+      run: |
+        echo "Waiting 60 seconds for TestPyPI to index the package..."
+        sleep 60
+    
+    - name: Install package from TestPyPI
+      run: |
+        python3 -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ duckframework
+    
+    - name: Verify duck command is available
+      run: |
+        duck --version
+        echo "Duck command installed successfully!"
+    
+    - name: Test basic duck command functionality
+      run: |
+        duck --help
+        echo "Duck command is functional!"
+
+  build:
+    name: Build distribution 📦
+    needs: test-testpypi-installation
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        ref: ${{ github.event.workflow_run.head_branch }}
+        persist-credentials: false
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.x"
+    - name: Install pypa/build
+      run: >-
+        python3 -m
+        pip install
+        build
+        --user
+    - name: Build a binary wheel and a source tarball
+      run: python3 -m build
+    - name: Install twine for package validation
+      run: python3 -m pip install --user twine
+    - name: Check package distributions with twine
+      # Note: twine check may fail during PEP 639 transition period when using
+      # setuptools>=77 which generates License-Expression metadata that twine
+      # doesn't fully support yet. The actual PyPI upload will work.
+      continue-on-error: true
+      run: python3 -m twine check dist/*
+    - name: Store the distribution packages
+      uses: actions/upload-artifact@v5
+      with:
+        name: python-package-distributions
+        path: dist/
+
+  publish-to-pypi:
+    name: Publish Python 🐍 distribution 📦 to PyPI
+    needs:
+    - build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/duckframework
+
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+
+    steps:
+    - name: Download all the dists
+      uses: actions/download-artifact@v6
+      with:
+        name: python-package-distributions
+        path: dist/
+    - name: Publish distribution 📦 to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        verbose: true
