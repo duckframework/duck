@@ -83,8 +83,13 @@ version = {attr = "duck.__version__"}
 [tool.setuptools.packages.find]
 include = ["duck*"]
 
+[tool.setuptools.package-data]
+"*" = ["LICENSE", "AUTHORS.md"]
+
 # Disable automatic license file inclusion to prevent License-File metadata
 # which causes validation errors with Metadata-Version 2.4 and PyPI uploads.
 # License information is provided via the SPDX identifier above.
+# LICENSE and AUTHORS.md files are included via MANIFEST.in for source distribution
+# and as package data for wheel distribution.
 [tool.setuptools]
 license-files = []
