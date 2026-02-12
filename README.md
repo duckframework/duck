@@ -1,7 +1,5 @@
 # Duck Framework
-![Duck image](./images/duck-icon.png)
-
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/release/python-3100/)
+[![Python >=3.10](https://img.shields.io/badge/python->=3.10-blue.svg)](https://www.python.org/downloads/release/python-3100/)
 [![GitHub stars](https://img.shields.io/github/stars/duckframework/duck?style=social)](https://github.com/duckframework/duck/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/duckframework/duck?style=social)](https://github.com/duckframework/duck/network/members)
 [![License](https://img.shields.io/github/license/duckframework/duck)](https://github.com/duckframework/duck/blob/main/LICENSE)
