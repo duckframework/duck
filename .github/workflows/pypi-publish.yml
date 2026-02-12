@@ -21,14 +21,47 @@ jobs:
       with:
         python-version: "3.x"
     
+    - name: Extract version from tag
+      id: extract_version
+      run: |
+        # Extract version from tag (e.g., v1.0.1 -> 1.0.1)
+        TAG_NAME="${{ github.event.workflow_run.head_branch }}"
+        
+        # Validate that it looks like a version tag
+        if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+          echo "ERROR: head_branch '$TAG_NAME' does not appear to be a valid version tag"
+          echo "Expected format: v*.*.* (e.g., v1.0.1)"
+          exit 1
+        fi
+        
+        # Strip the 'v' prefix to get version number
+        VERSION="${TAG_NAME#v}"
+        echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "✓ Extracted version: $VERSION from tag: $TAG_NAME"
+    
     - name: Wait for TestPyPI package availability
       run: |
         echo "Waiting 60 seconds for TestPyPI to index the package..."
         sleep 60
     
-    - name: Install package from TestPyPI
+    - name: Install specific version from TestPyPI
       run: |
-        python3 -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ duckframework
+        VERSION="${{ steps.extract_version.outputs.version }}"
+        echo "Installing duckframework==$VERSION from TestPyPI..."
+        python3 -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ duckframework==$VERSION
+    
+    - name: Verify installed version matches tag
+      run: |
+        EXPECTED_VERSION="${{ steps.extract_version.outputs.version }}"
+        INSTALLED_VERSION=$(python3 -c "import duck; print(duck.__version__)")
+        echo "Expected version: $EXPECTED_VERSION"
+        echo "Installed version: $INSTALLED_VERSION"
+        if [ "$INSTALLED_VERSION" != "$EXPECTED_VERSION" ]; then
+          echo "ERROR: Version mismatch!"
+          exit 1
+        fi
+        echo "✓ Version verification successful!"
     
     - name: Verify duck command is available
       run: |
