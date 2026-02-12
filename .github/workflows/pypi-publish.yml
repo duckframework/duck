@@ -12,6 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     
+    permissions:
+      contents: read
+    
     steps:
     - name: Set up Python
       uses: actions/setup-python@v6
@@ -41,11 +44,14 @@ jobs:
     name: Build distribution 📦
     needs: test-testpypi-installation
     runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
 
     steps:
     - uses: actions/checkout@v6
       with:
-        ref: ${{ github.event.workflow_run.head_branch }}
+        ref: ${{ github.event.workflow_run.head_sha }}
         persist-credentials: false
     - name: Set up Python
       uses: actions/setup-python@v6
