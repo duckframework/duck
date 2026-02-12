@@ -26,6 +26,10 @@ jobs:
         --user
     - name: Build a binary wheel and a source tarball
       run: python3 -m build
+    - name: Install twine for package validation
+      run: python3 -m pip install --user twine
+    - name: Check package distributions with twine
+      run: python3 -m twine check dist/*
     - name: Store the distribution packages
       uses: actions/upload-artifact@v5
       with:
