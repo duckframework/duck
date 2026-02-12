@@ -25,7 +25,7 @@ Duck supports three types of projects, each suited for different use cases:
 ### 3. Full Project (`--full`)
 - **Target Users**: Experienced developers, complex applications
 - **Files**: Complete configuration (20 files/12 directories)
-- **Use Case**: Complex applications requiring extensive customization (95% more customization)
+- **Use Case**: Complex applications requiring maximum customization and control (includes additional configuration files for automations, template tags, environment variables, and git integration)
 - **Command**: `duck makeproject myproject --full`
 
 ## Standard Project Structure
@@ -333,7 +333,7 @@ setproctitle
 ### Core Capabilities
 1. **Web Server**: Built-in HTTPS support
 2. **HTTP/2**: Native support with HTTP/1 backward compatibility
-3. **SSL/TLS**: Free SSL certificate generation with auto-renewal
+3. **SSL/TLS**: Free SSL certificate generation (via Let's Encrypt/certbot) with automatic renewal using Duck's automation system
 4. **WebSocket**: Modern implementation with per-message compression
 5. **Task Automation**: Built-in scheduling (no cron jobs needed)
 6. **Content Compression**: Automatic gzip, deflate, brotli
