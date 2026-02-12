@@ -101,6 +101,31 @@ pip install git+https://github.com/duckframework/duck.git
 
 ---
 
+## Testing Installation
+
+After installation, verify that Duck is working correctly:
+
+```sh
+# Check version
+duck --version
+
+# View available commands
+duck --help
+
+# Run the test suite
+duck runtests
+```
+
+For a comprehensive installation test:
+
+```sh
+python test_installation.py
+```
+
+See [TESTING.md](TESTING.md) for detailed testing instructions and troubleshooting.
+
+---
+
 ## Project Creation
 
 ```sh
