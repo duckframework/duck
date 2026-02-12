@@ -1,7 +1,10 @@
 __pycache__/
 Duck.egg-info/
+duckframework.egg-info/
 testing/assets/
 .processes.json
 .ducksight
 .ipc
+dist/
+build/
 
