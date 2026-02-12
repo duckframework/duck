@@ -73,6 +73,15 @@ class TestBaseServer(unittest.TestCase):
         
         if not self.app.started:
             self.app.run()
+    
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up server resources after all tests complete."""
+        if cls._app and cls._app.started:
+            try:
+                cls._app.stop()
+            except Exception:
+                pass  # Ignore errors during cleanup
             
 
 # Set dynamic testing settings
