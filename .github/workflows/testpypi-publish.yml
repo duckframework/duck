@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*.*.*"          # publish only when version tags are pushed
+  workflow_dispatch:
 
 jobs:
   build:
