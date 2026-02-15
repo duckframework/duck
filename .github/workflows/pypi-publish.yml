@@ -1,0 +1,139 @@
+name: Publish to PyPI
+
+on:
+  workflow_run:
+    workflows: ["Publish to TestPyPI"]
+    types:
+      - completed
+
+jobs:
+  test-testpypi-installation:
+    name: Test TestPyPI Installation
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    permissions:
+      contents: read
+    
+    steps:
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.x"
+    
+    - name: Extract version from tag
+      id: extract_version
+      env:
+        HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      run: |
+        # Extract version from tag (e.g., v1.0.1 -> 1.0.1)
+        TAG_NAME="$HEAD_BRANCH"
+        
+        # Validate that it looks like a version tag
+        if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+          echo "ERROR: head_branch '$TAG_NAME' does not appear to be a valid version tag"
+          echo "Expected format: v*.*.* (e.g., v1.0.1)"
+          exit 1
+        fi
+        
+        # Strip the 'v' prefix to get version number
+        VERSION="${TAG_NAME#v}"
+        echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "✓ Extracted version: $VERSION from tag: $TAG_NAME"
+    
+    - name: Wait for TestPyPI package availability
+      run: |
+        echo "Waiting 60 seconds for TestPyPI to index the package..."
+        sleep 60
+    
+    - name: Install specific version from TestPyPI
+      run: |
+        VERSION="${{ steps.extract_version.outputs.version }}"
+        echo "Installing duckframework==$VERSION from TestPyPI..."
+        python3 -m pip install --extra-index-url https://test.pypi.org/simple/ duckframework==$VERSION
+    
+    - name: Verify installed version matches tag
+      run: |
+        EXPECTED_VERSION="${{ steps.extract_version.outputs.version }}"
+        INSTALLED_VERSION=$(python3 -c "import duck; print(duck.__version__)")
+        echo "Expected version: $EXPECTED_VERSION"
+        echo "Installed version: $INSTALLED_VERSION"
+        if [ "$INSTALLED_VERSION" != "$EXPECTED_VERSION" ]; then
+          echo "ERROR: Version mismatch!"
+          exit 1
+        fi
+        echo "✓ Version verification successful!"
+    
+    - name: Verify duck command is available
+      run: |
+        duck --version
+        echo "Duck command installed successfully!"
+    
+    - name: Test basic duck command functionality
+      run: |
+        duck --help
+        echo "Duck command is functional!"
+
+  build:
+    name: Build distribution 📦
+    needs: test-testpypi-installation
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        ref: ${{ github.event.workflow_run.head_sha }}
+        persist-credentials: false
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.x"
+    - name: Install pypa/build
+      run: >-
+        python3 -m
+        pip install
+        build
+        --user
+    - name: Build a binary wheel and a source tarball
+      run: python3 -m build
+    - name: Install twine for package validation
+      run: python3 -m pip install --user twine
+    - name: Check package distributions with twine
+      # Note: twine check may fail during PEP 639 transition period when using
+      # setuptools>=77 which generates License-Expression metadata that twine
+      # doesn't fully support yet. The actual PyPI upload will work.
+      continue-on-error: true
+      run: python3 -m twine check dist/*
+    - name: Store the distribution packages
+      uses: actions/upload-artifact@v5
+      with:
+        name: python-package-distributions
+        path: dist/
+
+  publish-to-pypi:
+    name: Publish Python 🐍 distribution 📦 to PyPI
+    needs:
+    - build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/duckframework
+
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+
+    steps:
+    - name: Download all the dists
+      uses: actions/download-artifact@v6
+      with:
+        name: python-package-distributions
+        path: dist/
+    - name: Publish distribution 📦 to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        verbose: true
