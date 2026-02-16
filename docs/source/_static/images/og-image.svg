@@ -1,7 +1,7 @@
 <svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
 
   <!-- Dark background -->
-  <rect width="1200" height="630" fill="#03040a"/>
+  <rect width="1200" height="630" fill="#0001"/>
 
   <!-- Subtle grid -->
   <g opacity="0.05">
@@ -9,7 +9,7 @@
   </g>
 
   <!-- Terminal header -->
-  <rect x="80" y="70" width="1040" height="60" rx="12" fill="#111a2e"/>
+  <rect x="80" y="70" width="1040" height="60" rx="12" fill="#1111"/>
   <circle cx="110" cy="100" r="8" fill="#ff5f56"/>
   <circle cx="140" cy="100" r="8" fill="#ffbd2e"/>
   <circle cx="170" cy="100" r="8" fill="#27c93f"/>
@@ -29,7 +29,7 @@
   </text>
 
   <!-- Code snippet -->
-  <rect x="680" y="200" width="380" height="220" rx="16" fill="#111a2e"/>
+  <rect x="680" y="200" width="380" height="220" rx="16" fill="#1111"/>
 
   <text x="700" y="250" font-family="monospace" font-size="24" fill="#8bd5ff">
     from duck import App
