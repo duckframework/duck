@@ -1,6 +1,9 @@
 name: Publish to PyPI
 
 on:
+  push:
+    tags:
+      - "v*.*.*"          # publish only when version tags are pushed
   workflow_run:
     workflows: ["Publish to TestPyPI"]
     types:
@@ -11,7 +14,7 @@ jobs:
   test-testpypi-installation:
     name: Test TestPyPI Installation
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name != 'workflow_dispatch' && github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/')) || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v')) }}
     
     permissions:
       contents: read
