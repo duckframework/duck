@@ -11,7 +11,7 @@ jobs:
   test-testpypi-installation:
     name: Test TestPyPI Installation
     runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'workflow_dispatch' && github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name != 'workflow_dispatch' && github.event.workflow_run.conclusion == 'success' }}
     
     permissions:
       contents: read
