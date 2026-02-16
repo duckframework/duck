@@ -11,7 +11,7 @@ jobs:
   test-testpypi-installation:
     name: Test TestPyPI Installation
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name != 'workflow_dispatch' && github.event.workflow_run.conclusion == 'success' }}
     
     permissions:
       contents: read
@@ -79,6 +79,7 @@ jobs:
   build:
     name: Build distribution 📦
     needs: test-testpypi-installation
+    if: ${{ always() && (needs.test-testpypi-installation.result == 'success' || needs.test-testpypi-installation.result == 'skipped') }}
     runs-on: ubuntu-latest
     
     permissions:
@@ -87,7 +88,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
       with:
-        ref: ${{ github.event.workflow_run.head_sha }}
+        ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
         persist-credentials: false
     - name: Set up Python
       uses: actions/setup-python@v6
