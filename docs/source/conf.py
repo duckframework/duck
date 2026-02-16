@@ -9,6 +9,7 @@ import datetime
 
 # METADATA
 DUCK_HOMEPAGE = "https://duckframework.xyz"
+DUCK_DOCS_URL = "https://docs.duckframework.xyz"
 DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
 
 # Path to the duck package's __init__.py
@@ -21,6 +22,7 @@ DUCK_INIT_PATH = (
 def setup(app):
     def on_html_page_context(app, template_name, template, context, _):
         context["DUCK_HOMEPAGE"] = DUCK_HOMEPAGE
+        context["DUCK_DOCS_URL"] = DUCK_DOCS_URL
     app.connect("html-page-context", on_html_page_context)
 
 def read_metadata_from_init(init_path):
