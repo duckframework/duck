@@ -5,6 +5,7 @@ on:
     workflows: ["Publish to TestPyPI"]
     types:
       - completed
+  workflow_dispatch:
 
 jobs:
   test-testpypi-installation:
