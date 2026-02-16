@@ -69,12 +69,6 @@ And more — see [feature list](https://duckframework.xyz/features)
 
 ---
 
-## TODO:
-- Need to cythonize some of the project parts for improved speed esp., components.
-- Need to make **Duck** fully async, especially in component & templates (currently at 89% async compatible, need to enable strictness for component rendering in async mode).
-
----
-
 ## 🦆 Fun Facts
 
 - The **Duck** official website is powered by the **Duck** framework itself—showcasing a true "dogfooding" approach!
@@ -87,16 +81,16 @@ And more — see [feature list](https://duckframework.xyz/features)
 
 It is recommended to use **uv** for installing **Duck**.
 
-**Install Duck using `uv`:**
-
-```sh
-uv pip install git+https://github.com/duckframework/duck.git
-```
-
-**Or using original `pip`:**
+**Install latest version from Github using:**
 
 ```sh
 pip install git+https://github.com/duckframework/duck.git
+```
+
+**Or install from `PyPi` using:**
+
+```sh
+pip install duckframework
 ```
 
 ---
@@ -141,9 +135,6 @@ duck runserver   # or: python3 web/main.py
 This starts the server at **http://localhost:8000**   
 
 **Duck** serves a basic site by default — explore more at [Documentation](https://docs.duckframework.xyz/main)
-
-> By default, Duck compresses streaming responses (like large downloads or video).  
-> To disable this behavior, set `compress_streaming_responses` to `False`.
 
 ---
 

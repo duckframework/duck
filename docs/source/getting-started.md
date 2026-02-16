@@ -2,18 +2,19 @@
 
 ## Installation
 
-**Install Duck using uv**:
+**Install latest version from Github using:**
 
-```bash
-git clone https://github.com/duckframework/duck.git
-uv pip install ./duck # Or just use pip
-```
-
-**Alternatively, use**:
-
-```bash
+```sh
 pip install git+https://github.com/duckframework/duck.git
 ```
+
+**Or install from `PyPi` using:**
+
+```sh
+pip install duckframework
+```
+
+---
 
 ## Requirements
 

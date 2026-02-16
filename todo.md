@@ -7,3 +7,6 @@
 - Need to add monetization options for Duck framework users.
 - Need to improve FCP (First Contentful Paint) for `Lively` Pages. First we show a loading banner on page visit without
   loading the fullpage and then load the fullpage using Lively partial navigation.
+- Need to make `FileResponses` trully cacheable, as well as `FileIOStream` from `duck.utils.fileio.FileIOStream`.
+- Need to cythonize some of the project parts for improved speed esp., components.
+- Need to make **Duck** fully async, especially in component & templates (currently at 89% async compatible, need to enable strictness for component rendering in async mode).
