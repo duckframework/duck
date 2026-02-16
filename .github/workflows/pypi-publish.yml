@@ -9,6 +9,11 @@ on:
     types:
       - completed
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag to publish (e.g., v1.0.1)'
+        required: true
+        type: string
 
 jobs:
   test-testpypi-installation:
@@ -26,7 +31,7 @@ jobs:
     - name: Extract version from tag
       id: extract_version
       env:
-        HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+        HEAD_BRANCH: ${{ inputs.tag || github.event.workflow_run.head_branch || github.ref_name }}
       run: |
         # Extract version from tag (e.g., v1.0.1 -> 1.0.1)
         TAG_NAME="$HEAD_BRANCH"
@@ -89,7 +94,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
       with:
-        ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+        ref: ${{ inputs.tag || (github.event_name == 'workflow_run' && github.event.workflow_run.head_sha) || github.ref }}
         persist-credentials: false
     - name: Set up Python
       uses: actions/setup-python@v6
