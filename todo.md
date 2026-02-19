@@ -10,3 +10,4 @@
 - Need to make `FileResponses` trully cacheable, as well as `FileIOStream` from `duck.utils.fileio.FileIOStream`.
 - Need to cythonize some of the project parts for improved speed esp., components.
 - Need to make **Duck** fully async, especially in component & templates (currently at 89% async compatible, need to enable strictness for component rendering in async mode).
+- Make UID assignment exclude head elements and only assign to body elements only (reduce UID assignment redundancy).

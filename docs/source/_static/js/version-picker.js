@@ -42,7 +42,7 @@ document.addEventListener("DOMContentLoaded", function () {
     option.textContent = version.name;
 
     // Mark the current version as selected
-    if (window.location.pathname.endsWith(version.url)) {
+    if (version.name === "latest") {
       option.selected = true;
     }
     dropdown.appendChild(option);
