@@ -6,7 +6,7 @@
 Duck Documentation
 ==================
 
-**Duck** is a powerful, open-source, full-fledged Python-based **web server**, **framework**, and **reverse proxy** designed for building modern, customizable web applications — from small sites to large-scale platforms.
+**Duck** is an open-source Python web framework and web server with built-in reactive UI and real-time WebSocket support. Build high-performance, scalable, server-side reactive web applications — without separate frontend frameworks or complex JavaScript stacks.
 
 > **Duck is not a small or mini web framework, it is a full-fledged framework which makes you do almost everything!**
 

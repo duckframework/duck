@@ -19,7 +19,7 @@
 [![Django Integration](https://img.shields.io/badge/Django-Integration-blue.svg)](#)
 [![Monitoring](https://img.shields.io/badge/Monitoring-CPU%2FRAM%2FDisk%2FI%2FO-brightgreen.svg)](#)
 
-**Duck** is a powerful, open-source, full-fledged Python-based **web server**, **framework**, and **reverse proxy** designed for building modern, customizable web applications — from small sites to large-scale platforms.  
+**Duck** is an open-source Python web framework and web server with built-in reactive UI and real-time WebSocket support. Build high-performance, scalable, server-side reactive web applications — without separate frontend frameworks or complex JavaScript stacks.
 
 **It simplifies web development with:**
 
