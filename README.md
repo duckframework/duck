@@ -47,7 +47,7 @@
 22. Real-time [system monitoring](https://docs.duckframework.xyz/main/monitoring) for CPU, RAM, Disk usage, and I/O activity with `duck monitor`
 23. Easily generate app sitemap using command [`duck sitemap`](https://docs.duckframework.xyz/main/sitemap) or just use 
        the builtin blueprint [`duck.etc.apps.essentials.blueprint.Sitemap`](https://docs.duckframework.xyz/main/sitemap) for dynamic cached sitemap serving.
-24. Comes with independant [micro applications]https://docs.duckframework.xyz/main/microapps) which runs on their own servers for micro services support.
+24. Comes with independant [micro applications](https://docs.duckframework.xyz/main/microapps) which runs on their own servers for micro services support.
 25. Highly **customizable** to fit any use case  
 
 And more — see [feature list](https://duckframework.xyz/features)
@@ -170,11 +170,11 @@ duck runserver -dj
 
 ---
 
-## Duck Official Site
+## Useful Links
 
-Visit: [https://duckframework.xyz](https://duckframework.xyz)    
-Docs: [https://docs.duckframework.xyz](https://docs.duckframework.xyz)
-Lively UI Docs: https://docs.duckframework.xyz/main/lively-components   
+1. [Official Website](https://duckframework.xyz)    
+2. [Documentation](https://docs.duckframework.xyz)
+3. [Lively UI Documentation](https://docs.duckframework.xyz/main/lively-components)
 
 ---
 
