@@ -1,4 +1,4 @@
-# 📑 Templates
+# 📑 Templates - Python-Based HTML Rendering | Duck
 
 Templates in Duck are used to generate dynamic HTML responses by combining **static markup** with **runtime data** (context).  
 They are typically rendered inside views and returned as HTTP responses.

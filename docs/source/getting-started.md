@@ -1,4 +1,4 @@
-# 🚀 Getting Started
+# 🚀 Getting Started – Build Apps with Duck (Python)
 
 ## Installation
 
@@ -20,26 +20,6 @@ pip install duckframework
 
 ``` {note}
 **Duck** requires `Python>=3.10` for it to work seamlessly.
-```
-
-Before using **Duck**, ensure the following dependencies are installed. These packages will be automatically installed when you install Duck.
-
-
-```bash
-Django>=5.1.5
-Jinja2>=3.1.5
-watchdog>=4.0.1
-requests>=2.31.0
-h2>=4.2.0
-asgiref>=3.8.1
-psutil>=7.0.0
-msgpack>=1.1.1
-rich>=14.1.0
-diskcache
-colorama
-tzdata
-click
-setproctitle
 ```
 
 ---

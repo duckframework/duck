@@ -1,4 +1,4 @@
-# 🗃 Cached Views
+# 🗃 Cached Views – High-Performance Python Web Apps
 
 Duck’s **cached view system** provides a high-performance, flexible way to cache the output of both synchronous and asynchronous views.
 It offers fine-grained control over what contributes to the cache key: request attributes, request callables, or fully custom Python callables.

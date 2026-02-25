@@ -1,4 +1,4 @@
-# ⏳ Duck Automations
+# ⏳ Task Automation – Duck Python Framework
 
 **Duck** offers powerful automation capabilities that can run tasks throughout your application's lifecycle. With Duck automations, you can schedule tasks to run when specific triggers occur, or you can set them up to run automatically at specified times. 
 

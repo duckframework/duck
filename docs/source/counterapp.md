@@ -1,4 +1,4 @@
-# 📟 Simple Counter App
+# 📟 Simple Counter App in Python
 
 ![Badge](https://img.shields.io/badge/feature-CounterApp-blue)
 ![Badge](https://img.shields.io/badge/system-Lively_Component-green)
