@@ -79,7 +79,6 @@ Source = "https://github.com/duckframework/duck"
 Issues = "https://github.com/duckframework/duck/issues"
 Funding = "https://duckframework.xyz/contribute"
 Documentation = "https://docs.duckframework.xyz"
-Lively UI Documentation = "https://docs.duckframework.xyz/main/lively-components"
 
 [project.entry-points.console_scripts]
 duck = "duck.__main__:cli"
