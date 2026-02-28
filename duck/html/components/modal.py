@@ -115,7 +115,7 @@ class Modal(FlexContainer):
                     "display": 'inline-block'
                 },
                 props={
-                    "aria-label": "Close",
+                    "aria-label": "Close nodal",
                     "onclick": f"closeModal(document.getElementById('{self.id}'));"
                 },
             )
@@ -214,6 +214,7 @@ class Modal(FlexContainer):
                 "flex-direction": "column",
                 "position": "fixed",
                 "height": "100vh",
+                "width": "100%",
             },
             id="modal-content-container",
         )

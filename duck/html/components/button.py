@@ -20,11 +20,14 @@ class Button(InnerComponent):
             "cursor": "pointer",
             "transition": "background-color 0.3s ease",
             "border": "none",
-            "border-radius": Theme.border_radius
+            "border-radius": Theme.border_radius,
         }
         
         # Set default button style.
         self.style.setdefaults(btn_style)
+        
+        # SEO for the button
+        self.props.setdefault("role", "button")
 
 
 class RoundedButton(Button):
