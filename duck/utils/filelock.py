@@ -40,6 +40,9 @@ def lock_file(file_descriptor, retries=5, wait=1):
             try:
                 fcntl.flock(file_descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 return
+            except OSError:
+                # Maybe the function is not implemented
+                pass
             except BlockingIOError:
                 time.sleep(wait)
         raise BlockingIOError(
