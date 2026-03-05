@@ -60,7 +60,11 @@ def unlock_file(file_descriptor):
             os.path.getsize(file_descriptor.name),
         )
     else:
-        fcntl.flock(file_descriptor, fcntl.LOCK_UN)
+        try:
+            fcntl.flock(file_descriptor, fcntl.LOCK_UN)
+        except OSError:
+            # Maybe the function is unimplemented
+            pass
 
 
 def open_and_lock(filename, mode="r+"):
