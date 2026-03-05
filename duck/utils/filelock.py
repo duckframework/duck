@@ -67,17 +67,25 @@ def unlock_file(file_descriptor):
             pass
 
 
-def open_and_lock(filename, mode="r+"):
+def open_and_lock(filename, mode="r+", failsafe: bool = True):
     """
     Opens a file and acquires an exclusive lock.
 
     Args:
         filename: The name of the file to open.
         mode: The file open mode (default is 'r+').
-
+        failsafe: Whether to continue if file locking fails.
+        
     Returns:
         The opened file object.
     """
     fd = open(filename, mode)
-    lock_file(fd)
+    
+    try:
+        lock_file(fd)
+    except Exception as e:
+        if not failsafe:
+            raise e # Reraise exception
+    
+    # Return the file descriptor
     return fd
