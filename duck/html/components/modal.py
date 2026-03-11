@@ -45,7 +45,7 @@ class Modal(FlexContainer):
             "position": "fixed",
             "top": "0",
             "left": "0",
-            "width": "100vw",
+            "width": "100%",
             "height": "100vh",
             "background": "rgba(0, 0, 0, 0.68)", # Slightly stronger dark overlay for dark modals
             "z-index": "1000",

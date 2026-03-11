@@ -363,8 +363,8 @@ class HtmlComponent:
             '_component_attr_protection_targets',
             '_event_bindings',
             '_document_event_bindings',
-            'fullpage_reload_headers',
             '_prev_states',
+            'fullpage_reload_headers',
             'compatibility_keys',
             'kwargs',
         ] # __style, __properties, __children are already copied independantly, no need for them to be in here.
