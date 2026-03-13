@@ -8,6 +8,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Parse versions data from the script tag
   const versions = JSON.parse(versionList.textContent);
+  const currentVersionPath = window.location.pathname;
+  const versionPattern = /v?\d+\.\d+\.\d+/;
 
   // Create a floating version picker container
   const versionPicker = document.createElement("div");
@@ -42,7 +44,11 @@ document.addEventListener("DOMContentLoaded", function () {
     option.textContent = version.name;
 
     // Mark the current version as selected
-    if (version.name === "latest") {
+     
+    if (currentVersionPath.includes("main") && !versionPattern.test(currentVersionPath) && version.name === "latest"){
+      option.selected = true;
+    }
+    else if (currentVersionPath.includes(version.name)) {
       option.selected = true;
     }
     dropdown.appendChild(option);
