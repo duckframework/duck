@@ -56,7 +56,25 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Navigate to the selected version on change
   dropdown.addEventListener("change", function () {
-    window.location.href = this.value;
+    const selectedValue = this.value;
+    if (!selectedValue) {
+      return;
+    }
+
+    try {
+      // Normalize relative URLs against the current origin
+      const targetUrl = new URL(selectedValue, window.location.origin);
+
+      // Only allow navigation to http(s) URLs
+      if (targetUrl.protocol === "http:" || targetUrl.protocol === "https:") {
+        window.location.href = targetUrl.toString();
+      } else {
+        console.error("Blocked navigation to unsafe URL scheme:", targetUrl.href);
+      }
+    } catch (e) {
+      // If the value is not a valid URL, do not navigate
+      console.error("Invalid URL in version picker:", selectedValue, e);
+    }
   });
 
   // Add elements to the version picker
