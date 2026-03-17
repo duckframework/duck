@@ -1,4 +1,4 @@
-# 🖥️ Lively Component System
+# 🖥️ Lively Component System — Reactive Python UI Without JavaScript
 
 ![Badge](https://img.shields.io/badge/feature-Lively_Components-blue)
 

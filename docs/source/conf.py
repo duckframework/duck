@@ -166,6 +166,8 @@ exclude_patterns = ["*/projects/*/backend/*", "_build", "Thumbs.db", ".DS_Store"
 html_theme = "sphinxawesome_theme"
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
+html_title = "Duck Framework — Python Web Framework | Build Web Apps Without JavaScript"
+html_baseurl = "https://docs.duckframework.xyz/main/"
 html_theme_options = {
     "logo_light": "_static/images/duck-logo.png",
     "logo_dark": "_static/images/duck-logo.png",

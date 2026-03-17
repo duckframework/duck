@@ -1,4 +1,4 @@
-# 🚀 Getting Started – Build Apps with Duck (Python)
+# 🚀 Getting Started — Duck Python Web Framework (No JavaScript Required)
 
 ## Installation
 

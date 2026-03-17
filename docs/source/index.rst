@@ -3,12 +3,14 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Duck Documentation
-==================
+Duck Framework Documentation — Python Web Framework | No JavaScript Required
+=============================================================================
 
-**Duck** is an open-source Python web framework and web server with built-in reactive UI and real-time WebSocket support. Build high-performance, scalable, server-side reactive web applications — without separate frontend frameworks or complex JavaScript stacks.
+**Duck** is an open-source Python web framework and web server that replaces JavaScript frontends entirely.
+Build real-time, reactive web applications with pure Python — no React, no Vue, no JavaScript framework needed.
+A modern, full-stack alternative to Django and Flask with a built-in WebSocket-driven UI engine.
 
-> **Duck is not a small or mini web framework, it is a full-fledged framework which allows you to do almost everything!**
+> **Duck is not a small or mini web framework — it is a full-fledged Python framework that lets you build and deploy complete web applications without writing a single line of JavaScript.**
 
 Github
 ----------
