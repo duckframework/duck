@@ -49,7 +49,7 @@ class HomePage(Page):
         self.container.style["padding"] = "20px"
         
         # Add topheading
-        self.heading = Heading("h1", text="Counter App", color="green", style={"font-size": "2rem"})
+        self.heading = Heading("h1", text="Counter Application", color="green", style={"font-size": "2rem"})
         self.container.add_child(self.heading)
         
         # Add label
@@ -62,7 +62,7 @@ class HomePage(Page):
         self.btn = Button(text="Increment")
         self.btn.color = "white"
         self.btn.bg_color = "green"
-        self.btn.style["padding"] = "15px"
+        self.btn.style["padding"] = "13px"
         self.btn.style["font-size"] = "1.2rem"
         
         # Bind button to onclick event
@@ -126,7 +126,7 @@ class HomePage(Page):
         self.container.style["padding"] = "25px"
         
         # Add topheading
-        self.heading = Heading("h1", text="Counter App", color="green", style={"font-size": "2rem"})
+        self.heading = Heading("h1", text="Counter Application", color="green", style={"font-size": "2rem"})
         self.container.add_child(self.heading)
         
         # Add label
@@ -139,7 +139,7 @@ class HomePage(Page):
         self.btn = Button(text="Increment")
         self.btn.color = "white"
         self.btn.bg_color = "green"
-        self.btn.style["padding"] = "15px"
+        self.btn.style["padding"] = "13px"
         self.btn.style["font-size"] = "1.2rem"
         
         # Bind button to onclick event
