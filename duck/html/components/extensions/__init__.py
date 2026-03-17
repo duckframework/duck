@@ -115,6 +115,16 @@ class BasicExtension(Extension):
         Args:
             id_ (str): The ID to assign to the component.
         """
+        from duck.html.components.page import Page
+        
+        if isinstance(self, Page) and not self.disable_lively and id_ != "page-root":
+            raise ExtensionError(
+                "The Page component ID is reserved and cannot be changed from 'page-root'. "
+                "Lively relies on this ID to locate and manage the root of the component tree — "
+                "changing it will break real-time updates and WebSocket communication.\n\n"
+                "If you need to identify or target the page element, use a child container instead."
+            )
+            
         self.props["id"] = id_
 
     @property

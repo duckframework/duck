@@ -110,7 +110,7 @@ class Modal(FlexContainer):
                     "font-size": "1.5rem",
                     "color": "#bbb",
                     "cursor": "pointer",
-                    "padding": "2px",
+                    "padding": "4px",
                     "line-height": "1",
                     "display": 'inline-block'
                 },
