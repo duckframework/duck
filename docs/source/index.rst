@@ -6,11 +6,13 @@
 Duck Framework Documentation — Python Web Framework | No JavaScript Required
 =============================================================================
 
-**Duck** is an open-source Python web framework and web server that replaces JavaScript frontends entirely.
+**Duck Framework** is an open-source Python web framework and web server that replaces JavaScript frontends entirely.
 Build real-time, reactive web applications with pure Python — no React, no Vue, no JavaScript framework needed.
 A modern, full-stack alternative to Django and Flask with a built-in WebSocket-driven UI engine.
 
 > **Duck is not a small or mini web framework — it is a full-fledged Python framework that lets you build and deploy complete web applications without writing a single line of JavaScript.**
+
+> **CHECK OUT THIS [REPOSITORY](https://github.com/duckframework/url-shortener) FOR A REAL WEB APPLICATION BUILT WITH DUCK FRAMEWORK**
 
 Github
 ----------
