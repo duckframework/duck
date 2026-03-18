@@ -19,7 +19,9 @@
 [![Django Integration](https://img.shields.io/badge/Django-Integration-blue.svg)](#)
 [![Monitoring](https://img.shields.io/badge/Monitoring-CPU%2FRAM%2FDisk%2FI%2FO-brightgreen.svg)](#)
 
-**Duck** is an open-source Python web framework and web server with built-in reactive UI and real-time WebSocket support. Build high-performance, scalable, server-side reactive web applications — without separate frontend frameworks or complex JavaScript stacks.
+**Duck Framework** is an open-source Python web framework and web server with built-in reactive UI and real-time WebSocket support. Build high-performance, scalable, server-side reactive web applications — without separate frontend frameworks or complex JavaScript stacks.
+
+> **CHECK OUT THIS [REPOSITORY](https://github.com/duckframework/url-shortener) FOR A REAL WEB APPLICATION BUILT WITH DUCK FRAMEWORK**
 
 **It simplifies web development with:**
 
@@ -175,6 +177,7 @@ duck runserver -dj
 1. [Official Website](https://duckframework.xyz)    
 2. [Documentation](https://docs.duckframework.xyz)
 3. [Lively UI Documentation](https://docs.duckframework.xyz/main/lively-components)
+4. [Real-world Duck Web App](https://github.com/duckframework/url-shortener)
 
 ---
 
