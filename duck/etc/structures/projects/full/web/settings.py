@@ -435,7 +435,7 @@ DJANGO_BIND_PORT: int = 9999
 # Django Server Wait Time
 # Time in seconds to wait before checking if the Django server is up and running.
 # This variable is used to periodically verify the server's status during the initial startup or maintenance routines, ensuring that the server is ready to handle incoming requests.
-DJANGO_SERVER_WAIT_TIME: float = 2
+DJANGO_SERVER_WAIT_TIME: float = 2.5
 
 
 # These commands will be run before Django server startup if USE_DJANGO is set to True.

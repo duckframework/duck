@@ -64,11 +64,12 @@ class Modal(FlexContainer):
             "width": "100%",
             "box-shadow": "0 8px 30px rgba(0,0,0,0.18)",
             "display": "flex",
-            "padding": "24px 20px",
-            "align-items": "center",
+            "padding": "0",           # Padding moved to inner sections so header sits flush
+            "align-items": "stretch",
             "flex-direction": "column",
-            "overflow": "auto",              # Only modal content scrolls
-            "scroll-behavior": "smooth",     # Smooth scroll for modal content
+            "overflow": "auto",
+            "scroll-behavior": "smooth",
+            "position": "relative",   # Required so the header row stays inside the box
         }
         modal_box_props = self.kwargs.get("modal_props") or {}
 
@@ -85,9 +86,10 @@ class Modal(FlexContainer):
                 "h3",
                 text=title,
                 style={
-                    "margin-bottom": "1em",
-                    "margin-right": "12px",
-                    "margin-top": "3px"
+                    "margin": "0",
+                    "font-size": "1rem",
+                    "color": "#fff",
+                    "flex": "1",
                 }
             )
 
@@ -102,21 +104,22 @@ class Modal(FlexContainer):
                 klass="close-btn",
                 text="×",
                 style={
-                    "position": "absolute",
-                    "top": "12px",
-                    "right": "14px",
                     "background": "none",
                     "border": "none",
-                    "font-size": "1.5rem",
-                    "color": "#bbb",
+                    "font-size": "1.4rem",
+                    "color": "#888",
                     "cursor": "pointer",
-                    "padding": "4px",
+                    "padding": "0 0 0 12px",
                     "line-height": "1",
-                    "display": 'inline-block'
+                    "flex-shrink": "0",
+                    "display": "inline-block",
+                    "transition": "color 0.15s",
                 },
                 props={
-                    "aria-label": "Close nodal",
-                    "onclick": f"closeModal(document.getElementById('{self.id}'));"
+                    "aria-label": "Close modal",
+                    "onclick": f"closeModal(document.getElementById('{self.id}'));",
+                    "onmouseenter": "this.style.color='#fff'",
+                    "onmouseleave": "this.style.color='#888'",
                 },
             )
 
@@ -197,16 +200,32 @@ class Modal(FlexContainer):
         )
         
         # Modal content (title, close button, children)
-        content_children = []
+        # Build a header row that always sits at the top of the modal box.
+        # This keeps the close button anchored to the modal content regardless
+        # of how tall or short the content inside is.
+        self.modal_header = None
 
-        if self.close_btn:
-            content_children.append(self.close_btn)
-
-        if self.modal_script:
-            content_children.append(self.modal_script)
-
-        if self.title_heading:
-            content_children.append(self.title_heading)
+        has_header = bool(title or show_close)
+        if has_header:
+            self.modal_header = FlexContainer(
+                style={
+                    "flex-direction": "row",
+                    "align-items": "center",
+                    "justify-content": "space-between",
+                    "padding": "16px 20px",
+                    "border-bottom": "1px solid rgba(255,255,255,0.06)" if title else "none",
+                    "flex-shrink": "0",
+                }
+            )
+            if self.title_heading:
+                self.modal_header.add_child(self.title_heading)
+            if self.close_btn:
+                # Push close button to the right when there's no title
+                if not self.title_heading:
+                    spacer = FlexContainer()
+                    spacer.style["flex"] = "1"
+                    self.modal_header.add_child(spacer)
+                self.modal_header.add_child(self.close_btn)
 
         # Modal content container (modal content parent)
         self.modal_content_container = FlexContainer(
@@ -218,8 +237,8 @@ class Modal(FlexContainer):
             },
             id="modal-content-container",
         )
-        
-        # Modal content  (FlexContainer for vertical layout)
+
+        # Modal content (FlexContainer for vertical layout)
         self.modal_content = FlexContainer(
             direction="column",
             style=modal_box_style,
@@ -227,30 +246,61 @@ class Modal(FlexContainer):
             id="modal-content",
         )
 
+        # Add header row first, then script, then body content
+        if self.modal_header:
+            self.modal_content.add_child(self.modal_header)
+
+        if self.modal_script:
+            self.modal_content.add_child(self.modal_script)
+
         # Add modal content.
         super().add_child(self.modal_content_container)
         self.modal_content_container.add_child(self.modal_content)
-
-        for child in content_children:
-            self.add_child(child)
 
     def add_child(self, child):
         if not hasattr(self, 'modal_content'):
             super().add_child(child)
             return
 
-        # Add child to modal content.
-        self.modal_content.add_child(child)
+        # Script and header are added directly — everything else goes into
+        # a padded body wrapper so content has breathing room below the header
+        if child is self.modal_header or child is self.modal_script:
+            self.modal_content.add_child(child)
+            return
+
+        # Wrap body content in a padded container
+        body_wrap = FlexContainer()
+        body_wrap.style.update({
+            "flex-direction": "column",
+            "padding": "20px",
+            "gap": "12px",
+            "flex": "1",
+        })
+        body_wrap.add_child(child)
+        self.modal_content.add_child(body_wrap)
+
+    def open_modal(self):
+        """
+        Opens the modal; This simply makes the component visible.
+        """
+        self.style["display"] = "flex"
 
     def set_content(self, content: Component):
         """
-        Set modal content.
+        Replaces the modal body content while keeping the header row
+        (title + close button) intact at the top.
         """
+        # Remove everything except the header row and script
+        preserved = []
+        
+        for child in list(self.modal_content.children):
+            if child is self.modal_header or child is self.modal_script:
+                preserved.append(child)
+
         self.modal_content.clear_children()
-        if self.close_btn:
-            self.add_child(self.close_btn)
-        if self.modal_script:
-            self.add_child(self.modal_script)
-        if self.title_heading:
-            self.add_child(self.title_heading)
-        self.add_child(content)
+
+        for child in preserved:
+            self.modal_content.add_child(child)
+
+        # Add the new body content below the header
+        self.modal_content.add_child(content)

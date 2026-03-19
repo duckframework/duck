@@ -88,3 +88,4 @@ version = {attr = "duck.__version__"}
 
 [tool.setuptools.packages.find]
 include = ["duck*"]
+where = ["."]
