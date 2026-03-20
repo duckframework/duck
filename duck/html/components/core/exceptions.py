@@ -55,13 +55,6 @@ class NoParentError(HtmlComponentError):
     pass
 
 
-class RedundantUpdate(HtmlComponentError):
-    """
-    Raised when redundant update targets conflict due to shared root.
-    """
-    pass
-
-
 class ForceUpdateError(HtmlComponentError):
     """
     Raised when there is an issue in forcily updating a component on event"""

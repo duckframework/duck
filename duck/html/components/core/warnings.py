@@ -14,3 +14,12 @@ class DeeplyNestedEventBindingWarning(UserWarning):
         message (str): The warning message to display.
     """
     pass
+    
+    
+class RedundantUpdateWarning(UserWarning):
+    """
+    Flagged when redundant update targets conflict due to shared parent; this may result in 
+    inefficiencies rather than updating the parent in one goal instead.
+    """
+    pass
+

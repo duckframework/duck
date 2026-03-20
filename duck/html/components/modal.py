@@ -120,6 +120,7 @@ class Modal(FlexContainer):
                     "onclick": f"closeModal(document.getElementById('{self.id}'));",
                     "onmouseenter": "this.style.color='#fff'",
                     "onmouseleave": "this.style.color='#888'",
+                    "type": "button",
                 },
             )
 

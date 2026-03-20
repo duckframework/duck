@@ -177,7 +177,10 @@ from duck.html.components.extensions import (
 from duck.html.components.core.props import PropertyStore, StyleStore
 from duck.html.components.core.children import ChildrenList
 from duck.html.components.core.vdom import VDomNode
-from duck.html.components.core.warnings import DeeplyNestedEventBindingWarning
+from duck.html.components.core.warnings import (
+    DeeplyNestedEventBindingWarning,
+    RedundantUpdateWarning,
+)
 from duck.html.components.core.force_update import ForceUpdate as ForceUpdate # Avoids this being removed as unused on when formatters touch this.
 from duck.html.components.core.mutation import (
     on_mutation,
@@ -187,7 +190,6 @@ from duck.html.components.core.mutation import (
 from duck.html.components.core.exceptions import (
     HtmlComponentError,
     AlreadyInRegistry,
-    RedundantUpdate,
     UnknownEventError,
     InitializationError,
     EventAlreadyBound,
@@ -1206,6 +1208,53 @@ class HtmlComponent:
         """
         self._must_validate_on_event = must_validate
         
+    def _check_update_targets(
+        self,
+        targets: set,
+        min_shared_parent_detections: int = 3,
+    ) -> None:
+        """
+        Warns if multiple targets share the same parent based on relationship count.
+    
+        Provides a hint of which children share the same parent once the
+        detection threshold is reached.
+        """
+        from duck.settings import SETTINGS
+        from duck.logging import logger
+    
+        if not SETTINGS["DEBUG"] or len(targets) <= 1:
+            return
+    
+        parent_counts = {}
+        parent_children = {}  # Only populated for relevant parents
+    
+        # Count relationships
+        for target in targets:
+            parent = getattr(target, "parent", None)
+            if parent is None:
+                continue
+    
+            # Increment relationship count
+            count = parent_counts.get(parent, 0) + 1
+            parent_counts[parent] = count
+    
+            # Lazily start tracking children only when useful
+            if count >= 2:
+                if parent not in parent_children:
+                    parent_children[parent] = set()
+                parent_children[parent].add(target)
+    
+            # Trigger warning
+            if count >= min_shared_parent_detections:
+                children = parent_children.get(parent, set())
+                logger.warn(
+                    f"Performance tip: {count} update targets share the same parent {parent}. "
+                    f"Children involved: {children}. "
+                    f"Consider targeting the parent instead.",
+                    category=RedundantUpdateWarning,
+                )
+                return  # Warn once
+        
     def bind(
         self,
         event: str,
@@ -1229,7 +1278,6 @@ class HtmlComponent:
         Raises:
             UnknownEventError: If the event is not recognized and `force_bind` is False.
             AssertionError: If the event handler is not a callable.
-            RedundantUpdate: If any component pair in `update_targets` share the same root/parent.
             EventAlreadyBound: If event is already bound before.
             
         Notes:
@@ -1305,22 +1353,11 @@ class HtmlComponent:
         if update_self:
             sync_targets.add(self)
         
-        # Checking for repetitive unnecessary updates.
-        for target in sync_targets:
-            for other in sync_targets:
-                if target is not other:
-                    if target.parent == other.parent:
-                        raise RedundantUpdate(
-                            f"Conflicting updates detected: {repr(target)} and {repr(other)} share the same parent. "
-                            "Use only one top-level update target."
-                        )
-                        
-                    if target.get_raw_root() == other.get_raw_root(): # Use get_raw_root() instead of root property for the raw explicit root.
-                        raise RedundantUpdate(
-                            f"Conflicting updates detected: {repr(target)} and {repr(other)} share the same root. "
-                            "Use only one top-level update target."
-                        )
-                    
+        # Warn if sibling targets are detected — targeting a shared parent
+        # directly is more efficient and results in fewer diff passes.
+        self._check_update_targets(sync_targets)
+        
+        # Register the event
         self._event_bindings[event] = (
             event_handler,
             sync_targets,

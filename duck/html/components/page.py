@@ -99,7 +99,6 @@ from duck.html.components import (
     InnerComponent,
     NoInnerComponent,
     to_component,
-    RedundantUpdate,
 )
 from duck.html.components.core.exceptions import UnknownEventError, EventAlreadyBound
 from duck.html.components.extensions import RequestNotFoundError
@@ -295,7 +294,6 @@ class Page(InnerComponent):
         Raises:
             UnknownEventError: If the event is not recognized and `force_bind` is False.
             AssertionError: If the event handler is not a callable.
-            RedundantUpdate: If any component pair in update_targets share the same root/parent.
             EventAlreadyBound: If event is already bound.
             
         Notes:
@@ -355,22 +353,11 @@ class Page(InnerComponent):
             # Assign new event handler and new sync_updates
             event_handler, sync_targets = event_handler_chain, event_handler_chain.all_update_targets()
                 
-        # Checking for repetitive unnecessary updates.
-        for target in sync_targets:
-            for other in sync_targets:
-                if target is not other:
-                    if target.parent == other.parent:
-                        raise RedundantUpdate(
-                            f"Conflicting updates detected: {repr(target)} and {repr(other)} share the same parent. "
-                            "Use only one top-level update target."
-                        )
-                        
-                    if target.get_raw_root() == other.get_raw_root(): # Use get_raw_root() instead of root property for the raw explicit root.
-                        raise RedundantUpdate(
-                            f"Conflicting updates detected: {repr(target)} and {repr(other)} share the same root. "
-                            "Use only one top-level update target."
-                        )
-                    
+        # Warn if sibling targets are detected — targeting a shared parent
+        # directly is more efficient and results in fewer diff passes.
+        self._check_update_targets(sync_targets)
+        
+        # Register the event
         self._document_event_bindings[event] = (
             event_handler,
             sync_targets,
