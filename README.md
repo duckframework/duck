@@ -21,9 +21,15 @@
 
 **Duck Framework** is an open-source Python web framework and web server with built-in reactive UI and real-time WebSocket support. Build high-performance, scalable, server-side reactive web applications — without separate frontend frameworks or complex JavaScript stacks.
 
-> **CHECK OUT THIS [REPOSITORY](https://github.com/duckframework/url-shortener) FOR A REAL WEB APPLICATION BUILT WITH DUCK FRAMEWORK**
+---
 
-**It simplifies web development with:**
+## Real world apps built with Duck framework:
+1. [Snip - URL Shortener](https://snip.duckframework.com)
+2. [Quill - AI Design Generator](https://quill.duckframework.com)
+
+---
+
+## Duck simplifies web development with:
 
 1. [**Built-in HTTPS support**](https://docs.duckframework.xyz/main/https-and-http2) for secure connections  
 2. **Native HTTP/2 support** with **HTTP/1** backward compatibility [link](https://docs.duckframework.xyz/main/https-and-http2)  
