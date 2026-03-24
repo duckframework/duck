@@ -495,7 +495,7 @@ class HomePage(Page):
         # View source — links directly to GitHub
         src_link = to_component("", "a")
         src_link.klass = "counterapp-src-toggle"
-        src_link.props["href"] = "https://github.com/duckframework/duck/blob/main/duck/builtin_apps/counterapp/views/__init__.py"
+        src_link.props["href"] = "https://github.com/duckframework/duck/blob/main/duck/etc/apps/counterapp/views/__init__.py"
         src_link.props["target"] = "_blank"
         src_link.props["rel"] = "noopener noreferrer"
         src_link.inner_html = "<span class='bi bi-github'></span> View source on GitHub"
