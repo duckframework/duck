@@ -364,6 +364,40 @@ def home(request):
     return btn
 ```
 
+----
+
+```{warning}
+**Lively** only syncs `props` and `style` properties that were declared during the component's initial render. If a `ForceUpdate` isn't applying your changes, it likely means the property wasn't initialized on the server side.
+```
+
+**Example**
+
+Say you have a button with no `background-color` in its initial style:
+
+```python
+btn = Button(text="Click me")
+# No background-color set here
+```
+
+If something later changes the button's background on the client side (maybe direct JavaScript execution) and you then return a `ForceUpdate` over the button's style, Lively will **not** remove or reset the background.
+ It only knows about — and syncs — the style properties that existed when the component was first rendered.
+
+**Fix**
+
+Always initialize every property you intend to control with Lively, even if the starting value is empty or a default:
+
+```python
+btn = Button(text="Click me")
+btn.style["background-color"] = ""  # now Lively knows about it
+```
+
+Once a property is declared in the initial render, Lively will correctly sync it in any subsequent `ForceUpdate`.
+
+```{note}
+In cases where a property's presence resolves to `true` regardless of its value e.g. The presence 
+of `disabled` or `true`, you can just execute JavaScript (using `execute_js`) to alter the component directly.
+```
+
 ## Handling Forms
 
 **Duck** has got an easy mechanism you can use to easily handle form data.

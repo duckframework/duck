@@ -65,17 +65,21 @@ class TableOfContents(FlexContainer):
         self.style["flex-direction"] = "column"
         self.style["gap"] = "3px"
         self.klass = "table-of-contents"
+        self.show_nav_links = self.kwargs.get("show_nav_links", False)
 
         # Set title
         title_text = self.kwargs.get("title", "Table of Contents")
         self.title_heading = Heading("h1", text=title_text, klass="toc-title")
         
         # Create list container for quick navigation links
-        self.list_container = to_component("", tag="ul", klass="toc-list")
+        self.list_container = to_component("", tag="ul", klass="toc-list", style={"padding-left": "10px"})
         
         # Add title and list container to the component
         super().add_child(self.title_heading)
-        super().add_child(self.list_container)
+        
+        if show_nav_links:
+            # Only add nav links if allowed.
+            super().add_child(self.list_container)
 
     def add_child(self, child: TableOfContentsSection, list_style: str = "circle"):
          """
@@ -101,12 +105,12 @@ class TableOfContents(FlexContainer):
         """
         assert isinstance(section, TableOfContentsSection), "Only a TableOfContentsSection component is allowed"
 
-        if section.heading:
+        if section.heading and self.show_nav_links:
             heading_text = section.heading.inner_html
             heading_link = Link(text=heading_text)
             heading_link.style["text-decoration"] = "none"
             heading_link.props["href"] = f"#{section.heading.props.get('id', '')}"
-
+            
             list_item = to_component("", tag="li")
             list_item.style["list-style"] = list_style
             list_item.add_child(heading_link)

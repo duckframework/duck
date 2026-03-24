@@ -4,6 +4,7 @@
 - Need to document content security policy implementation (duck.csp module)
 - Need to make middlewares `async-compatible` without converting sync code to async with `sync_to_async`.
 - Need to integrate async-compatible Database ORM like sqlalchemy instead of using Django sync-first ORM.
+- Need to make default Duck pages like 404 or 500 error pages more modern just like the counterapp blueprint. Need to make pages like those use Lively by default and users can customize the use of Lively.
 - Need to add monetization options for Duck framework users.
 - Need to improve FCP (First Contentful Paint) for `Lively` Pages. First we show a loading banner on page visit without
   loading the fullpage and then load the fullpage using Lively partial navigation.
