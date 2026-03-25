@@ -162,11 +162,11 @@ class NavbarContainer(FlexContainer):
         self.navbar_toggler.klass = "navbar-toggler"
         self.navbar_toggler.props["onclick"] = "toggleCollapse($('.navbar-links-container'));"
 
-        self.navbar_toggler_icon = Icon(klass="navbar-toggler-icon bi bi-list")
+        self.navbar_toggler_icon = Icon(klass="navbar-toggler-icon")
         self.navbar_toggler_icon.style["width"] = "16px"
         self.navbar_toggler_icon.style["height"] = "16px"
         self.navbar_toggler_icon.style["display"] = "flex"
-        self.navbar_toggler_icon.props["alt"] = "menu"
+        self.navbar_toggler_icon.props["alt"] = "Toggle navbar"
 
         self.navbar_toggler.add_child(self.navbar_toggler_icon)
         self.add_child(self.navbar_toggler)
