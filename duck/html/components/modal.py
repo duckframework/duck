@@ -58,6 +58,7 @@ class Modal(FlexContainer):
            
         # Modal dialog styles (dark, minimal)
         modal_box_style = {
+            "min-height": "100px",
             "background": "#111",
             "color": "#fff",
             "border-radius": "8px",
@@ -218,8 +219,10 @@ class Modal(FlexContainer):
                     "flex-shrink": "0",
                 }
             )
+            
             if self.title_heading:
                 self.modal_header.add_child(self.title_heading)
+            
             if self.close_btn:
                 # Push close button to the right when there's no title
                 if not self.title_heading:

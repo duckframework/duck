@@ -77,7 +77,7 @@ class TableOfContents(FlexContainer):
         # Add title and list container to the component
         super().add_child(self.title_heading)
         
-        if show_nav_links:
+        if self.show_nav_links:
             # Only add nav links if allowed.
             super().add_child(self.list_container)
 

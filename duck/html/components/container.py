@@ -66,8 +66,8 @@ class FlexContainer(Container):
         super().on_create()
         self.style.setdefault("display", "flex")
         
-        if "flex_direction" in self.kwargs:
-            self.style["flex-direction"] = self.kwargs.get("flex_direction")
+        if "flex_direction" in self.kwargs or "direction" in self.kwargs:
+            self.style["flex-direction"] = self.kwargs.get("flex_direction") or self.kwargs.get('direction')
 
 
 class GridContainer(Container):
