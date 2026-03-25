@@ -23,7 +23,7 @@ class MadeWithDuck(FlexContainer):
         self.style["justify-content"] = "center"
         
         # Add image.
-        self.image = Image(source=static('images/duck-logo.png'))
+        self.image = Image(id="proudly-duck-logo", source=static('images/duck-logo.png'))
         self.image.style["object-fit"] = "contain"
         self.image.style["margin"] = "0px"
         self.add_child(self.image)

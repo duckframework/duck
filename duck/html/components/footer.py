@@ -129,7 +129,7 @@ class Footer(InnerComponent):
                           font-size: .8rem !important;
                       }
                       
-                      footer img {
+                      footer proudly-duck-logo {
                           width: 25px;
                           height: 25px;
                           margin-top: 5px;

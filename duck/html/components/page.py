@@ -782,6 +782,7 @@ class Page(InnerComponent):
             "type": type,
             "site_name": site_name,
         }
+        
         for key, val in props.items():
             if val is not None:
                 tag = to_component(
