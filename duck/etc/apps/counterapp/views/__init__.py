@@ -14,7 +14,7 @@ from duck.html.components.script import Script
 
 
 
-# Page-scoped CSS — dark editorial theme matching duckframework.xyz
+# Page-scoped CSS — dark editorial theme matching duckframework.com
 PAGE_STYLES = """
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 
@@ -510,7 +510,7 @@ class HomePage(Page):
         dot.klass = "counterapp-badge-dot"
         badge_text = to_component("", "span")
         badge_text.inner_html = (
-            "Powered by <a href='https://duckframework.xyz' "
+            "Powered by <a href='https://duckframework.com' "
             "target='_blank' rel='noopener noreferrer'>Duck Framework</a> "
             "— real-time UI, pure Python"
         )
