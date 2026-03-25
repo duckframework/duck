@@ -1,14 +1,37 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <!-- Basic SEO + compatibility -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Prevent indexing of this redirect page -->
+    <meta name="robots" content="noindex, follow" />
+
     <title>Redirecting...</title>
-    <meta http-equiv="refresh" content="0; url=main/index.html" />
+
+    <!-- Canonical target (helps search engines understand destination) -->
+    <link rel="canonical" href="/main/index.html" />
+
     <script>
-      // Fallback to redirecting in case meta refresh does not work
-      window.location.href = "main/index.html";
+      // Immediate, SEO-safe redirect (does not pollute history)
+      window.location.replace("/main/index.html");
     </script>
   </head>
+
   <body>
-    <p>If you are not redirected automatically, follow this <a href="main/index.html">link</a>.</p>
+    <!-- Fallback for users / bots without JS -->
+    <noscript>
+      <p>
+        This page has moved.
+        <a href="/main/index.html">Click here to continue</a>.
+      </p>
+    </noscript>
+
+    <!-- Visible fallback -->
+    <p>
+      Redirecting... If you are not redirected,
+      <a href="/main/index.html">click here</a>.
+    </p>
   </body>
 </html>
