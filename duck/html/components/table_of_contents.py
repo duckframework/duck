@@ -15,6 +15,14 @@ from duck.html.components.container import FlexContainer
 from duck.html.components.heading import Heading
 from duck.html.components.paragraph import Paragraph
 from duck.html.components.link import Link
+from duck.html.components.style import Style
+
+
+BASE_STYLE = """
+.toc-section li {
+  margin-left: 20px;
+}
+"""
 
 
 class TableOfContentsSection(FlexContainer):
@@ -64,9 +72,12 @@ class TableOfContents(FlexContainer):
         super().on_create()
         self.style["flex-direction"] = "column"
         self.style["gap"] = "3px"
+        self.style["line-height"] = "10px"
         self.klass = "table-of-contents"
-        self.show_nav_links = self.kwargs.get("show_nav_links", False)
-
+        
+        self.show_nav_links = self.kwargs.get("show_nav_links", True)
+        self.add_base_style = self.kwargs.get("add_base_style", True)
+        
         # Set title
         title_text = self.kwargs.get("title", "Table of Contents")
         self.title_heading = Heading("h1", text=title_text, klass="toc-title")
@@ -80,6 +91,9 @@ class TableOfContents(FlexContainer):
         if self.show_nav_links:
             # Only add nav links if allowed.
             super().add_child(self.list_container)
+        
+        if self.add_base_style:
+            super().add_child(Style(inner_html=BASE_STYLE))
 
     def add_child(self, child: TableOfContentsSection, list_style: str = "circle"):
          """
