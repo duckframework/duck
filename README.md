@@ -26,6 +26,7 @@
 
 1. [Snip - URL Shortener](https://snip.duckframework.com)
 2. [Quill - AI Design Generator](https://quill.duckframework.com)
+3. [Counter - Simple Counter App](https://duckframework.com/counterapp)
 
 ---
 
