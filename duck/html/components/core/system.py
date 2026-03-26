@@ -39,7 +39,7 @@ class LivelyComponentSystem:
     LivelyComponentSystem class.
     """
     
-    registry: InMemoryCache = InMemoryCache(maxkeys=100_000) # cache with LRU eviction lim->100 000 for very busy app.
+    registry: InMemoryCache = InMemoryCache(maxkeys=500_000) # cache with LRU eviction lim->500 000 for very busy app.
     """
     Mapping of UIDs to components.
     
