@@ -55,6 +55,7 @@ from duck.settings import SETTINGS
 from duck.exceptions.all import (
     RouteNotFoundError,
     TemplateError,
+    SettingsError,
 )
 from duck.html.components import Component
 from duck.meta import Meta
