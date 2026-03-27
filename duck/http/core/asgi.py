@@ -26,6 +26,7 @@ from duck.exceptions.all import (
     RequestUnsupportedVersionError,
     RequestSyntaxError,
     ExpectingNoResponse,
+    FileNotFoundResponseError,
 )
 from duck.http.core.handler import response_handler
 from duck.http.core.proxyhandler import (
@@ -199,7 +200,7 @@ class ASGI:
             else:
                  await self.apply_middlewares_to_response(response, request)
                  
-        except RouteNotFoundError:
+        except (RouteNotFoundError, FileNotFoundResponseError):
             # The request url cannot match any registered routes.
             response = get_404_error_response(request)
             

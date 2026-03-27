@@ -239,6 +239,7 @@ with open(joinpaths(duck_storage, "etc/headers/default_ssl.json")) as fd:
 
 
 # Extra Headers
+# You can override any headers here.
 EXTRA_HEADERS: dict = {}
 
 

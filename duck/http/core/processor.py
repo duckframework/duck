@@ -33,6 +33,7 @@ from duck.exceptions.all import (
     MethodNotAllowedError,
     RequestError,
     ExpectingNoResponse,
+    FileNotFoundResponseError,
 )
 from duck.http.core.proxyhandler import (
     HttpProxyResponse,
@@ -214,6 +215,7 @@ class RequestProcessor:
             RouteNotFoundError: If the requested url doesn't match any registered routes.
             ExpectingNoResponse: Raised if we are never going to get a response e.g. when we reach a WebSocketView.
                 This handles everything on its own and it will never return a response.
+            FileNotFoundResponseError: If file is not found, usually raised by FileResponse class.
             Exception: Any other exceptions.
             
         Returns:
@@ -271,7 +273,7 @@ class RequestProcessor:
                 f'\nError invoking {"response" if not is_ws_view else "websocket"} view for URL "{url}" ',
                 level=logger.ERROR,
                 custom_color=logger.Fore.YELLOW,
-            ) if not isinstance(e, ExpectingNoResponse) else None
+            ) if not isinstance(e, (ExpectingNoResponse, FileNotFoundResponseError)) else None
             raise e
         
         # Check and convert the data returned by the view to Http response.
@@ -563,6 +565,7 @@ class AsyncRequestProcessor(RequestProcessor):
             RouteNotFoundError: If the requested url doesn't match any registered routes.
             ExpectingNoResponse: Raised if we are never going to get a response e.g. when we reach a WebSocketView.
                 This handles everything on its own and it will never return a response.
+            FileNotFoundResponseError: If requesting file is not found, usually raised by `FileResponse` class.
             Exception: Any other exceptions.
             
         Notes:
@@ -599,7 +602,7 @@ class AsyncRequestProcessor(RequestProcessor):
                 f'\nError invoking {"response" if not is_ws_view else "websocket"} view for URL "{url}" ',
                 level=logger.ERROR,
                 custom_color=logger.Fore.YELLOW,
-            ) if not isinstance(e, ExpectingNoResponse) else None
+            ) if not isinstance(e, (ExpectingNoResponse, FileNotFoundResponseError)) else None
             raise e # reraise exception
         
         # Check and convert the data returned by the view to Http response.

@@ -44,7 +44,13 @@ class DisallowedAction(BaseException):
     Raised on disallowed actions.
     """
 
+
+class FileNotFoundResponseError(BaseException):
+    """
+    Raised by `FileResponse` class when a file is not found.
+    """
     
+
 class ServerError(BaseException):
     """
     Server based exceptions.

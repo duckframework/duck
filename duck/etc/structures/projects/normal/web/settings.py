@@ -176,6 +176,7 @@ CUSTOM_TEMPLATES: dict = {
 
 
 # Extra Headers
+# You can override any headers here.
 EXTRA_HEADERS: dict = {}
 
 

@@ -40,7 +40,7 @@ from duck.template.environment import (
 )
 from duck.html.components import Component
 from duck.contrib.sync import iscoroutinefunction, convert_to_async_if_needed
-from duck.exceptions.all import AsyncViolationError
+from duck.exceptions.all import AsyncViolationError, FileNotFoundResponseError
 from duck.etc.statuscodes import responses
 from duck.utils.string import smart_truncate
 from duck.utils.asyncio import in_async_context
@@ -933,7 +933,7 @@ class FileResponse(StreamingRangeHttpResponse):
             end_pos (int): The ending byte position for the range request. Defaults to -1, meaning the entire stream is used.
     
         Raises:
-            FileNotFoundError: If the specified file does not exist.
+            FileNotFoundResponseError: If the specified file does not exist.
             ValueError: If the file path is invalid or inaccessible.
     
         Notes:
@@ -953,15 +953,20 @@ class FileResponse(StreamingRangeHttpResponse):
         """
         file_stream: Union[FileIOStream, AsyncFileIOStream]
         
-        if SETTINGS['ASYNC_HANDLING']:
-            file_stream = StreamingHttpResponse.async_file_io_stream(filepath)
-        else:
-            file_stream = StreamingHttpResponse.file_io_stream(filepath)
-        
-        if not file_stream.is_open():
-            # Open file stream
-            file_stream.open()
+        try:
+            if SETTINGS['ASYNC_HANDLING']:
+                file_stream = StreamingHttpResponse.async_file_io_stream(filepath)
+            else:
+                file_stream = StreamingHttpResponse.file_io_stream(filepath)
             
+            if not file_stream.is_open():
+                # Open file stream
+                 file_stream.open()
+        
+        except FileNotFoundError as e:
+            # Raise our custom error which Duck knows how to handle.
+            raise FileNotFoundResponseError(str(e)) 
+        
         super().__init__(
             stream=file_stream,
             status_code=status_code,

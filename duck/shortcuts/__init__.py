@@ -39,6 +39,7 @@ from duck.utils.path import (
     build_absolute_uri,
     sanitize_path_segment,
     is_good_url_path,
+    joinpaths,
 )
 from duck.contrib.responses import (
     simple_response,
@@ -57,7 +58,7 @@ from duck.exceptions.all import (
 )
 from duck.html.components import Component
 from duck.meta import Meta
-from duck.routes import RouteRegistry
+from duck.routes import RouteRegistry, Blueprint
 
 
 __all__ = [
@@ -79,6 +80,8 @@ __all__ = [
     "to_response",
     "static",
     "media",
+    "static_filepath",
+    "media_filepath",
     "csrf_token",
 ]
 
@@ -138,6 +141,86 @@ def media(resource_path: str) -> str:
     resource_path = sanitize_path_segment(resource_path).lstrip("/")
     media_url = urljoin(root_url, media_url) + "/"
     return urljoin(media_url, resource_path)
+
+
+def static_filepath(relative_filepath: str, blueprint: Optional[Blueprint] = None, target_static_dir: Optional[str] = None) -> str:
+    """
+    Returns an absolute file path of the static file.
+    
+    Args:
+        relative_filepath (str): The relative file path within the default static directory.
+        blueprint (Optional[Blueprint]): If the static file is within a blueprint static directory (or belongs to a blueprint), a blueprint must be provided.
+        target_static_dir (str): This is the selected static directory if you are using more than 1 global static directories.
+        
+    Example:
+    
+    ```py
+    favicon = static_filepath('images/favicon.ico')
+    print(favicon) # May print something like /usr/home/myproject/web/ui/static/images/favicon.ico
+    ```
+    """
+    if target_static_dir and blueprint:
+        raise TypeError("Please provide either 'target_static_dir' or 'blueprint', not both.")
+    
+    if target_static_dir:
+        return joinpaths(target_static_dir, relative_filepath)  
+    
+    if SETTINGS['DEBUG']:
+        if blueprint:
+            file = joinpaths(blueprint.root_directory, blueprint.static_dir, relative_filepath)
+        else:
+            global_static_dirs = SETTINGS['GLOBAL_STATIC_DIRS']
+            
+            if len(global_static_dirs) > 1 and not target_static_dir:
+                raise SettingsError("More than 1 global static dirs detected in settings.py. Please provide 'target_static_dir' as an argument.")
+            
+            # Choose target static directory and return the final filepath
+            target_static_dir = global_static_dirs[0]
+            return joinpaths(target_static_dir, relative_filepath)  
+    else:
+        # We are in production.
+        target_static_dir = SETTINGS['STATIC_ROOT']
+        
+        if blueprint:
+            # Convert staticdir to relative path
+            abs_static_dir = joinpaths(blueprint.root_directory, blueprint.static_dir)
+            relative_static_dir = pathlib.Path(abs_static_dir).relative_to(pathlib.Path(blueprint.location).parent)
+            
+            # The blueprint stripped_staticdir is a dir with removed staticdir name from it
+            # so that function static() can resolve files correctly in production.
+            parts = pathlib.Path(relative_static_dir).parts
+            staticdir_name = ""
+            
+            if parts:
+                staticdir_name = parts[0]
+            
+            # Set staticdir without staticdir name
+            blueprint_stripped_staticdir = str(relative_static_dir).lstrip(staticdir_name)
+            target_static_dir = joinpaths(
+                static_root,
+                blueprint.name,
+                blueprint_stripped_staticdir,
+            )
+            return joinpaths(target_static_dir, relative_filepath)
+        else:
+            return joinpaths(target_static_dir, relative_filepath)
+
+
+def media_filepath(relative_filepath: str) -> str:
+    """
+    Returns an absolute file path of the media file.
+    
+    Args:
+        relative_filepath (str): The relative file path within the default static directory.
+        
+    Example:
+    
+    ```py
+    profile_img = media_filepath('users/user1/profile.png')
+    print(profile_img) # May print something like /usr/home/myproject/assets/media/users/user1/profile1.png
+    ```
+    """
+    return joinpaths(SETTINGS['MEDIA_ROOT'], relative_filepath)
 
 
 def jinja2_render(

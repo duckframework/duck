@@ -206,8 +206,8 @@ class Modal(FlexContainer):
         # This keeps the close button anchored to the modal content regardless
         # of how tall or short the content inside is.
         self.modal_header = None
-
         has_header = bool(title or show_close)
+        
         if has_header:
             self.modal_header = FlexContainer(
                 style={
@@ -238,6 +238,7 @@ class Modal(FlexContainer):
                 "position": "fixed",
                 "height": "100vh",
                 "width": "100%",
+                "padding": "10px",
             },
             id="modal-content-container",
         )
