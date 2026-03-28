@@ -17,6 +17,10 @@ DUCK_INIT_PATH = (
     pathlib.Path(__file__).resolve().parent / DUCK_PACKAGE_RELATIVE_PATH / "__init__.py"
 )
 
+# This must be called before any use of the duck.settings module e.g. through duck.app
+os.environ["DUCK_SETTINGS_MODULE"] = "duck.etc.structures.projects.testing.web.settings"
+os.environ["DJANGO_SETTINGS_MODULE"] = "duck.etc.structures.projects.testing.web.backend.django.duckapp.duckapp.settings"
+    
 
 # Entry point to sphinx
 def setup(app):

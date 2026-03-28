@@ -15,8 +15,8 @@ VERBOSE_TESTS = os.getenv("DUCK_TESTS_VERBOSE")
 
 def set_settings(settings: Dict[str, Any]):
     # This must be called before any use of the duck.settings module e.g. through duck.app
-    os.environ.setdefault("DUCK_SETTINGS_MODULE", "duck.etc.structures.projects.testing.web.settings")
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "duck.etc.structures.projects.testing.web.backend.django.duckapp.duckapp.settings")
+    os.environ["DUCK_SETTINGS_MODULE"] = "duck.etc.structures.projects.testing.web.settings"
+    os.environ["DJANGO_SETTINGS_MODULE"] = "duck.etc.structures.projects.testing.web.backend.django.duckapp.duckapp.settings"
     
     # Import settings after setting the settings module
     from duck.settings import SETTINGS
