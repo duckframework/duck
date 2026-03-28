@@ -8,8 +8,8 @@ import datetime
 
 
 # METADATA
-DUCK_HOMEPAGE = "https://duckframework.xyz"
-DUCK_DOCS_URL = "https://docs.duckframework.xyz"
+DUCK_HOMEPAGE = "https://duckframework.com"
+DUCK_DOCS_URL = "https://docs.duckframework.com"
 DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
 
 # Path to the duck package's __init__.py
@@ -24,6 +24,29 @@ def setup(app):
         context["DUCK_HOMEPAGE"] = DUCK_HOMEPAGE
         context["DUCK_DOCS_URL"] = DUCK_DOCS_URL
     app.connect("html-page-context", on_html_page_context)
+    app.connect("build-finished", on_build_finished)
+    
+
+def on_build_finished(app, exception):
+    """
+    Called when Sphinx finishes building the documentation.
+
+    Args:
+        app: The Sphinx application object.
+        exception: Exception raised during build, if any.
+    """
+    from sitemap import generate_sitemap
+    from duck.logging import console
+    
+    if exception is not None:
+        console.log("Build failed, skipping custom post-build task, no sitemap will be generated.", level=console.WARNING)
+        return
+
+    console.log("Build completed successfully. Running post-build task...", level=console.WARNING)
+    
+    # Build the sitemap
+    generate_sitemap()
+  
 
 def read_metadata_from_init(init_path):
     """
@@ -37,6 +60,7 @@ def read_metadata_from_init(init_path):
         dict: A dictionary containing metadata like __version__, __author__, and __email__.
     """
     metadata = {}
+    
     with open(init_path, "r", encoding="utf-8") as f:
         for line in f:
             # Look for __<name>__ = '<value>'
@@ -167,7 +191,7 @@ html_theme = "sphinxawesome_theme"
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
 html_title = "Duck Framework — Python Web Framework | Build Web Apps Without JavaScript"
-html_baseurl = "https://docs.duckframework.xyz/main/"
+html_baseurl = "https://docs.duckframework.com/main/"
 html_theme_options = {
     "logo_light": "_static/images/duck-logo.png",
     "logo_dark": "_static/images/duck-logo.png",

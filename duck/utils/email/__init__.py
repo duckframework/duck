@@ -81,6 +81,7 @@ class Email:
         recipients: Optional[List[str]] = None,
         use_bcc: bool = True,
         use_ssl: bool = True,
+        reply_to: Optional[str] = None,
     ):
         """
         Initialize a generic Email instance.
@@ -98,6 +99,7 @@ class Email:
             recipients: List of additional recipient emails for CC/BCC (optional).
             use_bcc: If True, use BCC for recipients; otherwise, use CC.
             use_ssl: Whether to use SSL for SMTP (default True).
+            reply_to: An email for users to reply to when they hit 'Reply'. Defaults to None, uses default from_addr.
         """
         self.smtp_host = smtp_host
         self.smtp_port = smtp_port
@@ -112,6 +114,7 @@ class Email:
         self.use_bcc = use_bcc
         self.use_ssl = use_ssl
         self.is_sent = False
+        self.reply_to = reply_to
 
     def _build_message(self) -> Tuple[MIMEMultipart, List[str]]:
         """
@@ -124,7 +127,10 @@ class Email:
         msg['From'] = formataddr((self.name, self.from_addr))
         msg['To'] = self.to
         msg['Subject'] = self.subject
-
+        
+        if self.reply_to:
+            msg["Reply-To"] = self.reply_to
+            
         if self.recipients:
             if self.use_bcc:
                 all_recipients = [self.to] + self.recipients
