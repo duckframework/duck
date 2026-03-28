@@ -39,7 +39,7 @@ def on_build_finished(app, exception):
         app: The Sphinx application object.
         exception: Exception raised during build, if any.
     """
-    from sitemap import generate_sitemap
+    from .sitemap import generate_sitemap
     from duck.logging import console
     
     if exception is not None:
