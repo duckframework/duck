@@ -39,7 +39,6 @@ def on_build_finished(app, exception):
         app: The Sphinx application object.
         exception: Exception raised during build, if any.
     """
-    from .sitemap import generate_sitemap
     from duck.logging import console
     
     if exception is not None:
@@ -47,10 +46,21 @@ def on_build_finished(app, exception):
         return
 
     console.log("Build completed successfully. Running post-build task...", level=console.WARNING)
+    try:
+        # Ensure docs/source is importable, then import sitemap without relying on package context
+        this_dir = pathlib.Path(__file__).resolve().parent
+        sys.path.insert(0, str(this_dir))
+        
+        # Import sitemap generation function
+        from sitemap import generate_sitemap
     
+    except Exception as e:
+        console.log(f"Skipping sitemap generation (import failed).", level=console.WARNING)
+        return
+        
     # Build the sitemap
     generate_sitemap()
-  
+
 
 def read_metadata_from_init(init_path):
     """
