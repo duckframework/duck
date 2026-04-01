@@ -12,6 +12,10 @@ DUCK_HOMEPAGE = "https://duckframework.com"
 DUCK_DOCS_URL = "https://docs.duckframework.com"
 DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
 
+# Metadata for sitemap generation
+DOCS_DIR = pathlib.Path(__file__).parent.parent
+DOCS_SOURCE_DIRS = ( "source", "source/api")
+
 # Path to the duck package's __init__.py
 DUCK_INIT_PATH = (
     pathlib.Path(__file__).resolve().parent / DUCK_PACKAGE_RELATIVE_PATH / "__init__.py"
@@ -20,7 +24,7 @@ DUCK_INIT_PATH = (
 # This must be called before any use of the duck.settings module e.g. through duck.app
 os.environ["DUCK_SETTINGS_MODULE"] = "duck.etc.structures.projects.testing.web.settings"
 os.environ["DJANGO_SETTINGS_MODULE"] = "duck.etc.structures.projects.testing.web.backend.django.duckapp.duckapp.settings"
-    
+
 
 # Entry point to sphinx
 def setup(app):
@@ -39,26 +43,6 @@ def on_build_finished(app, exception):
         app: The Sphinx application object.
         exception: Exception raised during build, if any.
     """
-    from duck.logging import console
-    
-    if exception is not None:
-        console.log("Build failed, skipping custom post-build task, no sitemap will be generated.", level=console.WARNING)
-        return
-
-    console.log("Build completed successfully. Running post-build task...", level=console.WARNING)
-    try:
-        # Ensure docs/source is importable, then import sitemap without relying on package context
-        this_dir = pathlib.Path(__file__).resolve().parent
-        sys.path.insert(0, str(this_dir))
-        
-        # Import sitemap generation function
-        from sitemap import generate_sitemap
-    
-    except Exception as e:
-        console.log(f"Skipping sitemap generation (import failed).", level=console.WARNING)
-        return
-        
-    # Build the sitemap
     generate_sitemap()
 
 
@@ -91,7 +75,73 @@ def read_metadata_from_init(init_path):
     return metadata
 
 
-# -- Project information -----------------------------------------------------
+def generate_sitemap():
+    """
+    This must be called after sphinx build.
+    
+    The sitemap.xml is placed in `build/html`.
+    """
+    from duck.logging import console
+    from duck.contrib.sitemap import SitemapBuilder
+    
+    urls = set()
+    
+    for source_dir in DOCS_SOURCE_DIRS:
+        try:
+            abs_dir = DOCS_DIR / source_dir
+            for entry in os.scandir(abs_dir):
+                if entry.is_file():
+                    filename = entry.name
+                    docname = None
+                    
+                    if filename == "index.rst":
+                        docname = ""
+                        
+                    elif filename.endswith(".md"):
+                        docname = filename.replace(".md", "")
+                        
+                    elif filename.endswith(".html"):
+                        docname = filename.replace(".html", "")
+                   
+                    elif filename.endswith(".rst"):
+                        docname = filename.replace(".rst", "")
+                        
+                    if source_dir == "source":
+                        # This is the root source directory for main docs.
+                        # Check if docname is set.
+                        if docname is not None:
+                            urls.add(f"{DOCS_URL}/{docname}")
+                    
+                    elif source_dir == "source/api":
+                        # This is the source directory for API docs.
+                        # This directory contains only html files.
+                        # Check if docname is set.
+                        if docname is not None:
+                            urls.add(f"{DOCS_URL}/api/{docname}")
+                    
+                    else:
+                        raise ValueError(f"Unknown source directory '{source_dir}', expected 'source' or 'source/api'.")
+        
+        except FileNotFoundError as e:
+                console.log(f"Caught an error whilst scanning source dirs: {e}", level=console.WARNING)                
+        
+    # Build the sitemap.
+    sitemap_filepath = DOCS_DIR / "build/html/sitemap.xml"
+    
+    # Initialize the builder.
+    builder = SitemapBuilder(
+        server_url=DOCS_URL, # Parsing None will automatically resolve server URL
+        save_to_file=True,
+        filepath=sitemap_filepath,
+        extra_urls=urls,
+    )
+    
+    # Generate the sitemap and save it accordingly.
+    builder.build()
+    console.log(f"Sitemap has been saved at {sitemap_filepath}", level=console.DEBUG)
+    
+
+# Project information
 
 # Extract metadata from duck/__init__.py
 metadata = read_metadata_from_init(DUCK_INIT_PATH)
