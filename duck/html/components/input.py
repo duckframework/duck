@@ -47,29 +47,29 @@ class Input(BaseInput):
         self.props["min-width"] = "50%"
         self.props["min-height"] = "60px"
         
-        if "type" in self.kwargs:
+        if self.kwargs.get("type"):
             self.props["type"] = self.kwargs.get('type')
             
-        if "value" in self.kwargs:
+        if self.kwargs.get("value"):
              self.props["value"] = self.kwargs.get("value")
              
-        if "name" in self.kwargs:
+        if self.kwargs.get("name"):
             self.props["name"] = self.kwargs.get('name') or ''
         
-        if "placeholder" in self.kwargs:
+        if self.kwargs.get("placeholder"):
             placeholder = self.kwargs.get('placeholder') or ''
             self.props["placeholder"] = placeholder
        
-        if "required" in self.kwargs:
+        if self.kwargs.get("required"):
             self.props["required"] = "true"
        
-        if "maxlength" in self.kwargs:
+        if self.kwargs.get("maxlength"):
            self.props["maxlength"] = str(self.kwargs.get('maxlength')) or ''  
         
-        if "minlength" in self.kwargs:
+        if self.kwargs.get("minlength"):
            self.props["minlength"] = str(self.kwargs.get('minlength')) or ''  
         
-        if "disabled" in self.kwargs:
+        if self.kwargs.get("disabled"):
             self.props["disabled"] = "true" if self.kwargs.get("disabled") else "false"
 
 
@@ -112,17 +112,17 @@ class InputWithLabel(FlexContainer):
         self.style["gap"] = "10px"
         self.style["flex-direction"] = "column"
         
-        if "label_html" in self.kwargs:
+        if self.kwargs.get("label_html"):
             label_html = self.kwargs.get('label_html')
             self.label = Label(inner_html=label_html)
             self.add_child(self.label)
         
-        elif "label_text" in self.kwargs:
+        elif self.kwargs.get("label_text"):
             label_text = self.kwargs.get('label_text')
             self.label = Label(text=label_text)
             self.add_child(self.label)
         
-        if "input" in self.kwargs:
+        if self.kwargs.get("input"):
             self.inputfield = self.kwargs.get('input')
             if self.inputfield:
                 self.add_child(self.inputfield)

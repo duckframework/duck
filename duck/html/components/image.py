@@ -23,16 +23,16 @@ class Image(NoInnerComponent):
         
     def on_create(self):
         super().on_create()
-        if "source" in self.kwargs:
+        if self.kwargs.get("source"):
             self.props["src"] = self.kwargs.get("source")
         
-        if "alt" in self.kwargs:
+        if self.kwargs.get("alt"):
             self.props["alt"] = self.kwargs.get("alt")
             
-        if "width" in self.kwargs:
+        if self.kwargs.get("width"):
             self.style["width"] = self.kwargs.get("width")
             
-        if "height" in self.kwargs:
+        if self.kwargs.get("height"):
             self.style["height"] = self.kwargs.get("height")
 
 

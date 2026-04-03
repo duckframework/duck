@@ -179,30 +179,22 @@ class Email:
             raise ImportError("aiosmtplib is required for async email sending. Install with 'pip install aiosmtplib'.")
 
         msg, all_recipients = self._build_message()
+        smtp_kwargs = dict(
+            hostname=self.smtp_host,
+            port=self.smtp_port,
+            username=self.username,
+            password=self.password,
+            sender=self.from_addr,
+            recipients=all_recipients,
+        )
         
-        # aiosmtplib expects the message as a string
+        # SSL wraps the connection from the start; STARTTLS upgrades it mid-handshake
         if self.use_ssl:
-            await aiosmtplib.send(
-                message=msg,
-                hostname=self.smtp_host,
-                port=self.smtp_port,
-                username=self.username,
-                password=self.password,
-                use_tls=True,
-                sender=self.from_addr,
-                recipients=all_recipients,
-            )
+            await aiosmtplib.send(msg, **smtp_kwargs, use_tls=True)
         else:
-            await aiosmtplib.send(
-                message=msg,
-                hostname=self.smtp_host,
-                port=self.smtp_port,
-                username=self.username,
-                password=self.password,
-                start_tls=True,
-                sender=self.from_addr,
-                recipients=all_recipients,
-            )
+            await aiosmtplib.send(msg, **smtp_kwargs, start_tls=True)
+        
+        # Update is_sent flag
         self.is_sent = True
 
     def __repr__(self):
@@ -257,6 +249,7 @@ class Gmail(Email):
         recipients: Optional[List[str]] = None,
         use_bcc: bool = True,
         use_ssl: bool = True,
+        reply_to: Optional[str] = None,
     ):
         """
         Initialize a Gmail email instance with Gmail's SMTP settings.
@@ -272,6 +265,7 @@ class Gmail(Email):
             recipients: List of additional recipient emails (optional).
             use_bcc: If True, use BCC for recipients; otherwise, use CC.
             use_ssl: Whether to use SSL for SMTP (default True).
+            reply_to: An email for users to reply to when they hit 'Reply'. Defaults to None, uses default from_addr.
         """
         super().__init__(
             smtp_host="smtp.gmail.com",
@@ -286,4 +280,5 @@ class Gmail(Email):
             recipients=recipients,
             use_bcc=use_bcc,
             use_ssl=use_ssl,
+            reply_to=reply_to,
         )

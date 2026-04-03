@@ -218,7 +218,7 @@ class URL:
                 By default, all unsafe characters are stripped.
     
         Example:
-            > https://duckframework.xyz/some/path + http://digreatbrian.tech/path/endpoint = https://digreatbrian.tech/some/path/endpoint
+            > https://duckframework.com/some/path + http://digreatbrian.tech/path/endpoint = https://digreatbrian.tech/some/path/endpoint
         """
         assert isinstance(base_url, str), f"Base URL must be an instance of str not {type(base_url)}"
         assert isinstance(head_url, str), f"Head URL must be an instance of str not {type(head_url)}"

@@ -49,6 +49,7 @@ class Modal(FlexContainer):
             "height": "100vh",
             "background": "rgba(0, 0, 0, 0.68)", # Slightly stronger dark overlay for dark modals
             "z-index": "1000",
+            "backdrop-filter": "blur(6px)",
             "align-items": "center",
             "flex-direction": "column",
             "display": "none", # Hide by default.
