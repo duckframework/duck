@@ -75,7 +75,8 @@ And more — see [feature list](https://duckframework.com/features)
 10. **Complete Reverse Proxy Server** – **Duck** only acts as reverse proxy for  Django only. Need to make Duck a full-fledged reverse proxy server with optional sticky sessions.
 11. ~~**Component Mutation Observer** – Need to build an optional component mutation observer for keeping track of child changes for fastest re-render (approx. 75x fast on unchanged children).~~
 12. **MCP (Model Context Protocol) Server** – Need to make it easy for creating MCP servers for easy AI communication. 
-13. **...and more** – [Request a feature](./feature_request.md)
+13. **JWT (JSON-based Web Token) Authentication ** – Need  to add JWT authentication persistent logins.
+14. **...and more** – [Request a feature](./feature_request.md)
 
 ---
 
@@ -145,6 +146,265 @@ This starts the server at **http://localhost:8000**
 
 ---
 
+## Understanding the Project
+
+Duck generates a set of files and directories as you build your application. This section walks through the core ones you'll interact with most.
+
+---
+
+### `web/main.py`
+
+The entry point for your Duck application. You can run it directly with `python web/main.py`, or use the `duck runserver` command instead.
+
+```py
+#!/usr/bin/env python
+"""
+Main script for creating and running the Duck application.
+"""
+
+from duck.app import App
+
+app = App(port=8000, addr="0.0.0.0", domain="localhost")
+
+if __name__ == "__main__":
+    app.run()
+```
+
+---
+
+### `web/urls.py`
+
+Defines the URL routes for your application. Each route maps a static or dynamic path to a **view** — a callable that handles incoming requests for that path.
+
+By default, `urlpatterns` is an empty list. Add your own routes to wire up the app.
+
+**HTTP route example:**
+
+```py
+from duck.urls import path
+from duck.http.response import HttpResponse
+
+def home(request):
+    return HttpResponse("Hello world")
+
+urlpatterns = [
+    path('/', home, name="home"),
+]
+```
+
+**WebSocket route example:**
+
+```py
+from duck.urls import path
+from duck.contrib.websockets import WebSocketView
+
+class SomeWebSocket(WebSocketView):
+    async def on_receive(self, data: bytes, opcode):
+        # Handle incoming WebSocket data
+        await self.send_text("Some text")
+
+        # Other available send methods:
+        # send_json, send_binary, send_ping, send_pong, send_close
+
+urlpatterns = [
+    path('/some_endpoint', SomeWebSocket, name="some_ws_endpoint"),
+]
+```
+
+---
+
+### `web/views.py`
+
+An optional file for organising your view functions. Import it as a module in `urls.py` to keep your routes clean.
+
+```py
+# web/urls.py
+from duck.urls import path
+from . import views
+
+urlpatterns = [
+    path('/', views.home, name="home"),
+]
+```
+
+---
+
+### `web/ui/`
+
+Contains all frontend logic — components, pages, templates, and static files.
+
+---
+
+#### `web/ui/pages/`
+
+Duck recommends building UI with **Pages** — Python classes that represent full HTML pages. Pages unlock the [Lively Component System](https://docs.duckframework.com/main/lively-components), which enables fast navigation and real-time interactivity without JavaScript or full page reloads.
+
+**What is an HTML Component?**
+
+A component is a Python class that represents an HTML element. You configure it with props and style, then render it to HTML.
+
+```py
+from duck.html.components import InnerComponent
+
+class Button(InnerComponent):
+    def get_element(self):
+        return "button"
+
+btn = Button(text="Hello world")
+
+print(btn.render())  # <button>Hello world</button>
+```
+
+Duck ships with many built-in components — `Button`, `Navbar`, `Modal`, `Input`, and more — available under `duck.html.components`.
+
+**Creating Pages**
+
+Subclass `duck.html.components.page.Page` to create a page. The recommended pattern is a `BasePage` that defines the shared layout, with individual pages overriding only what they need.
+
+```py
+# web/ui/pages/base.py
+from duck.html.components.container import FlexContainer
+from duck.html.components.page import Page
+
+class BasePage(Page):
+    def on_create(self):
+        super().on_create()
+        self.set_title("MySite")
+        self.set_description("Some base description ...")
+
+        # Set up the root layout container
+        self.main = FlexContainer(flex_direction="column")
+        self.add_to_body(self.main)
+
+        self.build_layout(self.main)
+
+    def build_layout(self, main):
+        # Override in subclasses to define page-specific layout
+        pass
+```
+
+```py
+# web/ui/pages/home.py
+from duck.html.components.container import Container
+from web.ui.pages.base import BasePage
+
+class HomePage(BasePage):
+    def build_layout(self, main):
+        main.add_child(Container(text="Hello world"))
+```
+
+**Using Pages in views:**
+
+```py
+# web/views.py
+from duck.shortcuts import to_response
+
+def home(request):
+    return to_response(HomePage(request))
+```
+
+> Pages automatically enable fast client-side navigation via Lively. Unlike templates, switching between pages does not trigger a full reload.
+
+---
+
+#### `web/ui/components/`
+
+Where your custom reusable components live. The example below shows a feedback form with real-time UI updates powered by Lively.
+
+```py
+# web/ui/components/form.py
+from duck.html.components.form import Form
+from duck.html.components.input import Input, InputWithLabel
+from duck.html.components.textarea import TextArea
+from duck.html.components.button import Button
+from duck.html.components.label import Label
+
+class MyFeedbackForm(Form):
+    def on_create(self):
+        super().on_create()
+
+        # Status label for displaying feedback or errors
+        self.label = Label(text="")
+
+        self.add_children([
+            self.label,
+            InputWithLabel(
+                label_text="Your name",
+                input=Input(name="name", type="text", placeholder="Enter your name", required=True),
+            ),
+            InputWithLabel(
+                label_text="Your message",
+                input=TextArea(name="message", placeholder="Your message", required=True),
+            ),
+            Button(text="Submit", props={"type": "submit"}),
+        ])
+
+        # Bind submit event — update_targets lists components to re-render on the client
+        self.bind("submit", self.on_form_submit, update_self=True, update_targets=[self.label])
+
+    async def on_form_submit(self, form, event, form_inputs, ws):
+        name = form_inputs.get("name").strip()
+        message = form_inputs.get("message").strip()
+
+        # Validate and persist the message here
+
+        # Patch the label in-place on the client
+        self.label.text = "Your message has been received"
+        self.label.color = "green"
+```
+
+---
+
+#### `web/ui/templates/`
+
+Prefer classic server-rendered templates? Store them here. Duck supports both **Django** and **Jinja2** template engines.
+
+```django
+{# web/ui/templates/home.html #}
+{% extends 'base.html' %}
+
+{% block main %}
+  Hello world!
+{% endblock main %}
+```
+
+```py
+# web/views.py
+from duck.shortcuts import render, async_render
+
+def home(request):
+    return render("home.html", engine="django")  # or engine="jinja2"
+
+async def async_home(request):
+    return await async_render("home.html", engine="django")
+```
+
+> You can also use HTML components inside templates. See [Lively Components](https://docs.duckframework.com/main/lively-components) for details.
+
+#### `web/ui/static/`
+
+This directory contains all the static files like css/js files, images or videos for your application.
+
+> Instead of hard-coding static file URLs in components or templates, use the `static` function in `duck.shortcuts` module.
+
+```py
+# views.py
+from duck.shortcuts import static
+
+def home(request):
+    # Instead of:
+    my_image_url = "/static/images/my-image.png"
+    
+    # Do this instead:
+    my_image_url = static("images/my-image.png")
+    
+    return "Hello world" # Anything here.
+```
+
+> The same applies with hard-coding internal URLs, use the `resolve()` function in `duck.shortcuts`.
+
+---
+
 ## Django Integration
 
 If you have an existing **Django** project and want production features like **HTTPS**, **HTTP/2**, and **resumable downloads**, Duck makes it easy.  
@@ -200,7 +460,7 @@ duck runserver -dj
 
 ### Sponsorship/Donations:  
 
-Support development at [Open Collective](https://opencollective.com/duckframework/contribute)  
+Support development on [Patreon](https://patreon.com/duckframework)  
 
 ### Report issues:  
 

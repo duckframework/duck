@@ -1,5 +1,5 @@
 """
-**Ducksight Reloader**
+**Duck Sight Reloader**
 
 Watches for file changes in Duck framework projects and restarts the
 webserver in DEBUG mode whenever relevant `.py` files change.

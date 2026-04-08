@@ -411,8 +411,7 @@ class Loaded:
         self.REQUEST_HANDLING_TASK_EXECUTOR = Lazy(get_request_handling_task_executor)
         self.PREFERRED_LOG_STYLE = Lazy(get_preferred_log_style)
         
-        # Load middlewares instantly because its sometimes causing errors if loaded lazily in
-        # request processor
+        # Load middlewares instantly because it sometimes cause errors if loaded lazily in request processor
         self.MIDDLEWARES() # This loads middlewares right away
         self.SESSION_STORE() # Also do the same for session store.
 

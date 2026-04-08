@@ -45,7 +45,7 @@ def get_correct_urlpatterns() -> List:
     urlpatterns = []
     duck_urlpatterns = get_duck_urlpatterns()
 
-    # make new django urlpatterns
+    # Make new django urlpatterns
     for urlpattern in duck_urlpatterns:
         url, name, methods = (
             urlpattern.get("url"),
