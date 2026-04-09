@@ -10,6 +10,7 @@ import datetime
 # METADATA
 DUCK_HOMEPAGE = "https://duckframework.com"
 DUCK_DOCS_URL = "https://docs.duckframework.com"
+DUCK_DOCS_MAIN_URL = f"{DUCK_DOCS_URL}/main"
 DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
 
 # Metadata for sitemap generation
@@ -110,14 +111,14 @@ def generate_sitemap():
                         # This is the root source directory for main docs.
                         # Check if docname is set.
                         if docname is not None:
-                            urls.add(f"{DOCS_URL}/{docname}")
+                            urls.add(f"{DUCK_DOCS_MAIN_URL}/{docname}")
                     
                     elif source_dir == "source/api":
                         # This is the source directory for API docs.
                         # This directory contains only html files.
                         # Check if docname is set.
                         if docname is not None:
-                            urls.add(f"{DOCS_URL}/api/{docname}")
+                            urls.add(f"{DUCK_DOCS_MAIN_URL}/api/{docname}")
                     
                     else:
                         raise ValueError(f"Unknown source directory '{source_dir}', expected 'source' or 'source/api'.")

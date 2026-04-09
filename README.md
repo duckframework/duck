@@ -75,7 +75,7 @@ And more — see [feature list](https://duckframework.com/features)
 10. **Complete Reverse Proxy Server** – **Duck** only acts as reverse proxy for  Django only. Need to make Duck a full-fledged reverse proxy server with optional sticky sessions.
 11. ~~**Component Mutation Observer** – Need to build an optional component mutation observer for keeping track of child changes for fastest re-render (approx. 75x fast on unchanged children).~~
 12. **MCP (Model Context Protocol) Server** – Need to make it easy for creating MCP servers for easy AI communication. 
-13. **JWT (JSON-based Web Token) Authentication ** – Need  to add JWT authentication persistent logins.
+13. **JWT (JSON-based Web Token) Authentication** – Need  to add JWT authentication persistent logins.
 14. **...and more** – [Request a feature](./feature_request.md)
 
 ---
@@ -84,6 +84,19 @@ And more — see [feature list](https://duckframework.com/features)
 
 - The **Duck** official website is powered by the **Duck** framework itself—showcasing a true "dogfooding" approach!
 - [**Duck's Lively components**](https://docs.duckframework.com/main/lively-components) bring you a **Lively UI** that's exceptionally fast and responsive, eliminating slow page re-rendering for a seamless user experience.
+
+---
+
+## AI Assistance
+
+All AI-assisted functionality is grouped under the `ai` directory in the root of this repository.
+
+This directory includes:
+- AI integration logic
+- Supporting utilities and helpers
+- Configuration and usage examples
+
+Refer to it for a deeper understanding of how AI is incorporated into the project.
 
 ---
 
