@@ -131,7 +131,7 @@ def generate_sitemap():
     
     # Initialize the builder.
     builder = SitemapBuilder(
-        server_url=DOCS_URL, # Parsing None will automatically resolve server URL
+        server_url=DUCK_DOCS_MAIN_URL, # Parsing None will automatically resolve server URL; this might cause an error.
         save_to_file=True,
         filepath=sitemap_filepath,
         extra_urls=urls,
