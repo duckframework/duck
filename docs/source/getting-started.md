@@ -2,7 +2,7 @@
 
 *Simple. Powerful. Reactive web apps in pure Python — no JavaScript, no extra tools.*  
 
-This guide will get you from **zero → running app → understanding structure** in a few minutes.
+This guide will get you from **zero ➝‬ running app ➝‬ understanding structure** in a few minutes.
 
 ---
 
@@ -26,7 +26,7 @@ cd myproject
 ## 3. Run the Server
 
 ```bash
-duck runserver
+duck runserver # Or use python3 web/main.py
 ```
 
 Open your browser:
@@ -54,7 +54,7 @@ Let’s break them down 👇
 
 ---
 
-## web/main.py → Entry Point (starts your app)
+## web/main.py ➝‬ Entry Point (starts your app)
 
 ```python
 #!/usr/bin/env python
@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
 ---
 
-## web/urls.py → URL Routing (maps URLs to logic)
+## web/urls.py ➝‬ URL Routing (maps URLs to logic)
 
 Example:
 
@@ -96,15 +96,15 @@ urlpatterns = [
 ### What it does:
 
 - Defines **which URL calls which function**
-- Connects user requests → your code
+- Connects user requests ➝‬ your code
 
 👉 Example:
 
-- Visiting `/` → calls `views.home`
+- Visiting `/` ➝‬ calls `views.home`
 
 ---
 
-## web/views.py → Logic (what your app does)
+## web/views.py ➝‬ Logic (what your app does)
 
 Example:
 
@@ -138,7 +138,7 @@ When a user visits your app:
 
 ## Run Built-in Tests
 
-bash
+```bash
 duck runtests
 ```
 
