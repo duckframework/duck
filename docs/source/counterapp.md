@@ -7,7 +7,7 @@
 
 ---
 
-## 🗂️ views/__init__.py
+## views.py
 
 ```py
 from duck.views import View
@@ -100,7 +100,7 @@ To use or to test out the builtin counterapp, you just need to follow the steps 
 
 ---
 
-## 📝 Notes
+## Notes
 
 - Requires the **Lively Component System** to be active.
 - Demonstrates **real-time updates**: the label updates automatically when the counter increments.

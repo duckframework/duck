@@ -10,7 +10,7 @@ This middleware is responsible for **loading, saving, and managing sessions** in
 
 ---
 
-## 🗃️ Session Storage Options
+## Session Storage Options
 
 Duck supports multiple session storage backends:
 
@@ -22,7 +22,7 @@ Duck supports multiple session storage backends:
 
 ---
 
-## ⚡ Accessing Sessions
+## Accessing Sessions
 
 - Access the request session via `request.SESSION` or `request.session`.  
 - Sessions are **lazily saved**, meaning they are written only if there are changes.  
@@ -45,7 +45,7 @@ def some_view(request):
 
 ---
 
-## 🛠️ Session Settings
+## Session Settings
 
 Most defaults are safe, but you can customize as needed:
 
@@ -105,7 +105,7 @@ Controls cross-site request behavior.
 
 ---
 
-## 💡 Notes & Tips
+## Notes & Tips
 
 - Duck sessions are **lightweight and flexible** for both short and long-lasting sessions.  
 - Always pick a session backend that fits your **performance and persistence needs**.  

@@ -255,7 +255,7 @@ exclude_patterns = ["*/projects/*/backend/*", "_build", "Thumbs.db", ".DS_Store"
 html_theme = "sphinxawesome_theme"
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
-html_title = "Duck Framework — Python Web Framework | Build Web Apps Without JavaScript"
+html_title = "Duck Framework — Build Reactive Web Apps Without JavaScript"
 html_baseurl = "https://docs.duckframework.com/main/"
 html_theme_options = {
     "logo_light": "_static/images/duck-logo.png",
@@ -264,7 +264,7 @@ html_theme_options = {
     "show_prev_next": True,
     "show_scrolltop": True,
     "main_nav_links": {
-        "Go Home": DUCK_HOMEPAGE,
+        "Explore the Main Site": DUCK_HOMEPAGE,
     }
 }
 

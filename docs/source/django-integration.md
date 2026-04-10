@@ -18,7 +18,7 @@ You can access your Django application **directly through Duck**, making it fast
 Visit [Django Official Site](https://djangoproject.com) for more info.
 
 
-## 🔄 How It Works
+## How It Works
 
 1. **Client sends a request:** A browser or API client initiates a request to the Duck server.  
 2. **Duck server receives the request:** Duck handles incoming connections first.  
@@ -28,7 +28,7 @@ Visit [Django Official Site](https://djangoproject.com) for more info.
 
 ---
 
-## 🌟 Why Use Duck with Django
+## Why Use Duck with Django
 
 - 🚀 **Native HTTP/2 & HTTPS** support  
 - 🛡 **Enhanced security middleware**: Protects against DoS, SQLi, and more  
@@ -44,7 +44,7 @@ Visit [Django Official Site](https://djangoproject.com) for more info.
 
 ---
 
-## 🛠️ Integration Steps
+## Integration Steps
 
 Duck provides a simple command for Django integration: `django-add`.
 
@@ -61,7 +61,7 @@ After running these commands, your Duck server can serve Django routes effortles
 
 ---
 
-## ⚡ Notes
+## Notes
 
 - Follow the instructions provided by `django-add` carefully  
 - Ensure your Django project defines **at least one `urlpattern`**  

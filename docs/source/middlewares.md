@@ -10,7 +10,7 @@ They provide a flexible mechanism for **logging, validation, authentication, and
 
 ---
 
-## 🏗️ Base Middleware Class
+## Base Middleware Class
 
 All custom middlewares in Duck inherit from **`BaseMiddleware`**:
 
@@ -34,7 +34,7 @@ class MyMiddleware(BaseMiddleware):
 
 ---
 
-### ⚡ Key Attributes
+### Key Attributes
 
 | Attribute          | Type      | Description |
 |-------------------|----------|-------------|
@@ -47,7 +47,7 @@ class MyMiddleware(BaseMiddleware):
 
 ---
 
-### 🔧 Class Methods
+### Class Methods
 
 #### `process_request(request: HttpRequest) -> int`
 
@@ -69,7 +69,7 @@ HttpBadRequestResponse("Sorry there is an error in Request, that's all we know!"
 
 ---
 
-### 💡 Notes
+### Notes
 
 - You can return `request_bad` **even if the request has no errors** to override the final response from `get_error_response`.  
 - Use middlewares for **authentication, logging, validation, rate-limiting**, or any cross-cutting concerns.  

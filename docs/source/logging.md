@@ -15,7 +15,7 @@ LOG_TO_FILE = False
 
 ---
 
-## ⚡ Other Logging Options
+## Other Logging Options
 
 ### SILENT
 
@@ -54,7 +54,7 @@ Provides **detailed exceptions with tracebacks**.
 
 ---
 
-## 🖥️ Logs CLI
+## Logs CLI
 
 Duck comes with a **command-line tool** for managing logs.
 

@@ -1,74 +1,62 @@
-# 🚀 Getting Started — Duck Python Web Framework (No JavaScript Required)
+# 🚀 Getting Started with Duck
 
-## Installation
+*Simple. Powerful. Reactive web apps in pure Python — no JavaScript, no extra tools.*  
 
-**Install latest version from Github using:**
+This guide will get you from **zero → running app → understanding structure** in a few minutes.
 
-```sh
-pip install git+https://github.com/duckframework/duck.git
-```
+---
 
-**Or install from `PyPi` using:**
+## 1. Install Duck
 
-```sh
+```bash
 pip install duckframework
 ```
 
 ---
 
-## Requirements
+## 2. Create Your First Project
 
-``` {note}
-**Duck** requires `Python>=3.10` for it to work seamlessly.
+```bash
+duck makeproject myproject
+cd myproject
 ```
 
 ---
 
-### Starting Project
-
-To run a Duck web application/server, you need to start by creating a project.
-
-**To quickly start a new project, run:**
+## 3. Run the Server
 
 ```bash
-duck makeproject myproject
+duck runserver
 ```
 
-#### Duck makeproject types
+Open your browser:
 
-1. **Normal project:**
-
-This project type is the Duck's default project that will be created when you create a project without any extra arguments. This version of a project create a normal average project with a sense of not making beginners too overwhelmed with the project confifuration.
-
-```bash
-duck makeproject myproject
+``` 
+http://localhost:8000
 ```
 
-2. **Mini project:**
-
-This project type has lesser files and directories, meaning less configuration, making it easy for beginners to understand the workflow if they turn up to be overwhelmed by the normal Duck project. You may also use this project type for those simple web applictions which doesn't require much of Duck's configurations.
-
-```bash
-duck makeproject myproject --mini
-```
-
-3. **Full project**:
-
-This is the absolute, complete and full project type which has full configuration of Duck. This is very useful for complex web applications which require more of quickstart configurations for efficiency and optimized solutions. This project type does not limit small to medium or simple web applications. You may use this project type if you want to have more control of your web application as this gives you upto 95% more customization compared to other project types.
-
-```sh
-duck makeproject myproject --full
-```
+🎉 Your Duck app is now running.
 
 ---
 
-### Running the application
+## 4. Understand the Project Structure
 
-By default every project comes up with a `main.py` file located at `web/main.py` in the root directory.
+Duck keeps things organized but simple. The most important files are:
 
-**Here is what the main.py looks like:**
+``` 
+web/
+ ├── main.py
+ ├── urls.py
+ └── views.py
+```
 
-```py
+Let’s break them down 👇
+
+---
+
+## web/main.py → Entry Point (starts your app)
+
+```python
 #!/usr/bin/env python
 """
 Main py script for application creation and execution.
@@ -80,33 +68,114 @@ app = App(port=8000, addr="0.0.0.0", domain="localhost")
 
 if __name__ == "__main__":
     app.run()
-
 ```
 
-You can run the **Duck** application by directly executing the `main.py` or use
-the command `duck runserver` from within the app root directory.
+### What it does:
 
+- Creates your Duck application (`App`)
+- Configures server settings (port, address, domain)
+- Starts the server with `app.run()`
 
-#### Notes
-
-- Running command `duck runserver ...` does not execute the `main.py` unless flag `--file` is provided.
-- Command `runserver` executes the app from terminal using explicitly provided terminal arguments.
+👉 Think of this as: **"booting up your backend"**
 
 ---
 
-### Running tests
+## web/urls.py → URL Routing (maps URLs to logic)
 
-**Duck** comes with builtin test cases which you can use to check if **Duck** is working correctly. This can be done as follows: 
+Example:
 
-```bash
+```python
+from duck.urls import path
+from . import views
+
+urlpatterns = [
+    path("/", views.home),
+]
+```
+
+### What it does:
+
+- Defines **which URL calls which function**
+- Connects user requests → your code
+
+👉 Example:
+
+- Visiting `/` → calls `views.home`
+
+---
+
+## web/views.py → Logic (what your app does)
+
+Example:
+
+```python
+def home():
+    return "Hello, Duck 🦆"
+```
+
+### What it does:
+
+- Contains your **business logic**
+- Returns responses (text, JSON, HTML, etc.)
+
+👉 This is where you build your app behavior
+
+---
+
+## How Everything Connects
+
+When a user visits your app:
+
+1. Duck server starts (`main.py`)
+2. Request comes in (e.g. `/`)
+3. `urls.py` decides which function to call
+4. `views.py` runs the logic
+5. Response is returned to the browser
+
+👉 That’s the full request flow.
+
+---
+
+## Run Built-in Tests
+
+bash
 duck runtests
 ```
 
-The above code tries to run default test cases for the server and it must output that everything went `OK`. To stop the server responsible for 
-handling the tests, you need to do `CTRL-C` (this shutdowns the test server).  
+Use verbose mode if needed:
 
-You can parse argument `-v` to make `duck runtests -v` for verbose logs. This is useful for finding where the code failed in cases there was a 
-failure in the tests. **Duck** `runtests` command can also be used for testing compatibility issues within your platform especially **python version compatibility** issues.
+```bash
+duck runtests -v
+```
 
-> If you have encountered an error with `duck runtests` command on a compatible python environment (`python3.10+`). Do not hesitate to open an [issue](https://github.com/duckframework/duck/issues) so that
-> we will get the issue fixed right away. 
+---
+
+## Requirements
+
+- Python **3.10+**
+
+---
+
+## What Makes Duck Different?
+
+With most frameworks, you need extra tools like:
+
+- Reverse proxy (NGINX)
+- App server (Gunicorn)
+- SSL setup
+
+👉 Duck handles these **out of the box**.
+
+---
+
+## Final Thought
+
+Duck is designed to be:
+
+- Simple to start 🧠
+- Powerful to scale ⚡
+- Flexible to control 🧩
+
+Start small. Explore the files. Build something real.
+
+Welcome to Duck.

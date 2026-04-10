@@ -219,7 +219,7 @@ RELOAD_ON_UNKNOWN_COMPONENTS: bool = True
 # Template Dirs
 # Global Directories to lookup templates
 # Blueprint template dirs will be resolved automatically, no need to be included here.
-TEMPLATE_DIRS: list[str | pathlib.Path] = [pathlib.Path("web/ui/templates/").resolve()]
+TEMPLATE_DIRS: list[str | pathlib.Path] = [BASE_DIR / "web/ui/templates"]
 
 
 # Module which contains Custom Template Tags or Filters

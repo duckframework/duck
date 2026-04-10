@@ -11,7 +11,7 @@ From custom sockets (`xsockets`) to full async handling, everything is designed 
 
 ---
 
-## 🔧 Enabling Async Handling
+## Enabling Async Handling
 
 Simply add the following setting in your **`settings.py`**:
 
@@ -23,7 +23,7 @@ This single flag turns on **asynchronous request handling** in your app.
 
 ---
 
-## 📝 Notes
+## Notes
 
 - ✅ The default **ASGI** handles everything automatically – no need to modify unless you want custom behavior.  
 - 🌐 Async environment supports protocols like **WebSockets** and **HTTP/2** natively.  
@@ -32,11 +32,11 @@ This single flag turns on **asynchronous request handling** in your app.
 
 ---
 
-## 👨‍💻 Defining Async Views
+## Defining Async Views
 
 You can define async views in two main ways:
 
-### 1️⃣ Async Views as Functions
+### Async Views as Functions
 
 ```py
 # views.py
@@ -48,7 +48,7 @@ async def myview(request):
 
 ---
 
-### 2️⃣ Async Views as Classes
+### Async Views as Classes
 
 ```py
 # views.py

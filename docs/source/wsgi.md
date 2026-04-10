@@ -14,7 +14,7 @@ Unlike most WSGI servers, Duck’s version isn’t limited — it runs a [**back
 
 ---
 
-## 🔧 Enabling WSGI Mode
+## Enabling WSGI Mode
 
 In your **`settings.py`**, simply set:
 
@@ -26,7 +26,7 @@ This switches the server into **WSGI (synchronous) mode**.
 
 ---
 
-## 🌀 Working with the Event Loop
+## Working with the Event Loop
 
 Duck automatically runs a background **asyncio event loop** to handle async protocols even in sync mode.  
 
@@ -39,7 +39,7 @@ You can access it with:
 
 ---
 
-## 📝 Notes
+## Notes
 
 - ✅ The default **WSGI** does everything for you — only override if necessary.  
 - 🔄 In synchronous environments, define your views as **regular sync functions**.  
@@ -47,7 +47,7 @@ You can access it with:
 
 ---
 
-## 👨‍💻 Defining Sync Views
+## Defining Sync Views
 
 ### 1️⃣ Function-based Views
 
@@ -61,7 +61,7 @@ def myview(request):
 
 ---
 
-### 2️⃣ Class-based Views
+### Class-based Views
 
 ```py
 # views.py

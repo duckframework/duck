@@ -12,7 +12,7 @@ This gives you the flexibility to **write reusable logic directly in templates**
 
 ---
 
-## 📝 Syntax Overview
+## Syntax Overview
 
 ### Default Template Tag
 
@@ -30,7 +30,7 @@ This gives you the flexibility to **write reusable logic directly in templates**
 - **Jinja2:** `{{ somevalue | somefilter }}`
 ---
 
-## 🏷️ Quick Cheatsheet
+## Quick Cheatsheet
 
 | Feature                         | Django Syntax                       | Jinja2 Syntax                         |
 |-----------------------------------|--------------------------------------------|--------------------------------------------|
@@ -40,7 +40,7 @@ This gives you the flexibility to **write reusable logic directly in templates**
 
 ---
 
-## 👨‍💻 Example Usage
+## Example Usage
 
 ```py
 # templatetags.py
@@ -71,7 +71,7 @@ TEMPLATETAGS = [
 
 ---
 
-## ⚡ Notes
+## Notes
 
 - For **Django templates** rendered via `django.shortcuts.render`, insert this at the **top of your template**:
 

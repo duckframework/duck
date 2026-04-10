@@ -1,4 +1,6 @@
-# 🖥️ Lively Component System — Reactive Python UI Without JavaScript
+# 🖥️ Lively Component System
+
+*Reactive Python UI Without JavaScript*
 
 ![Badge](https://img.shields.io/badge/feature-Lively_Components-blue)
 
@@ -9,7 +11,7 @@ It leverages **WebSockets with msgpack** for fast communication and supports nav
 
 ---
 
-## 🚀 What Is the Lively Component System?
+## What Is the Lively Component System?
 
 The **Lively Component System** is Duck’s way of building interactive web pages using pure Python.
 
@@ -22,7 +24,7 @@ Think of it like this:
 
 ---
 
-## 🤔 What Problem Does It Solve?
+## What Problem Does It Solve?
 
 Normally, web apps need:
 
@@ -42,7 +44,7 @@ The system keeps the page updated without full reloads.
 
 ---
 
-## ⚙️ How It Works (Simple Explanation)
+## How It Works (Simple Explanation)
 
 1. You create a **Page class** in Python.
 2. You add components (like buttons, text, forms).
@@ -56,7 +58,7 @@ This feels similar to React or other reactive frameworks — but controlled from
 
 ---
 
-## 💡 Why It’s Powerful
+## Why It’s Powerful
 
 - Real-time updates without manual JavaScript
 - Cleaner architecture (UI + logic in one place)
@@ -66,7 +68,7 @@ This feels similar to React or other reactive frameworks — but controlled from
 
 ---
 
-## 🧠 Beginner Mental Model
+## Beginner Mental Model
 
 If you’re new, think of it like this:
 
@@ -79,7 +81,7 @@ And Duck handles the browser synchronization automatically.
 
 ---
 
-## 📄 Page Component Example
+## Page Component Example
 
 ```py
 from duck.html.components.page import Page
@@ -114,7 +116,7 @@ class HomePage(Page):
 
 ---
 
-## 🖱️ Component Events
+## Component Events
 
 **Lively** components allow binding Python handlers to events like button clicks—no JS needed.
 
@@ -148,8 +150,12 @@ async def on_click(btn: Button, event: str, value: Any, websocket: LivelyWebSock
 
 def home(request):
     page = Page(request)
+    
+    # Create and add button to page
     btn = Button(id="some-id", text="Hello world", bg_color="green", color="white")
     page.add_to_body(btn)
+    
+    # Bind an event to Python handler
     btn.bind("click", on_click)
     return to_response(page) # Or just return page if you don't want control over response.
 ```
@@ -184,7 +190,7 @@ def home(request):
 
 ---
 
-## ⚡ Fast Navigation
+## Fast Navigation
 
 - URL paths returning **Component responses** allow vdom-diffing for minimal DOM updates.
 - Use `duckNavigate` for fast page navigation.
@@ -195,7 +201,7 @@ def home(request):
 
 ---
 
-## ⏱️ Pre-rendering Components
+## Pre-rendering Components
 
 Pre-rendering caches component outputs for faster loading.  
 
@@ -228,7 +234,7 @@ Visit `/counterapp` after adding it.
 
 ---
 
-## 📝 Notes
+## Notes
 
 - Component responses maximize the benefits of Lively Component System.
 - Fast navigation works best with component responses in views.
@@ -262,7 +268,7 @@ Components can be used in **Jinja2** and **Django** templates.
 
 ---
 
-## 🏗️ Custom Components
+## Custom Components
 
 ```py
 from duck.html.components import InnerComponent
@@ -284,7 +290,7 @@ def home(request):
 
 ---
 
-## 🔌 Component Extensions
+## Component Extensions
 
 Extensions enhance component functionality.
 
@@ -310,7 +316,7 @@ btn = MyButton() # Button with background-color "red"
 
 ---
 
-## 📦 Predefined Components
+## Predefined Components
 
 All predefined components are available in `duck.html.components` and in default `SETTINGS['TEMPLATE_HTML_COMPONENTS']`.
 
@@ -454,7 +460,7 @@ using `document_bind` on `Page` components.
 *Args:*
 - **root:** This is the root component.    
         
-### on_parent
+### `on_parent`:
 
 Called whenever a child component is added to a parent component.  
 

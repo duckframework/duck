@@ -17,13 +17,13 @@ With `xsocket`, you get:
 
 ---
 
-## 📦 Getting Started
+## Getting Started
 
 To use `xsocket` for Socket I/O, import from `duck.utils.xsocket.io`.  
 
 ---
 
-## 👨‍💻 Synchronous Example
+## Synchronous Example
 
 ```py
 import socket
@@ -63,7 +63,7 @@ if __name__ == '__main__':
 
 ---
 
-## ⚡ Asynchronous Example
+## Asynchronous Example
 
 ```py
 import socket
@@ -105,7 +105,7 @@ if __name__ == '__main__':
 
 ---
 
-## 📝 Notes
+## Notes
 - 🔒 Use `ssl_xsocket` for secure HTTPS/TLS connections.  
 - ⏱ Most I/O functions accept a `timeout` argument.  
 - 🔄 Works seamlessly with Duck’s async runtime (`duck.utils.asyncio.create_task`).  
@@ -113,7 +113,7 @@ if __name__ == '__main__':
 
 ---
 
-## 🚀 Performance Tips
+## Performance Tips
 - ♻ **Reuse sockets** where possible to avoid repeated creation overhead.  
 - 📏 **Tune `timeout` values** depending on expected network latency.  
 - 🧩 **Handle partial reads/writes** — especially for large frames or slow clients.  

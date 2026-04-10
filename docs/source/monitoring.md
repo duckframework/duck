@@ -5,7 +5,7 @@ Includes **per-process stats** and a **visual history table** to help you spot t
 
 ---
 
-## 🌟 Key Features
+## Key Features
 
 - 🔄 Rolling history buffer for system metrics:  
   `cpu_total`, `ram_percent`, `disk_percent`, `net_up`, `net_down`  
@@ -16,7 +16,7 @@ Includes **per-process stats** and a **visual history table** to help you spot t
 
 ---
 
-## 🚀 Usage
+## Usage
 
 Start monitoring Duck system metrics:
 
@@ -29,7 +29,7 @@ You will see output similar to this image:
 
 ---
 
-### 🔧 Parameters
+### Parameters
 
 | Parameter            | Type                  | Description                                                                 | Default       |
 |----------------------|----------------------|-----------------------------------------------------------------------------|---------------|
@@ -43,7 +43,7 @@ You will see output similar to this image:
 
 ---
 
-## ⚡ Notes
+## Notes
 
 - Some metrics may require **root permissions**; run with `sudo` if needed.  
 - Designed for Duck processes, but you can monitor other processes using wildcards or specific PIDs.  

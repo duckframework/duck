@@ -864,10 +864,11 @@ class DOMPatcher {
             
             // Add/update new props
             for (const key in newProps) {
-              if (el.getAttribute(key) !== String(newProps[key])) {
-                el.setAttribute(key, newProps[key]);
-              }
+              const value = newProps[key];
+              el[key] = value; // Live update
+              el.setAttribute(key, value); // Always sync the prop attribute
             }
+            
             // Unbind events no longer present
             for (const eventName of currentEvents) {
               if (!newEvents.includes(eventName)) {

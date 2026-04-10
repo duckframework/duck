@@ -10,7 +10,7 @@ Deploying your **Duck** web application is simple, fast, and beginner-friendly �
 
 ---
 
-## 🧠 Prerequisites  
+## Prerequisites  
 
 ```{note}
 **Required Python version:** `>= 3.10` (recommended: **3.12+**)  
@@ -133,7 +133,7 @@ For advanced options, see [Service Management](./service-management.md).
 
 ---
 
-## 📝 Notes & Best Practices  
+## Notes & Best Practices  
 
 ``` {note}
 It is strongly recommended to use the asynchronous implementation ([ASGI](./asgi.md)) 
@@ -209,7 +209,7 @@ Before going live, make sure your application is optimized and secure:
 
 ---
 
-## 🎉 You’re Done!  
+## You’re Done!  
 
 Your **Duck** web app is now fully deployed and production-ready.  
 Keep your environment updated, monitor performance, and enjoy a smooth deployment process — all powered by **Duck**.  

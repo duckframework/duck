@@ -11,7 +11,7 @@ Forget the boilerplate — with Duck you can add real-time features in just a fe
 
 ---
 
-## ⚡ Quick Example
+## Quick Example
 
 In your **`urls.py`**, define a WebSocket view:
 
@@ -44,7 +44,7 @@ urlpatterns = [
 
 ---
 
-## ⚙️ Customizing Behavior
+## Customizing Behavior
 
 Duck’s WebSocket views support configurable class variables:
 
@@ -57,9 +57,9 @@ Simply override these in your `WebSocketView` subclass to tweak performance.
 
 ---
 
-## 💬 Practical Examples
+## Practical Examples
 
-### 1️⃣ Simple Chat App
+### Simple Chat App
 
 A minimal chat implementation that **echoes messages** back to all connected users.
 
@@ -67,19 +67,24 @@ A minimal chat implementation that **echoes messages** back to all connected use
 from duck.contrib.websockets import WebSocketView, OpCode
 
 connected_clients = set()
+ids = 0
 
 class ChatSocket(WebSocketView):
+    user_id = 0
     async def on_open(self):
         connected_clients.add(self)
+        self.user_id = ids
+        ids += 1
         await self.send_text("👋 Welcome to the chat!")
 
     async def on_receive(self, data: bytes, opcode: int):
         if opcode == OpCode.TEXT:
             message = data.decode("utf-8")
+            
             # Broadcast to all connected clients
             for client in connected_clients:
                 if client != self:
-                    await client.send_text(f"User: {message}")
+                    await client.send_text(f"User {client.user_id}: {message}")
 
     async def on_close(self):
         connected_clients.remove(self)
@@ -87,7 +92,7 @@ class ChatSocket(WebSocketView):
 
 ---
 
-### 2️⃣ Live Notifications
+### Live Notifications
 
 Send **server-initiated notifications** to clients:
 

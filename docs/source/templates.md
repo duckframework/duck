@@ -1,4 +1,6 @@
-# 📑 Templates - Python-Based HTML Rendering | Duck
+# 📑 Templates
+
+*Python-Based HTML Rendering*  
 
 Templates in Duck are used to generate dynamic HTML responses by combining **static markup** with **runtime data** (context).  
 They are typically rendered inside views and returned as HTTP responses.
@@ -12,7 +14,7 @@ You can freely choose which engine to use per render call.
 
 ---
 
-## 🛠️ Rendering Functions
+## Rendering Functions
 
 Duck exposes template rendering helpers through the 'duck.shortcuts' module.  
 These helpers abstract engine selection, context injection, and response creation.
@@ -37,14 +39,14 @@ These helpers abstract engine selection, context injection, and response creatio
 
 ---
 
-## ⚙️ Template Syntax
+## Template Syntax
 
 Duck does not introduce a custom template language.  
 Instead, it fully embraces the native syntax of each supported engine.
 
 ---
 
-### 1️⃣ Django Template Syntax
+### Django Template Syntax
 
 Django templates use a tag-based syntax with filters and template inheritance.
 
@@ -63,7 +65,7 @@ Django templates use a tag-based syntax with filters and template inheritance.
 
 ---
 
-### 2️⃣ Jinja2 Template Syntax
+### Jinja2 Template Syntax
 
 Jinja2 templates are expressive and Pythonic, with powerful control structures.
 
@@ -82,7 +84,7 @@ Jinja2 templates are expressive and Pythonic, with powerful control structures.
 
 ---
 
-## 📌 Template Locations
+## Template Locations
 
 By default, Duck looks for templates in the global directory:
 
@@ -104,7 +106,7 @@ inside your `settings.py` file.
 
 ---
 
-## 🧪 Rendering Templates in Views
+## Rendering Templates in Views
 
 ### Synchronous View Example
 
@@ -134,7 +136,7 @@ async def async_view(request):
 
 ---
 
-## 📗 Blueprint Templates
+## Blueprint Templates
 
 Duck supports **template isolation per blueprint**, making large applications easier to organize.
 
@@ -192,7 +194,7 @@ This approach keeps templates:
 
 ---
 
-## ✅ Summary
+## Summary
 
 - Duck supports **Django** and **Jinja2** templates out of the box
 - Rendering helpers live in 'duck.shortcuts'

@@ -12,7 +12,7 @@ In **Duck**, you can **lazily generate and serve a sitemap** using the `duck.etc
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 To start serving the sitemap, add the blueprint in your settings:
 
@@ -39,7 +39,7 @@ SITEMAP_APPLY_DEFAULT_EXCLUDES = SETTINGS.get("SITEMAP_APPLY_DEFAULT_EXCLUDES", 
 
 ---
 
-### 📝 Setting Details
+### Setting Details
 
 | Setting                          | Description                                    | Notes / Tips                                                     |
 | -------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------- |
@@ -55,7 +55,7 @@ SITEMAP_APPLY_DEFAULT_EXCLUDES = SETTINGS.get("SITEMAP_APPLY_DEFAULT_EXCLUDES", 
 
 ---
 
-## 📌 Best Practices
+## Best Practices
 
 1. **Include PDFs** in your sitemap if they contain meaningful content, like manuals or guides.
 2. **Videos** should only be included if they are valuable content. For large or auxiliary media, consider a **separate video sitemap**.
@@ -65,7 +65,7 @@ SITEMAP_APPLY_DEFAULT_EXCLUDES = SETTINGS.get("SITEMAP_APPLY_DEFAULT_EXCLUDES", 
 
 ---
 
-## 🏗 Using `SitemapBuilder`
+## Using `SitemapBuilder`
 
 The `SitemapBuilder` class provides a **programmatic interface** for building sitemaps:
 
@@ -85,7 +85,7 @@ builder = SitemapBuilder(
 xml = builder.build(return_content=True)  # Returns sitemap XML as string
 ```
 
-### 🔹 Features
+### Features
 
 * Walks Duck’s `RouteRegistry` and collects valid routes.
 * Filters out **dynamic routes** (e.g., `/user/<id>`) and regex-like patterns.
@@ -95,7 +95,7 @@ xml = builder.build(return_content=True)  # Returns sitemap XML as string
 
 ---
 
-### ⚡ Exclude Patterns Example
+### Exclude Patterns Example
 
 Duck provides **default exclusions** to avoid indexing unnecessary content:
 
@@ -133,7 +133,7 @@ more information on this command usage.
 
 ---
 
-### ✅ Summary
+### Summary
 
 Duck’s sitemap system is:
 

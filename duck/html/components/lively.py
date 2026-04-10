@@ -24,7 +24,8 @@ class LivelyScripts(Container):
 
     Includes:
     - `msgpack.min.js`: For MessagePack encoding/decoding.
-    - `lively.js`: Main Lively client-side runtime.
+    - `lively.js`: Original Main Lively client-side runtime.
+    - `lively.min.js`: Minified Main Lively client-side runtime.
     - Inline JS: Instantiates and connects a LivelyWebSocketClient.
 
     Notes:
@@ -64,7 +65,7 @@ class LivelyScripts(Container):
         
         # Never make the following script async because it will break the app logic.
         self.lively_script = Script(
-            props={"src": static_url.replace("<staticfile>", "lively.js")}
+            props={"src": static_url.replace("<staticfile>", "lively.min.js")}
         )
         
         # Add all in required order

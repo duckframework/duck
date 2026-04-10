@@ -1,4 +1,6 @@
-# 🗃 Cached Views – High-Performance Python Web Apps
+# 🗃 Cached Views 
+
+*High-Performance Python Web Apps*  
 
 Duck’s **cached view system** provides a high-performance, flexible way to cache the output of both synchronous and asynchronous views.
 It offers fine-grained control over what contributes to the cache key: request attributes, request callables, or fully custom Python callables.
@@ -15,7 +17,7 @@ Unlike traditional caching decorators, Duck’s `cached_view` is designed for:
 
 ---
 
-## ⚙️ Overview
+## Overview
 
 The core concept:
 
@@ -37,7 +39,7 @@ After the first call, subsequent invocations return the cached result instantly,
 
 ---
 
-## 🛸 `cached_view` Decorator
+## `cached_view` Decorator
 
 The decorator handles:
 
@@ -62,7 +64,7 @@ The resolved values are then normalized into a stable, hashable structure (`froz
 
 ---
 
-## 📌 Parameters
+## Parameters
 
 | Parameter                 | Type                                                        | Description                                                                                                 |
 | ------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -76,7 +78,7 @@ The resolved values are then normalized into a stable, hashable structure (`froz
 
 ---
 
-## 🧠 How Targets Work
+## How Targets Work
 
 ### ✔ Attribute Targets (simple)
 
@@ -118,7 +120,7 @@ def handler(request):
 
 ---
 
-## 🧩 Namespace Support
+## Namespace Support
 
 Namespaces allow isolated cached values:
 
@@ -138,7 +140,7 @@ This means:
 
 ---
 
-## 🐛 Debugging with Skip
+## Debugging with Skip
 
 ```py
 request.skip_cache = True
@@ -154,7 +156,7 @@ Allows bypassing cache for *that single request*.
 
 ---
 
-## 🪝 on_cache_result Hook
+## on_cache_result Hook
 
 A callable executed whenever a cached result is retrieved:
 
@@ -171,7 +173,7 @@ Useful for UI components, objects with state, etc.
 
 ---
 
-## 🧱 Internal Behavior
+## Internal Behavior
 
 ### 1. **Target Resolution**
 
@@ -212,7 +214,7 @@ Stored with expiry if provided.
 
 ---
 
-## 🛠 Examples
+## Examples
 
 ### Simple
 
@@ -249,7 +251,7 @@ def staticfiles(request, staticfile):
 
 ---
 
-## ⚡ Best Practices
+## Best Practices
 
 1. Cache **expensive** or **read-heavy** views.
 2. Avoid caching highly personalized output unless namespaced.
@@ -262,7 +264,7 @@ def staticfiles(request, staticfile):
 
 ---
 
-## ⚖ Comparison to Other Frameworks
+## Comparison to Other Frameworks
 
 ### Django (`cache_page`, low-level API)
 
@@ -307,7 +309,7 @@ Overall:
 
 ---
 
-## ✅ Summary
+## Summary
 
 Duck’s cached view system delivers:
 

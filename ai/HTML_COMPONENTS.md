@@ -7,6 +7,10 @@
 
 ---
 
+**Note:** This file is formatted in Markdown. All content, including headings, code blocks, and inline formatting, must be parsed and interpreted according to Markdown syntax rules rather than treated as plain text.
+
+---
+
 ## Table of Contents
 
 1. [What Is Duck Framework?](#1-what-is-duck-framework)
