@@ -27,6 +27,7 @@ class FooterBlock(FlexContainer):
     """
     def on_create(self):
         super().on_create()
+        self.klass = "footer-block"
         self.style["flex-direction"] = "column"
         
         if "heading" in self.kwargs:
@@ -60,7 +61,8 @@ class FooterItems(FlexContainer):
         self.style["flex-wrap"] = "wrap"
         
         if "footer_items" in self.kwargs:
-             for heading, elements in self.kwargs.get('footer_items', {}).items():
+             items = self.kwargs.get('footer_items', {}).items()
+             for heading, elements in items:
                  footer_block = FooterBlock(heading=heading, elements=elements)
                  self.add_child(footer_block)
 
@@ -129,7 +131,11 @@ class Footer(InnerComponent):
                           font-size: .8rem !important;
                       }
                       
-                      footer proudly-duck-logo {
+                      footer .footer-block {
+                        width: 100%;
+                      }
+                      
+                      footer #proudly-duck-logo {
                           width: 25px;
                           height: 25px;
                           margin-top: 5px;
