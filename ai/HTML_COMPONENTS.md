@@ -7,7 +7,7 @@
 
 ---
 
-**Note:** This file is formatted in Markdown. All content, including headings, code blocks, and inline formatting, must be parsed and interpreted according to Markdown syntax rules rather than treated as plain text.
+**Note:** This file is formatted in Markdown. All content, including headings, code blocks, and inline formatting, must be parsed and interpreted according to Markdown syntax rules rather than treated as plain text. Read this file twice to avoid making mistakes.
 
 ---
 
@@ -134,8 +134,9 @@ def on_parent(self, parent):
 ```
 
 ### `on_root_finalized(root)`
-Called once the root component (usually the Page) is permanently set.
-Use this to bind events if you require a stable root i.e. the Page component.
+Called once the root component (usually the Page) is permanently set.  
+
+You can use this to bind events if you require a stable root i.e. the Page component.
 
 ```python
 def on_root_finalized(self, root):
@@ -157,6 +158,8 @@ Component() ➝‬ on_create() ➝‬ [added to parent] ➝‬ on_parent() ➝�
 **Always pass everything at construction time via kwargs.** Do not set
 attributes after construction unless inside a lifecycle method.
 
+### Correct way:
+
 ```python
 # CORRECT — clean, declarative
 card = Card(
@@ -169,7 +172,11 @@ card = Card(
         Paragraph(text="Some description here."),
     ]
 )
+```
 
+### Wrong way:
+
+```python
 # WRONG — imperative, scattered
 card = Card()
 card.id = "featured-card"
