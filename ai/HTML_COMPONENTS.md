@@ -966,7 +966,30 @@ def about(request):
 
 ---
 
-## 20. Code Style Rules
+## 20. Theming Patterns — Best Practice
+
+Instead of hardcording colors, the best approach is to use a central system for storing 
+theme data. This can be done by creating a `web/ui/components/theme.py` which stores a class named `Theme`, then 
+theming can be done through using `Theme's` class attributes e.g., `Theme.accent_color`.
+
+### Example of theme.py
+
+```python
+# web/ui/components/theme.py
+
+class Theme:
+    accent_color = "rgba(0, 35, 6, 1)"
+    border_radius = "12px"
+    font_size = "1rem"
+    # Other theming options here
+```
+
+> For a Duck project, a centralized system is recommended not only for theming but also for metadata and this 
+> type of data can be stored in `web/meta.py` (optional).
+
+---
+
+## 21. Code Style Rules
 
 These are project-specific conventions for Duck Framework codebase.
 Follow them on all code written for this project.  
@@ -1009,7 +1032,7 @@ def build_card(self, title: str) -> Card:
 
 ---
 
-## 21. Common Mistakes to Avoid
+## 22. Common Mistakes to Avoid
 
 ### Setting styles/props after construction (outside lifecycle)
 
@@ -1088,7 +1111,7 @@ btn = Button(text="Toggle", style={"display": "block"})
 
 ---
 
-## 22. How to Look Up Any Component
+## 23. How to Look Up Any Component
 
 Before writing code that uses a Duck component you're unsure about:
 
@@ -1108,7 +1131,7 @@ Before writing code that uses a Duck component you're unsure about:
 
 ---
 
-## 23. Helpful Sources
+## 24. Helpful Sources
 
 The following sources may help in digging more info on components:
 - **https://github.com/duckframework/duck?tab=readme-ov-file#webui**
