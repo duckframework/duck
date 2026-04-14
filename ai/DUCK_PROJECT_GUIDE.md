@@ -76,6 +76,9 @@ myproject/
 - Always refer to README for the repo to get a clear picture on project structure.
 - This is in markdown format and all headings, sections or codeblock must be parsed as markdown and not to be treated as plain text.
 
+### Strict Rule:
+Always check for and reuse existing components before creating new ones; never duplicate functionality. Composite components must include unique IDs and clear, minimal comments separating logical sections.
+
 ---
 
 ## Code Style
