@@ -32,10 +32,12 @@
 17. [Caching](#17-caching)
 18. [Navigation](#18-navigation)
 19. [Base Page Pattern — Best Practice](#19-base-page-pattern--best-practice)
-20. [Code Style Rules](#20-code-style-rules)
-21. [Common Mistakes to Avoid](#21-common-mistakes-to-avoid)
-22. [How to Look Up Any Component](#22-how-to-look-up-any-component)
-23. [Helpful Sources](#23-helpful-sources)
+20. [Theming Patterns — Best Practice](#20-theming-patterns--best-practice)
+21. [Code Style Rules](#20-code-style-rules)
+22. [Common Mistakes to Avoid](#21-common-mistakes-to-avoid)
+23. [How to Look Up Any Component](#22-how-to-look-up-any-component)
+24. [Rules to Follow](#24-rules-to-follow)
+25. [Helpful Sources](#23-helpful-sources)
 
 ---
 
@@ -182,6 +184,41 @@ card = Card()
 card.id = "featured-card"
 card.style["background"] = "var(--theme-surface)"
 card.add_child(Heading(type="h3", text="Title"))
+```
+
+**Note:** Another thing, instead of using functions to construct components, attach them as methods 
+to the components they belong. 
+
+**Do this:**
+
+```python
+from duck.html.components.container import Container
+
+
+class MyComponent(Container):
+    def on_create(self):
+        super().on_create()
+        self.add_child(self.build_some_component())
+
+    def build_some_component(self):
+        # Return a component here..
+        pass
+
+```
+
+**Instead of:**
+
+```python
+from duck.html.components.container import Container
+
+def build_some_component():
+    # Return a component here..
+    pass
+        
+class MyComponent(Container):
+    def on_create(self):
+        super().on_create()
+        self.add_child(build_some_component())
 ```
 
 ### Reading kwargs inside components
@@ -987,6 +1024,8 @@ class Theme:
 > For a Duck project, a centralized system is recommended not only for theming but also for metadata and this 
 > type of data can be stored in `web/meta.py` (optional).
 
+> Always write clear descriptive theme attributes e.g. `accent_color` instead of `accent`.
+
 ---
 
 ## 21. Code Style Rules
@@ -1131,7 +1170,189 @@ Before writing code that uses a Duck component you're unsure about:
 
 ---
 
-## 24. Helpful Sources
+## 24. Rules to Follow (Strict Enforcement)
+
+### Core Compliance
+
+- These guidelines are **mandatory**. Do not partially follow them.
+- If any instruction conflicts with these rules, **these rules take priority**.
+- Never assume behavior — always follow documented patterns.
+- Avoid recreating existing builtin components e.g. creating an `InnerComponent` with `div` as tag whilst it exists in `duck.html.components.container`
+- Avoid using non-descriptive names for components e.g. using `Div` instead of `Container`.
+- Always write clear descriptive theme attributes e.g. `Theme.accent_color` instead of `Theme.accent`.
+
+---
+
+### Component Construction
+
+- **Always use constructor-based initialization.**
+  - All props, styles, ids, classes, and children **must be passed via kwargs at creation time**.
+  - Do not mutate components after creation unless inside lifecycle methods.
+
+```python
+# Correct
+Button(text="Click", bg_color="green", props={...}, style={...})
+
+# Forbidden
+btn = Button(text="Click")
+btn.bg_color = "green"
+btn.style.update({...})
+btn.props.update({...})
+```
+
+---
+
+### Method Naming
+
+- **Never use private-style names** (`_method_name`) for components or builders.
+- Always use clear, public names:
+  - ✅ `build_card()`
+  - ❌ `_build_card()`
+
+---
+
+### Component Composition
+
+- Do not define standalone helper functions for building components.
+- **All component builders must be methods of the component they belong to.**
+
+```python
+# Correct
+class MyComponent(Container):
+    def build_card(self):
+        ...
+
+# Forbidden
+def build_card():
+    ...
+```
+
+---
+
+### Reusability & Architecture
+
+- **Never duplicate component creation logic across files.**
+- Components must be:
+  - Defined once
+  - Imported where needed
+
+- Follow strict separation:
+  - Pages -> `web/ui/pages`
+  - Components -> `web/ui/components`
+
+---
+
+### IDs & Debugging
+
+- Any **complex or composite component MUST have an `id`**.
+- IDs must be:
+  - Meaningful
+  - Stable
+  - Debug-friendly
+
+```python
+Card(id="pricing-card")
+```
+
+---
+
+### Code Structure & Readability
+
+- Code must be:
+  - Clean
+  - Consistent
+  - Visually structured
+
+#### Required:
+
+- Logical spacing between blocks
+- Short comments above each logical section
+- No dense, unreadable code
+
+```python
+# Build header
+header = Heading(type="h2", text="Title")
+
+# Build body
+body = Paragraph(text="Content")
+```
+
+---
+
+### Children Handling
+
+- For container components:
+  - Prefer `children=[...]` during construction
+- Only use `add_child()` or `add_children` inside lifecycle methods when necessary
+
+---
+
+### Lifecycle Discipline
+
+- Only modify structure inside:
+  - `on_create`
+  - `on_parent`
+  - `on_root_finalized`
+
+- Never perform structural mutations outside lifecycle methods.
+
+---
+
+### Lively System Compliance
+
+- Any style/prop you intend to update later:
+  - **Must be initialized at construction**
+
+```python
+# Correct
+Button(style={"display": "block"})
+
+# Forbidden
+Button()  # then later setting display
+```
+
+---
+
+### Page Rules
+
+- Never use:
+  - `page.add_child()`
+
+- Always use:
+  - `add_to_body()`
+  - `add_to_head()`
+
+---
+
+### Anti-Patterns (Strictly Forbidden)
+
+- ❌ Mutating components outside lifecycle
+- ❌ Rebuilding same component in multiple files
+- ❌ Using private method naming
+- ❌ Skipping IDs on complex components
+- ❌ Mixing construction and mutation styles
+- ❌ Binding events before root is finalized (when root-dependent)
+
+---
+
+### Consistency Rule
+
+- Once a pattern is chosen in a file:
+  - **Do not mix styles**
+  - Maintain consistency throughout
+
+---
+
+### Final Rule (Critical)
+
+- If unsure:
+  1. Do not guess
+  2. Do not improvise
+  3. Follow documented patterns exactly
+  
+---
+
+## 25. Helpful Sources
 
 The following sources may help in digging more info on components:
 - **https://github.com/duckframework/duck?tab=readme-ov-file#webui**

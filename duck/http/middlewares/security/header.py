@@ -16,7 +16,6 @@ from duck.utils.wildcard import process_wildcards
 
 # Pre-compile regex and constants for speed
 HOSTNAME_LABEL_RE = re.compile(r"^(?!-)[A-Z\d-]{1,63}(?<!-)$", re.IGNORECASE)
-
 MAX_HOSTNAME_LENGTH = 253
 
 
@@ -80,7 +79,6 @@ class HostMiddleware(BaseMiddleware):
     """
 
     allowed_hosts = SETTINGS["ALLOWED_HOSTS"]
-
     debug_message: str = "HostMiddleware: Host invalid/unrecognized"
 
     @classmethod
