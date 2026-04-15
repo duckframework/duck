@@ -513,16 +513,22 @@ class Page(InnerComponent):
             
         # Add progress bar to show page reloading
         # and snackbar to show network status.
-        self.snackbar =  Snackbar(id="page-snackbar", type="info", color="white")
-        self.snackbar.style["height"] = ".5px"
-        self.snackbar.style["font-size"] = ".5rem"
-        self.snackbar.style["width"] = "fit-content"
-        self.snackbar.style["padding"] = "10px"
-        self.snackbar.style["margin-top"] = "7px"
-        self.snackbar.style["margin-left"] = "auto"
-        self.snackbar.style["margin-right"] = "auto"
-        self.snackbar.style["min-width"] = "100px"
-        self.snackbar.style["border-radius"] = "8px"
+        self.snackbar =  Snackbar(
+            id="page-snackbar",
+            type="info",
+            color="white",
+            style={
+                "height": ".5px",
+                "font-size": ".5rem",
+                "width": "fit-content",
+                "padding": "10px",
+                "margin-top": "7px",
+                "margin-left": "auto",
+                "margin-right": "auto",
+                "min-width": "100px",
+                "border-radius": "8px",
+            },
+        )
         
         # Add snackbar label
         self.snackbar_label = Label(id="snackbar-label", color="white") 

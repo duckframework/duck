@@ -13,7 +13,7 @@ class MadeWithDuck(FlexContainer):
     text named `Proudly made with Duck`
     """
     def on_create(self):
-        from duck.etc.templatetags import static
+        from duck.shortcuts import static
         
         # Call the super creation
         super().on_create()
@@ -21,6 +21,9 @@ class MadeWithDuck(FlexContainer):
         self.style["gap"] = "10px"
         self.style["align-items"] = "center"
         self.style["justify-content"] = "center"
+        
+        # Set ID
+        self.id = "made-with-duck"
         
         # Add image.
         self.image = Image(id="proudly-duck-logo", source=static('images/duck-logo.png'))

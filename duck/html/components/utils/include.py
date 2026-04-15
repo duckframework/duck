@@ -40,6 +40,7 @@ BUILTIN_COMPONENTS = [
         "modal",
         "lively",
         "code",
+        "span",
         "label",
         "fileinput",
         "table_of_contents",
