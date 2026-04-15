@@ -4,7 +4,7 @@ A comprehensive reference for writing clean, maintainable, performant, and scala
 Duck Framework projects. Follow every rule in this guide — always, in every file.
 
 > **Docs:** https://docs.duckframework.com/main/
-> **Components:** Refer to [`HTML_COMPONENTS_GUIDE.md`](./ai/HTML_COMPONENTS_GUIDE.md) for the full component API reference.
+> **Components:** Refer to [`HTML_COMPONENTS_GUIDE.md`](./ai/HTML_COMPONENTS_GUIDE_GUIDE.md) for the full component API reference.
 > **GitHub:** https://github.com/duckframework/duck
 
 ---
@@ -15,7 +15,7 @@ Duck Framework projects. Follow every rule in this guide — always, in every fi
 2. [Code Style](#code-style)
 3. [Docstrings](#docstrings)
 4. [Comments](#comments)
-5. [Imports & Naming Conventions](#imports-and-naming-conventions)
+5. [Imports](#imports)
 6. [Centralized Systems — No Repetition](#centralized-systems--no-repetition)
 7. [Pages](#pages)
 8. [Components](#components)
@@ -77,8 +77,43 @@ myproject/
 - This is in markdown format and all headings, sections or codeblock must be parsed as markdown and not to be treated as plain text.
 
 ### Strict Rule:
-Always check for and reuse existing components before creating new ones; never duplicate functionality. Composite components must include unique IDs and clear, minimal comments separating logical sections.
 
+- Always check for and reuse existing components before creating new ones — never duplicate functionality. Composite components must include unique IDs and minimal comments separating logical sections.
+- Never introduce invisible or non-standard characters into any file.
+- Never hardcode metadata such as brand name, year, email, or location, etc. Always source these from a central config — this is critical.
+- Always use consistent, predictable patterns across the entire codebase.
+- Never use uncertain or inconsistent values in any file — for example: 
+```python
+  # BAD:
+  # Confusing on which to use or configure.
+  class Theme:
+      accent = "red" 
+      accent_color = "red"
+  
+  # GOOD:
+  # Clear on which one is in use and changing it here is safe
+  class Theme:
+      accent_color = "red"
+  
+  ```
+  
+  Another inconsistent pattern:
+  ```python
+  # BAD:
+  # Confusing on which to use or configure.
+  class Theme:
+      accent = "red" 
+  
+  THEME = {
+      "accent": "blue",
+  }
+  
+  # GOOD:
+  # Clean and clear on which to use or configure.
+  class Theme:
+      accent = "red" 
+  
+  ```
 ---
 
 ## Code Style
@@ -118,7 +153,28 @@ class ProductCard(InnerComponent):
 - Two blank lines between top-level definitions.
 - Use f-strings over `.format()` or `%`.
 - Type-hint all public function signatures.
-
+- Avoid adding unecessary spacing  around variables, characters or at the end of line e.g.:
+  
+  ```python
+  # GOOD:
+  class Theme:
+      """
+      All design tokens in one place
+      """  
+      # Background palette
+      primary = "#000000" # main dark background
+      surface = "#111" # slightly lighter dark surface
+  
+  # BAD:
+  class Theme:
+      """
+      All design tokens in one place
+      """  
+      # Background palette
+      primary       = "#000000"               # main dark background
+      surface       = "#111"                  # slightly lighter dark surface
+  
+  ```
 ---
 
 ## Docstrings
@@ -258,19 +314,78 @@ def on_create(self):
   from duck.html.components.button import Button
   
   from web.ui.components.nav import SiteNavBar
+  
+  # BAD:
+  from duck.html.components.button import Button
+  from web.ui.components.nav import SiteNavBar
+  
   ```
 
 - Use centralized imports wherever possible.
 
 - For components, import specific component you want to use rather than the whole module:
   ```python
+  # GOOD:
+   from duck.html.components.button import FlatButton, RoundButton
+   
+  # BAD:
+  from duck.html.components import button
   ```
   
 - Arrange and format imports so that they look clean and structured:
   ```python
-  # GOOD
-  from duck import 
+  # GOOD:
+  import os
+  import some_module
+  
+  from duck.app import App
+  from duck.contrib.sync import ensure_async
+  
+  # Local imports here
+  from web.ui.pages.home import HomePage
+  
+  # BAD:
+  from duck.app import App
+  from duck.contrib.sync import ensure_async
+  import os
+  import some_module
+  from web.ui.pages.home import HomePage
+  
   ```
+
+- Always use absolute imports because Duck is run from the base directory even for Django. This includes local django modules must have this prefix `web.backend.django.duckapp`:
+  ```python
+  # web/backend/django/duckapp/duckapp/settings.py
+  # GOOD:
+  INSTALLED_APPS = ["web.backend.django.duckapp.<appname>"]
+  # Other settings here...
+  
+  # BAD:
+  INSTALLED_APPS = ["<appname>"]
+  # Other settings here...
+  
+  ```
+  
+  Application entry modules:
+  
+  ```python
+  # web/backend/django/duckapp/myapp/apps.py
+  # GOOD:
+  from django.apps import AppConfig
+  
+  class MyAppConfig(AppConfig):
+      default_auto_field = "django.db.models.BigAutoField"
+      name = "web.backend.django.duckapp.myapp"
+
+  # BAD:
+  from django.apps import AppConfig
+  
+  class MyAppConfig(AppConfig):
+      default_auto_field = "django.db.models.BigAutoField"
+      name = "myapp"
+  ```
+  
+  **This applies as well to other files `urls.py`, `views.py`, etc
 ---
 
 ## Centralized Systems — No Repetition
@@ -404,10 +519,10 @@ delegate all content to components and helpers.
 Homepage page — the public landing page of the application.
 """
 
+from web import meta
 from web.ui.pages.base import BasePage
 from web.ui.components.hero import HeroSection
 from web.ui.components.features import FeaturesGrid
-import meta
 
 
 class HomePage(BasePage):
@@ -440,8 +555,8 @@ class HomePage(BasePage):
 
 ## Components
 
-For the full built-in component API (Button, Container, Modal, Input, Form, etc.)
-refer to **`HTML_COMPONENTS.md`**. The rules below apply to all component code in this project.
+For the full built-in component API (Button, Container, Modal, Input, Form, etc.) plus other component related information
+refer to **`HTML_COMPONENTS_GUIDE.md`**. The rules below apply to all component code in this project.
 
 ### Construction rules
 
@@ -909,6 +1024,7 @@ duck runserver -dj
   `duck.contrib.sync` to wrap it safely.
 - Duck mostly use Django for it's ORM so the best app to create for Django is `core`. Django project structure in 
   Django is auto-created. Read the contents to understand the structure.
+- Never try to manually create Django files and directories inside the directory `web/backend/django` (unless necessary), they are auto-generated by Duck.
 - Use absolute imports in auto-generated Django projects e.g. `ROOT_URLCONF = "web.backend.django.duckapp.duckapp.urls"`.
 
 ```python
@@ -935,6 +1051,29 @@ async def async_get_user_profile(user_id: int):
     # Django ORM is sync — wrap it to avoid blocking the event loop
     return await ensure_async(UserProfile.objects.filter)(pk=user_id).first
 ```
+
+**Other Operations to Perform:**
+
+If models are present and being used, register them in the app's admin.py.
+- If models are in use, update the auto-generated URL patterns in web/backend/django/duckapp/duckapp/urls.py — include the admin URL and configure the admin site to match the brand:
+  ```
+  # web/backend/django/duckapp/duckapp/urls.py
+  from django.urls import path
+  from django.contrib import admin
+  from duck.backend.django import urls as duck_urls
+    
+  from web.ui.components.theme import Theme
+    
+  # Brand the admin site
+  admin.site.site_header = Theme.brand_name
+  admin.site.site_title = ""
+  admin.site.index_title = "Dashboard"
+    
+  urlpatterns = duck_urls.urlpatterns + [
+      path("admin/", admin.site.urls),
+      # Add your URL patterns here
+  ]
+  ```
 
 ---
 
@@ -1382,12 +1521,19 @@ return jsonify({"status": "created", "id": new_id}, status_code=201)
 logo_url = static("images/logo.svg")
 ```
 
-### Points to Note
+### Strict Rules: Points to Note
 
+- Every Information here is important, follow it.
 - Never hardcode data like URLs, always use these helpers e.g. `resolve`, `static`, `media`.
 - For more info on the API Documentation look at https://docs.duckframework.com/main/api/duck.shortcuts
 - For more customization on responses see https://docs.duckframework.com/main/api/duck.http.response
-
+- For dynamic urls with <param> returned by resolve, use string method `replace()` for replacing the dynamic parameter e.g.:
+  
+  ```python
+  # Route: /products/<id>
+  product_url = resolve("product").replace("<id>", "1234")
+  ```
+  
 ---
 
 ## Security & Settings

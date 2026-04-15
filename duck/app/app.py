@@ -557,10 +557,7 @@ class App:
                 headers={"Host": SETTINGS["DJANGO_SHARED_SECRET_DOMAIN"]},
                 timeout=1,
             )
-            
-            if not response:
-                # Response status is not expected here.
-                return False
+            # If we reached here, a response has been received
             return True
         except Exception:
             pass

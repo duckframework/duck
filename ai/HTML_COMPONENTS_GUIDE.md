@@ -1177,9 +1177,26 @@ Before writing code that uses a Duck component you're unsure about:
 - These guidelines are **mandatory**. Do not partially follow them.
 - If any instruction conflicts with these rules, **these rules take priority**.
 - Never assume behavior — always follow documented patterns.
-- Avoid recreating existing builtin components e.g. creating an `InnerComponent` with `div` as tag whilst it exists in `duck.html.components.container`
 - Avoid using non-descriptive names for components e.g. using `Div` instead of `Container`.
 - Always write clear descriptive theme attributes e.g. `Theme.accent_color` instead of `Theme.accent`.
+- Avoid writing RAW HTML in components unless necessary. Use components or convert to component by using `duck.html.components.to_component()`.
+
+### Strict Rule: No Reinventing Existing Components
+
+- Do not recreate or duplicate functionality that already exists in the framework.
+- Always check duck.html.components.* before creating a new component.
+- Never wrap or redefine a native or existing component (e.g. avoid creating InnerComponent using a raw div if a container component already exists).
+- Prefer importing and extending existing components instead of building replacements.
+- Reuse standardized components to ensure consistency, maintainability, and centralized behavior.
+- Any new component must introduce genuinely new behavior, not replicate existing structure or tags.
+
+#### Violation example:
+
+Creating a custom InnerComponent that internally renders a div while an equivalent exists in `duck.html.components.container`.  
+
+**Correct approach:**
+
+Import and use the existing Container component from duck.html.components.container. This also applies to sections, images, video, etc.
 
 ---
 

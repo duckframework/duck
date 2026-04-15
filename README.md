@@ -98,6 +98,17 @@ This directory includes:
 
 Refer to it for a deeper understanding of how AI is incorporated into the project.
 
+### Vibe Coding
+
+When vibe-coding, point your AI assistant to the ai directory in the root repository, or provide its files directly for best results.
+
+**Example prompts:**
+```
+Using the guidelines in the `ai` directory of https://github.com/duckframework/duck, create a project named `xyz`.
+Using the guidelines in the `ai` directory of https://github.com/duckframework/duck, improve my project `xyz`.
+Using the guidelines in the `ai` directory of https://github.com/duckframework/duck, improve my project UI — make it modern and beautiful.
+```
+
 ---
 
 ## Getting Started
