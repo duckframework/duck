@@ -39,7 +39,7 @@ class MadeWithDuck(Link, FlexContainer):
         self.add_child(self.image)
         
         # Add some text.
-        self.add_child(Label(text="Proudly made with duck", style={"margin": "0px"}))
+        self.add_child(Label(text="Proudly Made With Duck", style={"margin": "0px"}))
         self.add_child(
             Style(
                 inner_html="""
