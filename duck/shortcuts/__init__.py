@@ -102,15 +102,18 @@ def csrf_token(request) -> str:
     return token
 
 
-def static(resource_path: str) -> str:
+def static(resource_path: str, absolute: bool = True) -> str:
     """
     Returns the absolute static url path for provided resource.
+    
+    Notes:
+        This returns absolute URL by default. If this fails to get absolute URL, a relative static URL is returned.
     """
     if not is_good_url_path(resource_path):
         raise TypeError(f"Please provide valid URL path in form '/some/path' not {resource_path}")
         
     try:
-        root_url = Meta.get_absolute_server_url() # get absolute server url
+        root_url = "/" if not absolute else Meta.get_absolute_server_url() # get absolute server url
     except Exception:
         root_url = "/"
     
@@ -122,9 +125,12 @@ def static(resource_path: str) -> str:
     return urljoin(static_url, resource_path)
 
 
-def media(resource_path: str) -> str:
+def media(resource_path: str, absolute: bool = True) -> str:
     """
     Returns the absolute media URL path for provided resource.
+    
+    Notes:
+        This returns absolute URL by default. If this fails to get absolute URL, a relative media URL is returned.
     """
     if not is_good_url_path(resource_path):
         raise TypeError(
@@ -132,7 +138,7 @@ def media(resource_path: str) -> str:
         )
     
     try:
-        root_url = Meta.get_absolute_server_url() # get absolute server url
+        root_url = "/" if  not absolute else Meta.get_absolute_server_url() # get absolute server url
     except Exception:
         root_url = "/"
     
