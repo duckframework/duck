@@ -58,6 +58,7 @@ myproject/
 │   │       ├── nav.py
 │   │       └── footer.py
 │   ├── static/
+│   │   ├── images/
 │   │   ├── css/
 │   │   └── js/
 │   └── templates/            # Jinja2 / Django templates (if used)
@@ -82,6 +83,7 @@ myproject/
 - Never introduce invisible or non-standard characters into any file.
 - Never hardcode metadata such as brand name, year, email, or location, etc. Always source these from a central config — this is critical.
 - Always use consistent, predictable patterns across the entire codebase.
+- Never create unnecessary files, create only relavant files not creating files which are not referrenced or used anywhere in the project.
 - Never use uncertain or inconsistent values in any file — for example: 
 ```python
   # BAD:

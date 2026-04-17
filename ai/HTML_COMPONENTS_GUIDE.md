@@ -1180,6 +1180,7 @@ Before writing code that uses a Duck component you're unsure about:
 - Avoid using non-descriptive names for components e.g. using `Div` instead of `Container`.
 - Always write clear descriptive theme attributes e.g. `Theme.accent_color` instead of `Theme.accent`.
 - Avoid writing RAW HTML in components unless necessary. Use components or convert to component by using `duck.html.components.to_component()`.
+- Functions with no descriptive name resembling a component and returning a component must use PascalCase e.g. `FieldLabel()` instead of `field_label()`
 
 ### Strict Rule: No Reinventing Existing Components
 

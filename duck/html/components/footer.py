@@ -12,6 +12,7 @@ from duck.html.components.container import FlexContainer
 from duck.html.components.style import Style
 from duck.html.components.link import Link
 from duck.html.components.heading import Heading
+from duck.meta import Meta
 
 
 class FooterBlock(FlexContainer):
@@ -109,7 +110,10 @@ class Footer(InnerComponent):
         self.add_child(self.footer_items)
         
         # Add made with Duck
-        self.duck_link = Link(url="https://github.com/duckframework/duck")
+        github_url = "https://github.com/duckframework/duck"
+        duck_url = "https://duckframework.com"
+        
+        self.duck_link = Link(url=github_url if Meta.get_metadata("DUCK_SERVER_DOMAIN") == "duckframework.com" else duck_url)
         self.duck_link.add_child(MadeWithDuck())
         self.add_child(self.duck_link)
         
