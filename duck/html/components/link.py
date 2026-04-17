@@ -16,7 +16,7 @@ class Link(InnerComponent):
     """
     def __init__(self, url: str = None, text: str = None, *args, **kwargs):  
         self.url = url or "#"
-        super().__init__(text=text or "", *args, **kwargs)
+        super().__init__(text=text, *args, **kwargs)
         
     def get_element(self):
         return "a"
