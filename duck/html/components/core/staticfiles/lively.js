@@ -1605,10 +1605,15 @@ class NavigationHandler {
     if (!this.navigationInProgress) {
       this.navigationInProgress = true;
     }
+    
+    /**
+    This block is causing navigation issues; navigation is not working when navigating from URL with a hash
+    
     else {
       // Navigation already in progress.
       return;
     }
+    **/
     
     // Reset page progress
     window.LIVELY_APPLICATION.resetPageProgressBar();
