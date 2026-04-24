@@ -22,7 +22,7 @@ and this project adheres to Semantic Versioning.
 
 ---
 
-## [1.0.2]
+## [1.0.2] - March 6, 2026
 
 ### Added
 - Minor features
