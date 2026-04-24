@@ -104,50 +104,76 @@ def csrf_token(request) -> str:
 
 def static(resource_path: str, absolute: bool = True) -> str:
     """
-    Returns the absolute static url path for provided resource.
-    
-    Notes:
-        This returns absolute URL by default. If this fails to get absolute URL, a relative static URL is returned.
+    Returns the static URL for the provided resource path.
+
+    Args:
+        resource_path: A URL path or external URL pointing to the resource.
+        absolute: Whether to return an absolute URL. Defaults to True.
+            Falls back to relative if the absolute server URL cannot be resolved.
+
+    Returns:
+        The resolved static URL string.
+
+    Raises:
+        TypeError: If resource_path is not a valid URL path.
     """
     if not is_good_url_path(resource_path):
         raise TypeError(f"Please provide valid URL path in form '/some/path' not {resource_path}")
+    
+    resource_path = sanitize_path_segment(resource_path)
+    static_url = URL(SETTINGS["STATIC_URL"])
+    
+    if static_url.scheme:
+        # This is most likely an external CDN
+        return static_url.join(resource_path).to_str()
         
+    # Serve directly from server
     try:
-        root_url = "/" if not absolute else Meta.get_absolute_server_url() # get absolute server url
+        root_url = "/" if not absolute else Meta.get_absolute_server_url()
     except Exception:
         root_url = "/"
     
     # Join and return final URL
-    static_url = SETTINGS["STATIC_URL"]
-    static_url = sanitize_path_segment(static_url)
-    resource_path = sanitize_path_segment(resource_path).lstrip("/")
-    static_url = urljoin(root_url, static_url) + "/"
-    return urljoin(static_url, resource_path)
+    static_url_str = urljoin(root_url, static_url.to_str())
+    return urljoin(static_url_str, resource_path)
 
 
 def media(resource_path: str, absolute: bool = True) -> str:
     """
-    Returns the absolute media URL path for provided resource.
-    
-    Notes:
-        This returns absolute URL by default. If this fails to get absolute URL, a relative media URL is returned.
+    Returns the media URL for the provided resource path.
+
+    Args:
+        resource_path: A URL path or external URL pointing to the resource.
+        absolute: Whether to return an absolute URL. Defaults to True.
+            Falls back to relative if the absolute server URL cannot be resolved.
+
+    Returns:
+        The resolved media URL string.
+
+    Raises:
+        TypeError: If resource_path is not a valid URL path.
     """
     if not is_good_url_path(resource_path):
         raise TypeError(
             f"Please provide valid url path in form '/some/path' not {resource_path}"
         )
     
+    resource_path = sanitize_path_segment(resource_path)
+    media_url = URL(SETTINGS["MEDIA_URL"])
+    
+    if media_url.scheme:
+        # This is most likely an external media source
+        return media_url.join(resource_path).to_str()
+        
+    # Serve directly from server
     try:
-        root_url = "/" if  not absolute else Meta.get_absolute_server_url() # get absolute server url
+        root_url = "/" if not absolute else Meta.get_absolute_server_url()
     except Exception:
         root_url = "/"
     
     # Join and return final URL
-    media_url = SETTINGS["MEDIA_URL"]
-    media_url = sanitize_path_segment(media_url)
-    resource_path = sanitize_path_segment(resource_path).lstrip("/")
-    media_url = urljoin(root_url, media_url) + "/"
-    return urljoin(media_url, resource_path)
+    media_url_str = urljoin(root_url, media_url.to_str())
+    return urljoin(media_url_str, resource_path)
 
 
 def static_filepath(relative_filepath: str, blueprint: Optional[Blueprint] = None, target_static_dir: Optional[str] = None) -> str:

@@ -1,7 +1,9 @@
-"""Version module for Duck"""
+"""
+Version module for Duck.
+"""
 import sys
 
-version_num = (1, 0, 2)
+version_num = (1, 1, 0)
 version = "%d.%d.%d" % version_num
 version_name = "Duck"
 

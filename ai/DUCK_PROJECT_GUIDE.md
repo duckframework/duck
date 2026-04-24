@@ -4,7 +4,7 @@ A comprehensive reference for writing clean, maintainable, performant, and scala
 Duck Framework projects. Follow every rule in this guide — always, in every file.
 
 > **Docs:** https://docs.duckframework.com/main/
-> **Components:** Refer to [`HTML_COMPONENTS_GUIDE.md`](./ai/HTML_COMPONENTS_GUIDE_GUIDE.md) for the full component API reference.
+> **Components:** Refer to [`HTML_COMPONENTS_GUIDE.md`](./HTML_COMPONENTS_GUIDE.md) for the full component API reference.
 > **GitHub:** https://github.com/duckframework/duck
 
 ---
