@@ -41,6 +41,7 @@ from duck.utils.path import (
     is_good_url_path,
     joinpaths,
 )
+from duck.utils.urlcrack import URL
 from duck.contrib.responses import (
     simple_response,
     template_response,
