@@ -19,7 +19,6 @@ from typing import (
     Callable,
     Dict,
 )
-from urllib.parse import urljoin
 from collections.abc import Iterable
 from functools import lru_cache
 
@@ -135,8 +134,8 @@ def static(resource_path: str, absolute: bool = True) -> str:
         root_url = "/"
     
     # Join and return final URL
-    static_url_str = urljoin(root_url, "/" + static_url.to_str())
-    return urljoin(static_url_str, resource_path)
+    static_url_str = URL.urljoin(root_url, "/" + static_url.to_str())
+    return URL.urljoin(static_url_str, resource_path)
 
 
 def media(resource_path: str, absolute: bool = True) -> str:
@@ -173,8 +172,8 @@ def media(resource_path: str, absolute: bool = True) -> str:
         root_url = "/"
     
     # Join and return final URL
-    media_url_str = urljoin(root_url, "/" + media_url.to_str())
-    return urljoin(media_url_str, resource_path)
+    media_url_str = URL.urljoin(root_url, "/" + media_url.to_str())
+    return URL.urljoin(media_url_str, resource_path)
 
 
 def static_filepath(relative_filepath: str, blueprint: Optional[Blueprint] = None, target_static_dir: Optional[str] = None) -> str:
