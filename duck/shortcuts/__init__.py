@@ -135,7 +135,7 @@ def static(resource_path: str, absolute: bool = True) -> str:
         root_url = "/"
     
     # Join and return final URL
-    static_url_str = urljoin(root_url, static_url.to_str())
+    static_url_str = urljoin(root_url, "/" + static_url.to_str())
     return urljoin(static_url_str, resource_path)
 
 
@@ -173,7 +173,7 @@ def media(resource_path: str, absolute: bool = True) -> str:
         root_url = "/"
     
     # Join and return final URL
-    media_url_str = urljoin(root_url, media_url.to_str())
+    media_url_str = urljoin(root_url, "/" + media_url.to_str())
     return urljoin(media_url_str, resource_path)
 
 

@@ -12,6 +12,7 @@ and this project adheres to Semantic Versioning.
 ### Added
 - Functions `static_filepath` & `media_filepath` from `duck.shortcuts` module.
 - Added argument `absolute` to functions `media` & `static` from `duck.shortcuts` module.
+- Added argument `log_results` to decorators `exec_time` & `async_exec_time` of `duck.utils.performance` module.
 
 ### Changed
 - Refactored functions `static` and `media` to support external URLs. Supported only internal URL's before.

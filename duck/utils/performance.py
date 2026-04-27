@@ -9,13 +9,14 @@ import time
 from duck.logging import console # better than print()
 
 
-def exec_time(func):
+def exec_time(func, log_results: bool = True):
     """
     A decorator that measures the execution time of a function.
     
     Args:
         func (function): The function to measure.
-    
+        log_results (bool): Whether to log results to console. Defaults to True.
+        
     Returns:
         function: The wrapped function that will time its execution.
     """
@@ -24,18 +25,21 @@ def exec_time(func):
         result = func(*args, **kwargs)
         end_time = time.time()
         exec_t = end_time - start_time
-        console.log_raw(f'Execution time: "{func.__name__}": {exec_t*1000:.8f} ms ({exec_t:.8f} s)')
+        
+        if log_results:
+            console.log_raw(f'Execution time: "{func.__name__}": {exec_t*1000:.8f} ms ({exec_t:.8f} s)')
         return result
     return wrapper
 
 
-def async_exec_time(func):
+def async_exec_time(func, log_results: bool = True):
     """
     A decorator that measures the execution time of a function.
     
     Args:
         func (function): The function to measure.
-    
+        log_results (bool): Whether to log results to console. Defaults to True.
+        
     Returns:
         function: The wrapped asynchronous function that will time its execution.
     """
@@ -44,7 +48,9 @@ def async_exec_time(func):
         result = await func(*args, **kwargs)
         end_time = time.time()
         exec_t = end_time - start_time
-        console.log_raw(f'Execution time: "{func.__name__}": {exec_t*1000:.8f} ms ({exec_t:.8f} s)')
+        
+        if log_results:
+            console.log_raw(f'Execution time: "{func.__name__}": {exec_t*1000:.8f} ms ({exec_t:.8f} s)')
         return result
     return async_wrapper
 
