@@ -1,5 +1,8 @@
 """
 Module for creating middlewares.
+
+In production, please add the middleware `duck.http.middlewares.contrib.WWWRedirectMiddleware` to redirect 
+traffic from www to non-www domain.
 """
 
 from duck.http.request import HttpRequest

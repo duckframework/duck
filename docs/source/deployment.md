@@ -101,6 +101,11 @@ FORCE_HTTPS_BIND_PORT = 80  # Optional: specify the port to redirect from
 Duck uses a built-in **MicroApp** called `HttpsRedirectMicroApp` to handle redirects efficiently.  
 See [MicroApp documentation](./microapp.md) for customization details.  
 
+```{info}
+To redirect www traffic to non-www domain, add this middleware `duck.http.middlewares.contrib.WWWRedirectMiddleware` to default middlewares in settings, 
+usuallly at the second position.
+```
+
 ---
 
 ### 6. Run the App as a Background Service  

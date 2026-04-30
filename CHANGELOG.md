@@ -17,6 +17,7 @@ and this project adheres to Semantic Versioning.
 ### Changed
 - Refactored functions `static` and `media` to support external URLs. Supported only internal URL's before.
 - Refined AI guidelines in [ai](./ai/) directory.
+- Made the middleware `duck.http.middlewares.contrib.WWWRedirectMiddleware` optional, it's no longer included in MIDDLEWARES by default.
 
 ### Fixed
 - Lively Navigation bug when trying to navigate from a URL with a fragment e.g. https://duckframework.com#something -> any internal URL.

@@ -97,4 +97,4 @@ class Select(InnerComponent):
 
         if "options" in self.kwargs:
             for option in self.kwargs.get("options"):
-                self.add_child(option if isinstance(option, Option) else Option(text=option))
+                self.add_child(option if isinstance(option, Option) else Option(inner_html=option))
