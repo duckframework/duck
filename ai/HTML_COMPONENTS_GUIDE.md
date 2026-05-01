@@ -26,7 +26,7 @@
 11. [Custom Components](#11-custom-components)
 12. [Component Extensions](#12-component-extensions)
 13. [Forms](#13-forms)
-14. [Force Updates](#14-force-updates)
+14. [Force Updates and Immediate Syncing](#14-force-updates-and-immediate-syncing)
 15. [JavaScript Execution](#15-javascript-execution)
 16. [Utility Functions](#16-utility-functions)
 17. [Caching](#17-caching)
@@ -63,18 +63,44 @@ The Lively system is Duck's reactive engine. It:
 - Sends minimal DOM patches over WebSocket when state changes
 - Handles event routing from browser ➝‬ Python handler ➝‬ DOM patch
 
-**Critical rule:** Lively only knows about props/style that were declared on
-the server during the initial render. If you set a style property for the
-first time in an event handler, Lively will not sync it. Always initialise
-every property you intend to control, even to an empty string:
+**Critical rule:** Lively performs **non-destructive syncing**.  
+
+It only updates props and styles it is aware of from the server state, and ignores anything it didn’t create or track.
+
+- New props/styles set from Python (e.g. in event handlers) will sync normally
+- Props/styles added externally (e.g. via `execute_js`) **are not tracked**
+- Untracked properties will **not be removed or overridden**, even when patches are applied
+
+This means Lively will **merge updates**, not replace the entire prop/style object.
 
 ```python
-# Good — Lively will track background-color
-btn = Button(text="Click", style={"background-color": ""})
-
-# Bad — Lively cannot sync background-color later
+# Initial render — no background-color
 btn = Button(text="Click")
+
+# Later in Python (event handler) — this WILL sync
+btn.style["background-color"] = "red"
 ```
+
+```javascript
+// Added externally — Lively does NOT track this
+element.style.border = "1px solid blue"
+```
+
+Even after future updates from Python:
+
+```python
+btn.style["background-color"] = "green"
+```
+
+The `border` style will remain untouched because Lively never tracked it.
+
+### Key takeaway
+
+Lively behaves like a **partial diff system**, not a full state replacement system:
+
+- ✅ Updates known fields
+- ✅ Adds new fields from server-side changes
+- ❌ Does not remove unknown/external fields
 
 ---
 
@@ -758,7 +784,7 @@ Notes:
 
 ---
 
-## 14. Force Updates
+## 14. Force Updates and Immediate Syncing
 
 When JavaScript modifies a component's DOM directly, Lively loses track.
 Use `ForceUpdate` to reset specific properties back to their server state:
@@ -774,6 +800,29 @@ def on_click(btn, event, value, ws):
 
 **Rule:** Only properties that were declared on initial render can be
 force-updated. If a property was never set server-side, Lively ignores it.
+
+### Immediate Syncing
+
+Method `update_now` synchronizes the current component state with the client.
+Unlike deferred updates, this applies changes immediately and can be safely called within a component event handler.
+
+```{note}
+This method internally performs a `ForceUpdate`, ensuring the specified updates are applied immediately.
+```
+
+**Example:**
+
+```python
+# Immediately sync state before continuing execution
+async def on_click(btn, _, __, ws):
+    btn.text = "Clicking..."
+    await ws.update_now(btn, updates=["text"])
+
+    # Continue processing after UI reflects the change
+
+btn = Button(text="Click me")
+btn.bind("click", on_click, update_self=True)
+```
 
 ---
 

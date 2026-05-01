@@ -7,7 +7,7 @@
 **Duck** now includes the **Lively Component System**—a real-time, component-based system that enables responsive page updates without full reloads.  
 It leverages **WebSockets with msgpack** for fast communication and supports navigation to new URLs without full page reloads.
 
-> Recommended: Use Duck components over traditional templates. Components are flexible, Pythonic, and allow pluggable, reusable UI elements.
+> Recommended: Use Lively/HTML components over traditional templates. Components are flexible, Pythonic, and allow pluggable, reusable UI elements.
 
 ---
 
@@ -92,7 +92,7 @@ class HomePage(Page):
         super().on_create()
         self.set_title("Home - MySite")
         self.set_description("Welcome to MySite, the premier platform...")
-        self.set_favicon("/static/favicon.ico")
+        self.set_favicon("/static/favicon.ico", icon_type="image/x-icon")
         self.set_opengraph(
             title="Home - MySite",
             description="Welcome to MySite, the premier platform...",
@@ -113,6 +113,15 @@ class HomePage(Page):
 ```
 
 > Organizing pages this way isolates page-specific logic in dedicated classes, making code easier to maintain, extend, and debug.
+
+---
+
+## Guidelines
+
+When vibecoding or working with these components, refer to the guidelines directory in our GitHub repository:
+https://github.com/duckframework/duck/blob/main/ai⁠  
+
+This directory provides best practices for building scalable, maintainable components and structuring projects effectively.
 
 ---
 
@@ -139,12 +148,10 @@ async def on_click(btn: Button, event: str, value: Any, websocket: LivelyWebSock
         websocket (LivelyWebSocketView): Active WebSocket.
     """
     btn.bg_color = "red" if btn.bg_color != "red" else "green"
+    
     try:
-        await websocket.execute_js(
-            code='alert(`Javascript execution success`);',
-            timeout=2,
-            wait_for_result=True
-        )
+        # Execute some JS directly
+        await websocket.execute_js('alert(`Javascript execution success`);')
     except (JSExecutionTimedOut, JSExecutionError):
         pass
 
@@ -326,7 +333,7 @@ All predefined components are available in `duck.html.components` and in default
 
 ## Force Updates on Lively Components
 
-It is possible to modify values set with `Javascript` with the use of `Force updates`.  
+It is possible to modify values set with `Javascript` with the use of `Force updates` or using `ws.update_now` method.  
 
 **The following example will showcase this technique:**
 
@@ -372,37 +379,78 @@ def home(request):
 
 ----
 
-```{warning}
-**Lively** only syncs `props` and `style` properties that were declared during the component's initial render. If a `ForceUpdate` isn't applying your changes, it likely means the property wasn't initialized on the server side.
-```
+**Critical rule:** Lively performs **non-destructive syncing**.  
 
-**Example**
+It only updates props and styles it is aware of from the server state, and ignores anything it didn’t create or track.
 
-Say you have a button with no `background-color` in its initial style:
+- New props/styles set from Python (e.g. in event handlers) will sync normally
+- Props/styles added externally (e.g. via `execute_js`) **are not tracked**
+- Untracked properties will **not be removed or overridden**, even when patches are applied
 
-```python
-btn = Button(text="Click me")
-# No background-color set here
-```
-
-If something later changes the button's background on the client side (maybe direct JavaScript execution) and you then return a `ForceUpdate` over the button's style, Lively will **not** remove or reset the background.
- It only knows about — and syncs — the style properties that existed when the component was first rendered.
-
-**Fix**
-
-Always initialize every property you intend to control with Lively, even if the starting value is empty or a default:
+This means Lively will **merge updates**, not replace the entire prop/style object.
 
 ```python
-btn = Button(text="Click me")
-btn.style["background-color"] = ""  # now Lively knows about it
+# Initial render — no background-color
+btn = Button(text="Click")
+
+# Later in Python (event handler) — this WILL sync
+btn.style["background-color"] = "red"
 ```
 
-Once a property is declared in the initial render, Lively will correctly sync it in any subsequent `ForceUpdate`.
+```javascript
+// Added externally — Lively does NOT track this
+element.style.border = "1px solid blue"
+```
+
+Even after future updates from Python:
+
+```python
+btn.style["background-color"] = "green"
+```
+
+The `border` style will remain untouched because Lively never tracked it.
+
+### Key takeaway
+
+Lively behaves like a **partial diff system**, not a full state replacement system:
+
+- ✅ Updates known fields
+- ✅ Adds new fields from server-side changes
+- ❌ Does not remove unknown/external fields
 
 ```{note}
 In cases where a property's presence resolves to `true` regardless of its value e.g. The presence 
 of `disabled` or `true`, you can just execute JavaScript (using `execute_js`) to alter the component directly.
 ```
+
+### Immediate Syncing
+
+```{info}
+Added in version 1.1.0
+```
+
+Method `update_now` synchronizes the current component state with the client.
+Unlike deferred updates, this applies changes immediately and can be safely called within a component event handler.
+
+```{note}
+This method internally performs a `ForceUpdate`, ensuring the specified updates are applied immediately.
+```
+
+**Example:**
+
+```python
+# Immediately sync state before continuing execution
+async def on_click(btn, _, __, ws):
+    btn.text = "Clicking..."
+    await ws.update_now(btn, updates=["text"])
+
+    # Continue processing after UI reflects the change
+
+btn = Button(text="Click me")
+btn.bind("click", on_click, update_self=True)
+```
+
+---
 
 ## Handling Forms
 

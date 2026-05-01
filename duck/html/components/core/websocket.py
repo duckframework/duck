@@ -31,6 +31,7 @@ from duck.html.components.core.force_update import (
     ForceUpdate,
     ForceUpdateError,
     check_force_updates,
+    update_now,
 )
 from duck.html.components.core.opcodes import EventOpCode, PatchCode
 from duck.html.components.core.exceptions import (
@@ -78,6 +79,15 @@ class LivelyWebSocketView(WebSocketView):
         """
         return msgpack.unpackb(data, raw=False)
 
+    async def update_now(self, component, updates: List[str]):
+        """
+        Sync current updates to the client immediately.
+        
+        Notes:
+            This uses `ForceUpdate` logic.
+        """
+        return await update_now(component, updates, self)
+        
     async def send_data(self, data: Any):
         """
         Sends serialized data over the WebSocket.

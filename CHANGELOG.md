@@ -13,6 +13,9 @@ and this project adheres to Semantic Versioning.
 - Functions `static_filepath` & `media_filepath` from `duck.shortcuts` module.
 - Added argument `absolute` to functions `media` & `static` from `duck.shortcuts` module.
 - Added argument `log_results` to decorators `exec_time` & `async_exec_time` of `duck.utils.performance` module.
+- Added support for keyword arguments `selected` & `value` to `Option` HTML/Lively component and improved the `Select` component as well.
+- Added a method `update_now` to `LivelyWebsocketView` for syncing the current state of an HTML/Lively component with the client. 
+  It behaves more like `ForceUpdate` and can be used in the middle of component event event handler.
 
 ### Changed
 - Refactored functions `static` and `media` to support external URLs. Supported only internal URL's before.

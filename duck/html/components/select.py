@@ -6,6 +6,7 @@ This module provides reusable `Select` and `Option` components for creating drop
 
 from duck.html.components import (
     InnerComponent,
+    ComponentError,
     Theme,
 )
 
@@ -18,7 +19,7 @@ class Option(InnerComponent):
 
     **Example Usage:**
     ```py
-    option = Option(inner_body="Option 1")
+    option = Option(inner_html="Option 1")
     select.add_child(option)
     ```
 
@@ -32,50 +33,35 @@ class Option(InnerComponent):
     """
 
     def get_element(self):
-        """Returns the HTML tag for the component."""
+        """
+        Returns the HTML tag for the component.
+        """
         return "option"
-
+    
+    def on_create(self):
+        super().on_create()
+        
+        # Get optional fields, no need for handling text (already handled by default)
+        value = self.kwargs.get("value")
+        selected = self.kwargs.get("selected")
+        
+        if value:
+            self.props["value"] = value
+        
+        if selected:
+            self.props["selected"] = "true"
+        
 
 class Select(InnerComponent):
     """
     A reusable HTML `<select>` component for creating dropdown menus.
 
     This component generates a customizable `<select>` dropdown with options.
-
-    **Args:**
-        options (list[str], optional):  
-            A list of options as text or HTML.  
-            **Note:** The 'option' tag should not be included in individual options.
-
-    **Example Usage:**
-    ```py
-    select = Select(
-        options=[
-            "Option 1",
-            "Option 2",
-            "Option 3"
-        ]
-    )
-    component.add_child(select)
-    ```
-
-    This generates:
-    ```html
-    <select>
-        <option>Option 1</option>
-        <option>Option 2</option>
-        <option>Option 3</option>
-    </select>
-    ```
-
+    
     **Styling:**
     - Uses default styling based on the `Theme` class.
     - Can be customized using CSS styles.
-
-    **Returns:**
-        - A `<select>` HTML element.
     """
-
     def get_element(self):
         """
         Returns the HTML tag for the component.
@@ -94,7 +80,19 @@ class Select(InnerComponent):
             "font-size": Theme.normal_font_size,
         }
         self.style.setdefaults(select_style)
-
-        if "options" in self.kwargs:
-            for option in self.kwargs.get("options"):
-                self.add_child(option if isinstance(option, Option) else Option(inner_html=option))
+        
+        # Retrieve optional options
+        options = self.kwargs.get("options", [])
+        
+        for option in options:
+            if isinstance(option, (str, int, float)):
+                option = Option(text=option)
+            
+            elif isinstance(option, dict):
+                option = Option(**option)
+            
+            elif not isinstance(option, Option):
+                raise ComponentError(f"Option must be a string, dictionary, list or Option component not {type(option)}")
+            
+            # Finally add option
+            self.add_child(option if isinstance(option, Option) else Option(inner_html=option))

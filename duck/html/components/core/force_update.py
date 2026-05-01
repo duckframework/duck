@@ -47,6 +47,32 @@ def check_force_updates(updates: List["ForceUpdate"]):
             raise ForceUpdateError(f"Unknown update '{update}', must be an instance of `ForceUpdate` not {type(update)}.")
     
 
+async def update_now(component: "Component", updates: List[str], ws_view):
+    """
+    Sync current updates to the client immediately.
+    """
+    from duck.html.components import Component
+    
+    force_updates_patchlist = []
+    
+    async def on_force_update_patch(patch):
+        """
+        Action called when new patch found as a result of a force update.
+        """
+        if patch:
+            if patch in force_updates_patchlist:
+                # Patch was already sent as a force update before.
+                return
+                
+            # Finally send patches
+            patches = [patch]
+            await ws_view.send_patches(patches)
+    
+    # Create a force update and send patches immediately.
+    force_update = ForceUpdate(component, updates=updates)
+    await force_update.generate_patch_and_act(action=on_force_update_patch)
+
+
 class ForceUpdate:
     """
     Class for applying force updates on HTML components.
