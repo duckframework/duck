@@ -77,13 +77,14 @@ myproject/
 - Always refer to README for the repo to get a clear picture on project structure.
 - This is in markdown format and all headings, sections or codeblock must be parsed as markdown and not to be treated as plain text.
 
-### Strict Rule:
+### Strict Rules:
 
 - Always check for and reuse existing components before creating new ones — never duplicate functionality. Composite components must include unique IDs and minimal comments separating logical sections.
 - Never introduce invisible or non-standard characters into any file.
 - Never hardcode metadata such as brand name, year, email, or location, etc. Always source these from a central config — this is critical.
 - Always use consistent, predictable patterns across the entire codebase.
 - Never create unnecessary files, create only relavant files not creating files which are not referrenced or used anywhere in the project.
+- Source code files should stay small and focused. When a file starts growing too large, group related logic into a clearly named folder and split it into smaller, cohesive components. This keeps the structure modular, easier to maintain, and more scalable.
 - Never use uncertain or inconsistent values in any file — for example: 
 ```python
   # BAD:

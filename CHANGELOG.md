@@ -16,6 +16,7 @@ and this project adheres to Semantic Versioning.
 - Added support for keyword arguments `selected` & `value` to `Option` HTML/Lively component and improved the `Select` component as well.
 - Added a method `update_now` to `LivelyWebsocketView` for syncing the current state of an HTML/Lively component with the client. 
   It behaves more like `ForceUpdate` and can be used in the middle of component event event handler.
+- Added session persistence for Lively events: sessions are now automatically saved when modified within a Lively event handler.
 
 ### Changed
 - Refactored functions `static` and `media` to support external URLs. Supported only internal URL's before.

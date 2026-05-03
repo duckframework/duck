@@ -900,7 +900,7 @@ class App:
                 ):
                     # Close the session storage connector
                     self.last_request.SESSION.session_storage_connector.close()
-        
+                    
         except Exception as e:
             logger.log_raw('\n')
             logger.log(

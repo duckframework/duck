@@ -7,6 +7,7 @@ import datetime
 import warnings
 
 from typing import Optional, Union
+from functools import wraps
 
 from duck.settings import SETTINGS
 from duck.utils.importer import import_module_once
@@ -78,9 +79,9 @@ class SessionStore(dict):
         Returns whether the session data is worthy to be saved, this is the lazy behavior of Duck.
         """
         if (self and self.session_key 
-                and self._modified
-                and not ("expiry_date" in self
-                and len(self) == 1)
+            and self._modified
+            and not ("expiry_date" in self
+            and len(self) == 1)
         ):
             # The session data is not empty, has been modified, session data length is (not 1 and containing only the key `expiry_date`)
             return True
@@ -104,6 +105,7 @@ class SessionStore(dict):
         Returns the datetime the session is going to expire.
         """
         expire_date = self.get("expiry_date")
+        
         if not expire_date:
             self.set_expiry(
                 datetime.datetime.utcnow() + datetime.timedelta(seconds=self.get_expiry_age())
@@ -140,30 +142,36 @@ class SessionStore(dict):
             raise SessionError(
                 f"Invalid expiry, expected any of [int, float, datetime.datetime, datetime.timedelta, None] but got '{type(expiry)}'"
             )
-
+    
     @staticmethod
     def check_session_storage_connector(method):
         """
-        Decorator to check if session storage is set and is correct.
+        Decorator to ensure a valid session storage connector is present.
+    
+        Validates:
+            - Attribute exists
+            - Attribute is not None
+            - Attribute is correct type
         """
         from duck.http.session.session_storage_connector import SessionStorageConnector
-
-        def wrapper(self, *a, **kw):
-            def inner(*args, **kwargs):
-                if not hasattr(self, "session_storage_connector"):
-                    raise ValueError("Session storage connector is not set")
-
-                if not self.session_storage_connector:
-                    raise ValueError("Session storage connector is not set")
-
-                assert isinstance(
-                    self.session_storage_connector, SessionStorageConnector
-                ), (f"Invalid session storage connector provided, should be an instance "
-                    f"of {SessionStorageConnector} not {type(self.session_storage_connector)}"
-                    )
-
-                return method(self, *args, **kwargs)
-            return inner(*a, **kw)
+    
+        @wraps(method)
+        def wrapper(self, *args, **kwargs):
+            connector = getattr(self, "session_storage_connector", None)
+    
+            if connector is None:
+                raise ValueError("Session storage connector is not set")
+    
+            if not isinstance(connector, SessionStorageConnector):
+                raise TypeError(
+                    "Invalid session storage connector provided. "
+                    f"Expected {SessionStorageConnector}, got {type(connector)}"
+                )
+    
+            # Execute the decorated method
+            return method(self, *args, **kwargs)
+    
+        # Return wrapper
         return wrapper
 
     @check_session_storage_connector
@@ -175,12 +183,15 @@ class SessionStore(dict):
             logger.warn(
                 f"{self.__class__.__name__} is already loaded; reloading may be inefficient."
             )
-        session_data = (
-            self.session_storage_connector.get_session(self.session_key) or {}
-        )
+        
+        # Update session data
+        session_data = self.session_storage_connector.get_session(self.session_key) or {}
         self.update(session_data)
+        
         if not self._loaded:
-            self._modified = False # if session hasn't been loaded for the first time, set _modified to False
+            self._modified = False # If session hasn't been loaded for the first time, set _modified to False
+        
+        # Update state and return session data
         self._loaded = True
         return session_data
 
@@ -207,9 +218,7 @@ class SessionStore(dict):
             )
             self.session_storage_connector.save()
         else:
-            raise SessionExpired(
-                "Cannot save an expired session, use `set_expiry` to reset the session expiry."
-            )
+            raise SessionExpired("Cannot save an expired session, use `set_expiry` to reset the session expiry.")
         self._modified = False  # reset session modification.
 
     @check_session_storage_connector

@@ -59,7 +59,8 @@ def register_urlpatterns(urlpatterns: List[URLPattern]):
                         url, handler, name, methods,
                 )
         except Exception as e:
-            raise RouteError(f"Error registering URL pattern '{urlpattern}': {e}")
+            url = urlpattern["url"]
+            raise RouteError(f"Error registering URL pattern for '{url}': {e}")
 
 
 def register_blueprints(blueprints: List[Blueprint]):

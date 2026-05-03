@@ -1080,9 +1080,11 @@ class Theme:
 ## 21. Code Style Rules
 
 These are project-specific conventions for Duck Framework codebase.
+
 Follow them on all code written for this project.  
 
-> Accompanying components and Pages must be stored in different directories for max flexibility. Pages must be stored in `web/ui/pages` whilst components must be stored in `web/ui/components`.
+- Accompanying components and Pages must be stored in different directories for max flexibility. Pages must be stored in `web/ui/pages` whilst components must be stored in `web/ui/components`.
+- Component files — including Page files — should stay small and focused. When a file starts growing too large, group related logic into a clearly named folder and split it into smaller, cohesive components. This keeps the structure modular, easier to maintain, and more scalable.
 
 ### Naming
 - No leading underscores on methods or globals (`build_nav` not `_build_nav`)
@@ -1230,6 +1232,7 @@ Before writing code that uses a Duck component you're unsure about:
 - Always write clear descriptive theme attributes e.g. `Theme.accent_color` instead of `Theme.accent`.
 - Avoid writing RAW HTML in components unless necessary. Use components or convert to component by using `duck.html.components.to_component()`.
 - Functions with no descriptive name resembling a component and returning a component must use PascalCase e.g. `FieldLabel()` instead of `field_label()`
+- Avoid accessing the request directly from the websocket (`ws`). Instead, use the request attached to the root component (e.g., `Page.request`). For nested components, access it via `component.root.request`, and only after the `on_root_finalized` lifecycle method has been executed.
 
 ### Strict Rule: No Reinventing Existing Components
 

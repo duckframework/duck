@@ -282,6 +282,15 @@ class EventHandler:
            EventOpCode.NAVIGATE_TO: self.handle_navigation,
        }
     
+    async def ensure_session_saved(self, request):
+        """
+        Ensures session is saved on Lively event.
+        """
+        from duck.http.middlewares.contrib.session import SessionMiddleware
+         
+        # If session changed on event, this saves session even on Lively components
+        await SessionMiddleware.process_lively_event(self.ws_view, request=request)
+        
     async def dispatch(self, opcode: EventOpCode, data: List[Any]):
         """
         Handle incoming WebSocket events.
@@ -291,7 +300,9 @@ class EventHandler:
             if not handler:
                 await self.send_close(CloseCode.INVALID_DATA, reason="Unknown event opcode.")
             else:
+                # Execute event handler
                 await handler(data)
+                
         except Exception as e:
             logger.log_exception(e)
             if not isinstance(e, asyncio.CancelledError):
@@ -307,7 +318,7 @@ class EventHandler:
         from duck.html.components.core.system import LivelyComponentSystem
         from duck.html.components.page import Page, EventHandlerChain
         from duck.html.components import HtmlComponent
-         
+        
         root_uid, uid, event_name, value, is_document_event = data
             
         # Retrieve the component and then dispatch the event.
@@ -351,7 +362,7 @@ class EventHandler:
         # then there is no need to call it again
         if is_document_event and event_name == "DOMContentLoaded" and getattr(component, "_domcontentloaded_event_called", False):
             return
-
+            
         # Execute event and send patches/updates
         event_handler: Union[Callable, EventHandlerChain]
         update_targets: Set[HtmlComponent]
@@ -373,6 +384,10 @@ class EventHandler:
         else:
             event_handler_chain = event_handler
             event_handler_execution_results = await event_handler_chain.async_execute((component, event_name, value, self.ws_view), restart=False)
+        
+        # If session changed on event, this saves session even on Lively components
+        root_request = component.get_raw_root().request
+        await self.ensure_session_saved(request=root_request)
         
         async def on_force_update_patch(patch):
             """
@@ -553,6 +568,10 @@ class EventHandler:
                             client_address=self.ws_view.request.client_address
                         )
                         request.parse_request(topheader, headers, content=b'')
+                        
+                        # Update the request session from the previous request.
+                        prev_request = prev_component.get_raw_root().request
+                        request.SESSION = prev_request.session
                         
                         # Reuse CSP nonce from last session to avoid unmatching nonces on patching
                         first_request = self.ws_view.request
