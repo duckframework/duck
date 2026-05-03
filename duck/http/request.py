@@ -305,12 +305,8 @@ class Request:
     
         Args:
             session (Any): The session object to associate with the request.
-    
-        Notes:
-            - The session's `request` attribute will be set to the current request instance.
         """
         self.__session = session
-        self.__session.request = self
     
     @property
     def headers(self) -> dict:
