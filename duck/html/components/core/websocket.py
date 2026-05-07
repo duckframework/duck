@@ -571,7 +571,10 @@ class EventHandler:
                         
                         # Update the request session from the previous request.
                         prev_request = prev_component.get_raw_root().request
-                        request.SESSION = prev_request.session
+                        request.SESSION.update(prev_request.session)
+                        
+                        # Ensure session saved
+                        await self.ensure_session_saved(request=request)
                         
                         # Reuse CSP nonce from last session to avoid unmatching nonces on patching
                         first_request = self.ws_view.request

@@ -151,7 +151,6 @@ class SessionMiddleware(BaseMiddleware):
         from duck.http.session.engine import SessionExpired
         from duck.contrib.sync import ensure_async
         
-        print("Processing lively event")
         if not request.SESSION.needs_update():
             return
 

@@ -14,7 +14,7 @@
 [![SSL Auto-Renewal](https://img.shields.io/badge/SSL-Auto%20Renewal-brightgreen.svg)](#)
 [![Resumable Downloads](https://img.shields.io/badge/Downloads-Resumable-orange.svg)](#)
 [![Security](https://img.shields.io/badge/Security-DoS%2C%20SQLi%2C%20CmdInj-red.svg)](#)
-[![Duck Sight Reloader](https://img.shields.io/badge/HotReload-DuckSight-yellow.svg)](#)
+[![Auto Reload](https://img.shields.io/badge/AutoReload-DuckSight-yellow.svg)](#)
 [![Django Integration](https://img.shields.io/badge/Django-Integration-blue.svg)](#)
 [![Monitoring](https://img.shields.io/badge/Monitoring-CPU%2FRAM%2FDisk%2FI%2FO-brightgreen.svg)](#)
 

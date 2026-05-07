@@ -1233,6 +1233,11 @@ Before writing code that uses a Duck component you're unsure about:
 - Avoid writing RAW HTML in components unless necessary. Use components or convert to component by using `duck.html.components.to_component()`.
 - Functions with no descriptive name resembling a component and returning a component must use PascalCase e.g. `FieldLabel()` instead of `field_label()`
 - Avoid accessing the request directly from the websocket (`ws`). Instead, use the request attached to the root component (e.g., `Page.request`). For nested components, access it via `component.root.request`, and only after the `on_root_finalized` lifecycle method has been executed.
+- Root components (typically `Page` instances) have attributes like `root`, `parent`, and other upward references set to `None` by default.  
+  The only exception is `get_raw_root()`, which attempts to resolve the `root` and falls back to returning the component itself when root is `None`.  
+  As a consequence, lifecycle hooks that depend on an established component hierarchy—such as `on_root_finalized` and `on_parent`—are never triggered for these root components, since no `parent/root` linkage is formed during initialization. Bear this behavior in mind before making changes.
+- Accessing or interacting with the `root` component from a child or grandchild MUST be performed within the `on_root_finalized` lifecycle method.
+- Components MUST NOT attempt to access or rely on the root component before `on_root_finalized` has been executed, as the hierarchy may not yet be fully established.
 
 ### Strict Rule: No Reinventing Existing Components
 
@@ -1431,7 +1436,6 @@ The following sources may help in digging more info on components:
 
 ---
 
-*Last updated from live Duck Framework docs — April 2026.*
-*Source: https://docs.duckframework.com/main/lively-components*
-*Source: https://docs.duckframework.com/main/api/duck/duck.html.components.html*
-*Source: https://docs.duckframework.com/main/api/duck/duck.html.components.page.html*
+*Source: https://docs.duckframework.com/main/lively-components*  
+*Source: https://docs.duckframework.com/main/api/duck/duck.html.components.html*  
+*Source: https://docs.duckframework.com/main/api/duck/duck.html.components.page.html*  
