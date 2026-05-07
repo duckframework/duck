@@ -850,7 +850,11 @@ class DOMPatcher {
             this.unregisterElement(currentUid);
             this.registerElement(newUid, el);
           }
-           
+
+          // Update the cached props immediately for future diffs
+          this.setElementCachedProps(el, newProps);
+          
+          // Schedule the DOM updates in a batch for optimal performance
           this.scheduleUpdate(() => {
             // Animate property changes for visibility
             if (animatePatch) this.animateIn(el);
@@ -881,8 +885,6 @@ class DOMPatcher {
                 this.bindEvents(el, uid, [eventName]);
               }
             }
-            // Update the cached props for future diffs
-            this.setElementCachedProps(el, newProps);
           });
         }
         break;
@@ -894,6 +896,10 @@ class DOMPatcher {
           const cachedStyle = this.getElementCachedStyle(el, false); // Parsing 2nd arg means latest=true, meaning latest style will be fetched.
           const newStyle = payload;
           
+          // Update the cached style immediately for future diffs
+          this.setElementCachedStyle(el, newStyle);
+          
+          // Schedule the DOM updates in a batch for optimal performance
           this.scheduleUpdate(() => {
             // Animate style changes for visibility
             if (animatePatch) this.animateIn(el);
@@ -914,9 +920,6 @@ class DOMPatcher {
                 el.style[camelCasedStyleKey] = newStyle[styleKey];
               }
             }
-            
-            // Update the cached style for future diffs
-            this.setElementCachedStyle(el, newStyle);
           });
         }
         break;

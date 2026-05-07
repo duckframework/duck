@@ -442,10 +442,11 @@ class Page(InnerComponent):
         self.robots = meta(props={"name": "robots", "content": "index, follow"})
         self.lang_http_equiv = meta(props={"http-equiv": "Content-Language", "content": "en"})
         
-        # Title and favicon placeholder
+        # Title, favicon, meta placeholder
         self.title = to_component("", "title")
         self.favicons: List[Component] = []  # support multiple favicons
-        
+        self.meta_tags: List[Component] = []  # support multiple meta tags
+
         # Canonical & pagination links
         self.canonical_link = None
         self.prev_link = None
@@ -521,7 +522,7 @@ class Page(InnerComponent):
                 "height": ".5px",
                 "font-size": ".5rem",
                 "width": "fit-content",
-                "padding": "10px",
+                "padding": "7px 4px",
                 "margin-top": "7px",
                 "margin-left": "auto",
                 "margin-right": "auto",
@@ -531,26 +532,37 @@ class Page(InnerComponent):
         )
         
         # Add snackbar label
-        self.snackbar_label = Label(id="snackbar-label", color="white") 
-        self.snackbar_label.style["text-align"] = "center"
-        self.snackbar_label.style["margin"] = "auto"
+        self.snackbar_label = Label(
+            id="snackbar-label",
+            color="white",
+            style={
+                "text-align": "center",
+                "margin": "auto",
+            }
+        ) 
         self.snackbar.add_child(self.snackbar_label)
         
         # Add snackbar and progress bar
-        self.progress_bar = ProgressBar(id="page-progress-bar")
-        self.progress_bar.style["position"] = "fixed"
-        self.progress_bar.style["z-index"] = "5000"
+        self.progress_bar = ProgressBar(
+            id="page-progress-bar",
+            style={
+                "position": "fixed",
+                "z-index": "50000",
+            }
+        )
         self.add_to_body([self.snackbar, self.progress_bar])
         
         # Add unsupported browser version banner.
         self.unsupported_browser_banner = Modal(
             title="🌐 Unsupported Browser Detected",
             id="unsupported-browser-banner",
+            style={
+                "align-items": "flex-start",
+                "padding": "20px",
+            },
+            add_to_registry=False,
         )
-        self.unsupported_browser_banner.add_to_registry = False
-        self.unsupported_browser_banner.style["align-items"] = "flex-start"
-        self.unsupported_browser_banner.style["padding"] = "20px"
-        
+
         # Minimalist dark modal content styling
         self.unsupported_browser_banner.modal_content.style.update({
             "padding": "24px 20px",               # Classic padding
@@ -673,7 +685,23 @@ class Page(InnerComponent):
         if role:
             self.body.props["role"] = role
             
-    def set_favicon(self, source: str, icon_type: str = "image/png", rel: str = "icon", sizes: Optional[str] = None):
+    def set_meta(self, name: str, content: str) -> NoInnerComponent:
+        """
+        Add a meta tag to the head.
+
+        Args:
+            name: The name attribute of the meta tag.
+            content: The content attribute of the meta tag.
+        
+        Returns:
+            NoInnerComponent: The generated meta component.
+        """
+        meta_tag = to_component("", "meta", no_closing_tag=True, props={"name": name, "content": content})
+        self.meta_tags.append(meta_tag)
+        self.add_to_head(meta_tag)
+        return meta_tag
+
+    def set_favicon(self, source: str, icon_type: str = "image/png", rel: str = "icon", sizes: Optional[str] = None) -> NoInnerComponent:
         """
         Add a favicon or icon link tag.
 

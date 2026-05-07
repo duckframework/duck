@@ -343,6 +343,9 @@ def on_create(self):
   
   from duck.app import App
   from duck.contrib.sync import ensure_async
+
+  # Duck html components imports
+  from duck.html.components.button import Button
   
   # Local imports here
   from web.ui.pages.home import HomePage
@@ -1629,6 +1632,7 @@ Full deployment guide: https://docs.duckframework.com/main/deployment
 - Always generate code that is future proof and ready to scale at any point.
 - Do not overengineer on simple functionality, introducing unnecessary complexity e.g. introducing Mixins, etc.
 - For this arrow character (→), use ➝‬ instead.
+- Write code understandable/readale to humans whenever possible. Use comments to split code purpose/instructions.
 
 ---
 

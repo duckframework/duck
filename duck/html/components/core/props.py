@@ -10,6 +10,9 @@ from typing import (
 )
 
 
+_sentinel = object()
+
+
 class PropertyStore(dict):
     """
     A dictionary subclass to store properties for HTML components, with certain restrictions.
@@ -133,7 +136,7 @@ class PropertyStore(dict):
             return default if default is not None else ''
         return self[k]
 
-    def pop(self, key: str, default: Any = None) -> Any:
+    def pop(self, key: str, default: Any = _sentinel) -> Any:
         """
         Removes the specified key and returns its value.
         If key is not found, default is returned if provided, otherwise KeyError is raised.
@@ -153,7 +156,7 @@ class PropertyStore(dict):
             value = self[k]
             self.__delitem__(k)
             return value
-        elif default is not None:
+        elif default is not _sentinel:
             return default
         else:
             raise KeyError(k)

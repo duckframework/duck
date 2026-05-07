@@ -22,33 +22,49 @@ class Snackbar(FlexContainer):
         super().on_create()
         self.color = "#222"
         self.klass = f"snackbar snackbar-{self.type}"
-        self.style["position"] = "fixed"
-        self.style["top"] = "0"
-        self.style["left"] = "0"
-        self.style["right"] = "0"
-        self.style["text-align"] = "center"
-        self.style["padding"] = "12px 0"
-        self.style["z-index"] = "9999"
-        self.style["transition"] = "transform 0.3s, opacity 0.3s"
-        self.style["transform"] = "translateY(-100%)"
-        self.style["opacity"] = "0"
-        self.style["backdrop-filter"] = self.style["-webkit-backdrop-filter"] = "blur(20px)"
-        self.style["will-change"] = "transform, opacity"
-        self.style["flex-direction"] = "column"
-        self.style["justify-content"] = "center"
-        self.style["align-items"] = "center"
-        self.style["margin-bottom"] = "2px"
         
+        # set default colors for different types
+        self.error_color = self.kwargs.get("error_color", "#f44336")
+        self.info_color = self.kwargs.get("info_color", "#2196f3")
+        self.success_color = self.kwargs.get("success_color", "#43a047")
+        self.warning_color = self.kwargs.get("warning_color", "#FFB300")
+
+        # Base styles for the snackbar
+        self.style.setdefaults({
+            "position": "fixed",
+            "top": "0",
+            "left": "0",
+            "right": "0",
+            "text-align": "center",
+            "padding": "12px 4px",
+            "z-index": "9999",
+            "transition": "transform 0.3s, opacity 0.3s",
+            "transform": "translateY(-100%)",
+            "opacity": "0",
+            "backdrop-filter": "blur(20px)",
+            "-webkit-backdrop-filter": "blur(20px)",
+            "will-change": "transform, opacity",
+            "flex-direction": "column",
+            "justify-content": "center",
+            "align-items": "center",
+            "margin-bottom": "2px",
+        })
+
         bg = None
         
         if self.type == "error":
-            bg = "#f44336"
+            bg = self.error_color
+        
         elif self.type == "info":
-           bg = "#2196f3"
+           bg = self.info_color
+        
         elif self.type == "warning":
-            bg = "#FFB300"
+            bg = self.warning_color
+
         else:
-            bg = "#43a047"
+            bg = self.success_color
+        
+        # Set background color based on type
         self.style["background"] = bg
         
         # Add script to handle show/hide logic.
@@ -61,10 +77,10 @@ class Snackbar(FlexContainer):
                 let bg = null;
                 
                 // Set background color based on type
-                if (type === "error") bg = "#f44336";
-                else if (type === "info") bg = "#2196f3";
-                else if (type === "success") bg = "#43a047";
-                else if (type === "warning") bg = "#FFB300";
+                if (type === "error") bg = "{self.error_color}";
+                else if (type === "info") bg = "{self.info_color}";
+                else if (type === "success") bg = "{self.success_color}";
+                else if (type === "warning") bg = "{self.warning_color}";
                 
                 if (bg) {{
                     snackbar.style.background = bg;
