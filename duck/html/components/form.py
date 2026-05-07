@@ -25,19 +25,18 @@ class Form(InnerComponent):
     
     def on_create(self):
         super().on_create()
+        
+        # Always set form method
+        self.props["method"] = self.kwargs.get("method", "post")
+        
         if "action" in self.kwargs:
             self.props["action"] = self.kwargs.get("action") or "#"
             
-        if "method" in self.kwargs:
-            self.props["method"] = self.kwargs.get("method") or "post"
-        
         if "enctype" in self.kwargs:
             self.props["enctype"] = self.kwargs.get("enctype") or "multipart/form-data"
         
         if "fields" in self.kwargs:
             for field in self.kwargs.get("fields", []):
-                field.style["border-radius"] = Theme.border_radius
-                field.style["font-size"] = "1.5rem"
                 if "class" in field.props:
                     field.props["class"] += " form-control"
                 else:
