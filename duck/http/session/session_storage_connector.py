@@ -27,13 +27,20 @@ def get_session_storage_connector():
     return globals.session_storage_connector
 
 
-class NonPersistentStorageError(Exception):
-    pass
+class SessionStorageConnectorError(Exception):
+    """
+    Raised when errors related to the session storage connector arises
+    """
 
 
 class SessionStorageConnector:
     """
     This class is used to connect to the session storage and perform almost all the operations on the session storage
+    """
+    
+    CACHED_SESSIONS = InMemoryCache(maxkeys=1024 * 4)
+    """
+    In Memory cache for sessions.
     """
 
     def __init__(self, session_storage_cls: Callable):
@@ -41,7 +48,7 @@ class SessionStorageConnector:
         Initialize SessionStorageConnector
 
         Args:
-                session_storage_cls (Callable): Class to initialize the session storage object
+            session_storage_cls (Callable): Class to initialize the session storage object
         """
         self.session_dir = SETTINGS["SESSION_DIR"]
         self.session_storage_cls = session_storage_cls
@@ -74,6 +81,10 @@ class SessionStorageConnector:
             self._session_storage.set(session_id, data, expiry)
         else:
             self._session_storage.set(session_id, data)
+        
+        # Update cache in memory also - only if not in memory cache is used
+        if not issubclass(self.session_storage_cls, InMemoryCache):
+            self.CACHED_SESSIONS.set(session_id, data, expiry=expiry)
 
     def update_session(self, session_id: str, data: dict):
         """
@@ -87,6 +98,14 @@ class SessionStorageConnector:
         """
         Get the session data.
         """
+        # Get session from cache - only if not in memory cache is used
+        if not issubclass(self.session_storage_cls, InMemoryCache):
+            session = self.CACHED_SESSIONS.get(session_id)
+
+            if session is not None:
+                return session
+        
+        # Get session from real storage
         return self._session_storage.get(session_id)
 
     def delete_session(self, session_id: str):
@@ -119,9 +138,8 @@ class SessionStorageConnector:
         if not Meta.get_metadata("SESSION_STORAGE_SET"):
             Meta.set_metadata("SESSION_STORAGE_SET", True)
         else:
-            if issubclass(session_storage_cls, InMemoryCache):
-                raise NonPersistenceStorageError(
-                    "SessionStorageConnector should only be instantiated once. Multiple instances may lead to data inconsistency, "
-                    "corruption, or loss. Ensure that the SessionStorageConnector is created only once throughout the application lifecycle."
-                )
+            raise SessionStorageConnectorError(
+                "SessionStorageConnector should only be instantiated once. Multiple instances may lead to data inconsistency, "
+                "corruption, or loss. Ensure that the SessionStorageConnector is created only once throughout the application lifecycle."
+            )
         return super().__new__(cls)
