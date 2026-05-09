@@ -823,7 +823,7 @@ class App:
         """
         if sig in [signal.SIGINT, signal.SIGTERM]:
             logger.log_raw("") # print a blank line to separate ^C and Stop message.
-            self.stop()
+            self.stop(wait_for_thread_pool_executor_shutdown=False)
     
     def stop_servers(
         self,
@@ -841,7 +841,8 @@ class App:
         """
         self.server.stop_server(log_to_console=log_to_console, wait=wait)
         
-        if (stop_force_https_server
+        if (
+            stop_force_https_server
             and self.force_https_app_process
             and self.force_https_app_process.is_alive()
         ):
@@ -896,17 +897,14 @@ class App:
                 hasattr(self, "last_request")
                 and self.last_request
                 and hasattr(self.last_request.SESSION, "session_storage_connector") 
-                 and self.last_request.SESSION.session_storage_connector
-                ):
-                    # Close the session storage connector
-                    self.last_request.SESSION.session_storage_connector.close()
+                and self.last_request.SESSION.session_storage_connector
+            ):
+                # Close the session storage connector
+                self.last_request.SESSION.session_storage_connector.close()
                     
         except Exception as e:
             logger.log_raw('\n')
-            logger.log(
-                f"Error while closing session storage: {e}",
-                level=logger.WARNING,
-            )
+            logger.log(f"Error while closing session storage: {e}", level=logger.WARNING)
 
         try:
             # Stop all servers
@@ -1135,11 +1133,7 @@ class App:
         
         if SETTINGS['ENABLE_COMPONENT_SYSTEM']:
             # Components are enabled
-            logger.log(
-                "Lively Component System active"
-                f"\n  └── Some components require JQuery & Bootstrap +icons ",
-                level=logger.DEBUG,
-            )
+            logger.log("Lively Component System active", level=logger.DEBUG)
             
             # Check if CSP headers are set correctly for component system to run nicely.
             csp_directives = SETTINGS['CSP_TRUSTED_SOURCES']

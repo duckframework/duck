@@ -55,7 +55,7 @@ class BaseMiddleware:
         return getattr(type(cls), key, None)
 
     @classmethod
-    def get_error_response(cls, request):
+    def get_error_response(cls, request: HttpRequest):
         """
         Returns the error response when process_request returns `BaseMiddleware.request_bad`.
         """
@@ -67,7 +67,7 @@ class BaseMiddleware:
         """
         Processes the incoming request.
         """
-        raise NotImplementedError(f"The method `process_request` should be implemented: {cls}")
+        raise NotImplementedError(f"The method `process_request` must be implemented: {cls}")
 
     @classmethod
     def process_response(

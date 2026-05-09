@@ -4,6 +4,7 @@ Asyncio utilities and helpers.
 import asyncio
 
 from typing import Coroutine, Callable, List, Type, Optional
+from duck.exceptions.all import AsyncViolationError
 
 
 def create_task(
@@ -82,3 +83,12 @@ def in_async_context() -> bool:
         return True
     except RuntimeError:
         return False
+
+
+def raise_if_in_async_context(message):
+    """
+    Raises AsyncViolationError if in async context
+    """
+    if in_async_context():
+        raise AsyncViolationError(message)
+    

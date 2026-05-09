@@ -522,7 +522,7 @@ class Page(InnerComponent):
                 "height": ".5px",
                 "font-size": ".5rem",
                 "width": "fit-content",
-                "padding": "7px 4px",
+                "padding": "8px 4px",
                 "margin-top": "7px",
                 "margin-left": "auto",
                 "margin-right": "auto",

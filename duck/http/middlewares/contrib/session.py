@@ -38,6 +38,14 @@ class SessionMiddleware(BaseMiddleware):
     debug_message: str = "SessionMiddleware: Session Error"
 
     @classmethod
+    def get_session_key_from_cookie(cl, request: HttpRequest) -> Optional[str]:
+        """
+        Returns the session key from request COOKIE.
+        """
+        session_cookie_name = SETTINGS["SESSION_COOKIE_NAME"]
+        return request.COOKIES.get(session_cookie_name)
+        
+    @classmethod
     def process_request(cls, request: HttpRequest) -> int:
         """
         Load an existing session from the cookie, or create a fresh one.
@@ -51,25 +59,14 @@ class SessionMiddleware(BaseMiddleware):
         Returns:
             int: cls.request_ok always — session errors are non-fatal.
         """
-        session_cookie_name = SETTINGS["SESSION_COOKIE_NAME"]
-        session_key = request.COOKIES.get(session_cookie_name)
-        session_exists = False
-
-        if session_key:
+        # NOTE: Sessions are now loaded lazily on access/update
+        session_key = cls.get_session_key_from_cookie(request)
+        
+        if session_key is not None:
             request.SESSION.session_key = session_key
-            try:
-                data = request.SESSION.load()
-                if data:
-                    session_exists = True
-            except KeyError:
-                # Cookie present but session no longer in storage — treat as new
-                pass
-
-        if not session_exists and not session_key:
-            # Brand new visitor — allocate a session slot now
-            request.SESSION.create()
-
-        request.session_exists = session_exists
+        else:
+            # Brand new visitor — generate session key
+            request.SESSION.assign_new_session_key()
         return cls.request_ok
 
     @classmethod
@@ -85,48 +82,47 @@ class SessionMiddleware(BaseMiddleware):
             response: The outgoing HTTP response object.
             request: The corresponding HTTP request.
         """
-        from duck.http.session.engine import SessionExpired
-
-        if not request.SESSION.needs_update():
+        # Set session
+        session = request.SESSION
+        
+        if not session.needs_update():
             # Nothing changed — skip the DB write and cookie overhead
             return
 
-        # Initialize variable for storing session expiry.
-        session_expired = False
+        # Initialize variable for storing session info.
+        session_expired = session.session_expired()
+        session_key_from_cookie = cls.get_session_key_from_cookie(request)
+        session_cookie_present = bool(session_key_from_cookie)
 
-        try:
-            request.SESSION.save()
-        except SessionExpired:
-            # Session TTL elapsed between request and response — reset it
-            session_expired = True
-            request.set_expiry(None)  # Falls back to SESSION_AGE from settings
-            request.SESSION.save()
+        if session_expired:
+            # Session expired between request and response — reset it
+            session.set_expiry(None)  # Falls back to SESSION_COOKIE_AGE from settings
 
-        if request.session_exists or session_expired:
+        # Save the session to the DB, generating a new session key if it expired
+        session.save()
+
+        # Decide whether to send session cookie
+        if session_cookie_present and not session_expired:
             # Client already holds a valid cookie — no need to resend it
             return
 
         # New session — build and attach the Set-Cookie header
-        expire_at_browser_close = SETTINGS["SESSION_EXPIRE_AT_BROWSER_CLOSE"]
-        expires = request.SESSION.get_expiry_date() if not expire_at_browser_close else None
-        session_key = request.SESSION.session_key
-        session_cookie_name = SETTINGS["SESSION_COOKIE_NAME"]
-        session_cookie_domain = (
-            SETTINGS["SESSION_COOKIE_DOMAIN"]
-            or Meta.get_metadata("DUCK_SERVER_DOMAIN")
-        )
         path = SETTINGS["SESSION_COOKIE_PATH"]
         secure = SETTINGS["SESSION_COOKIE_SECURE"]
         httponly = SETTINGS["SESSION_COOKIE_HTTPONLY"]
         samesite = SETTINGS["SESSION_COOKIE_SAMESITE"]
-
+        expire_at_browser_close = SETTINGS["SESSION_EXPIRE_AT_BROWSER_CLOSE"]
+        expires = session.get_expiry_date() if not expire_at_browser_close else None
+        session_cookie_name = SETTINGS["SESSION_COOKIE_NAME"]
+        session_cookie_domain = SETTINGS["SESSION_COOKIE_DOMAIN"] or Meta.get_metadata("DUCK_SERVER_DOMAIN")
+        
         if session_cookie_name in response.cookies:
             # Something else already wrote the cookie — don't overwrite it
             return
-
+        
         response.set_cookie(
             session_cookie_name,
-            value=session_key,
+            value=session.session_key,
             domain=session_cookie_domain,
             path=path,
             expires=expires,
@@ -148,43 +144,47 @@ class SessionMiddleware(BaseMiddleware):
             ws: The LivelyWebSocketView handling the current event.
             request: The shared HTTP request.
         """
-        from duck.http.session.engine import SessionExpired
         from duck.contrib.sync import ensure_async
+
+        # Set session
+        session = request.SESSION
         
-        if not request.SESSION.needs_update():
+        if not session.needs_update():
+            # Nothing changed — skip the DB write and cookie overhead
             return
 
-        session_expired = False
+        # Initialize variable for storing session info.
+        session_expired = session.session_expired()
+        session_key_from_cookie = cls.get_session_key_from_cookie(request)
+        session_cookie_present = bool(session_key_from_cookie)
 
-        try:
-            await ensure_async(request.SESSION.save)()
-        except SessionExpired:
-            session_expired = True
-            request.set_expiry(None)
-            await ensure_async(request.SESSION.save)()
+        if session_expired:
+            # Session expired between request and response — reset it
+            session.set_expiry(None)  # Falls back to SESSION_COOKIE_AGE from settings
 
-        # Cookie already in the browser — nothing more to do
-        if request.session_exists and not session_expired:
+        # Save the session to the DB, generating a new session key if it expired
+        await session.async_save()
+
+        # Decide whether to send session cookie
+        if session_cookie_present and not session_expired:
+            # Client already holds a valid cookie — no need to resend it
             return
 
         # New or expired session — push the cookie via JS since no HTTP
         # response headers are available over an active WebSocket connection
-        session_key = request.SESSION.session_key
-        session_cookie_name = SETTINGS["SESSION_COOKIE_NAME"]
-        session_cookie_domain = (
-            SETTINGS["SESSION_COOKIE_DOMAIN"]
-            or Meta.get_metadata("DUCK_SERVER_DOMAIN")
-        )
-        expire_at_browser_close = SETTINGS["SESSION_EXPIRE_AT_BROWSER_CLOSE"]
         path = SETTINGS["SESSION_COOKIE_PATH"]
         secure = SETTINGS["SESSION_COOKIE_SECURE"]
         samesite = SETTINGS["SESSION_COOKIE_SAMESITE"]
-
+        session_cookie_name = SETTINGS["SESSION_COOKIE_NAME"]
+        session_cookie_domain = SETTINGS["SESSION_COOKIE_DOMAIN"] or Meta.get_metadata("DUCK_SERVER_DOMAIN")
+        expire_at_browser_close = SETTINGS["SESSION_EXPIRE_AT_BROWSER_CLOSE"]
+        
         # Build the cookie string the same way a Set-Cookie header would
-        cookie_parts = [f"{session_cookie_name}={session_key}"]
+        cookie_parts = [f"{session_cookie_name}={session.session_key}"]
 
         if not expire_at_browser_close:
-            expires = request.SESSION.get_expiry_date()
+            expires = session.get_expiry_date()
+            
             # Format as UTC string that document.cookie understands
             cookie_parts.append(f"expires={expires.strftime('%a, %d %b %Y %H:%M:%S GMT')}")
 
@@ -204,7 +204,4 @@ class SessionMiddleware(BaseMiddleware):
 
         # Set on client — only way to deliver a cookie over WebSocket
         await ws.execute_js(f"document.cookie = {cookie_str!r};")
-        
-        # Mark session as existing so subsequent events in the same WS
-        # connection don't re-send the cookie unnecessarily
-        request.session_exists = True
+

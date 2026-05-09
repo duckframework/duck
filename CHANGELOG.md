@@ -10,6 +10,7 @@ and this project adheres to Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+
 - Functions `static_filepath` & `media_filepath` from `duck.shortcuts` module.
 - Added argument `absolute` to functions `media` & `static` from `duck.shortcuts` module.
 - Added argument `log_results` to decorators `exec_time` & `async_exec_time` of `duck.utils.performance` module.
@@ -19,11 +20,15 @@ and this project adheres to Semantic Versioning.
 - Added method `set_meta` to Page component.
 
 ### Changed
+
 - Refactored functions `static` and `media` to support external URLs. Supported only internal URL's before.
 - Refined AI guidelines in [ai](./ai/) directory.
 - Made the middleware `duck.http.middlewares.contrib.WWWRedirectMiddleware` optional, it's no longer included in MIDDLEWARES by default.
+- Changed `create()` method of `SessionStore` to a clearer name `assign_new_session_key`.
+- Made request sessions to be lazily loaded upon access or modification.
 
 ### Fixed
+
 - Lively Navigation bug when trying to navigate from a URL with a fragment e.g. https://duckframework.com#something -> any internal URL.
 
 ---

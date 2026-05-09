@@ -1286,16 +1286,17 @@ class Request:
         return headers
     
     def __repr__(self):
-        return (f"<{self.__class__.__name__} ("
-                f'{self.protocol!r} '
-                f"method={self.method!r}, "
-                f"path={self.path!r}, "
-                f"error={self.error!r}, "
-                f"ID={self.ID!r}, "  # unique identifier
-                f"content=..., "  # Truncated content representation
-                f"query=...)>"  # Truncated query representation
-                )[:]
+        return (
+            f"<{self.__class__.__name__} ("
+            f'{self.protocol!r} '
+            f"method={self.method!r}, "
+            f"path={self.path!r}, "
+            f"error={self.error!r}, "
+            f"ID={self.ID!r}, "  # unique identifier
+            f"content=..., "  # Truncated content representation
+            f"query=...)>"  # Truncated query representation
+        )[:]
 
 
-# Sets http request
+# Alias for HttpRequest
 HttpRequest = Request

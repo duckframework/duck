@@ -569,9 +569,13 @@ class EventHandler:
                         )
                         request.parse_request(topheader, headers, content=b'')
                         
-                        # Update the request session from the previous request.
-                        prev_request = prev_component.get_raw_root().request
-                        request.SESSION.update(prev_request.session)
+                        # Update the request session from the latest request.
+                        latest_request = ws_view.request
+
+                        request.SESSION.session_key = latest_request.SESSION.session_key
+                        request.SESSION.update(latest_request.SESSION)
+                        request.SESSION._loaded = latest_request.SESSION.loaded
+                        request.SESSION._modified = latest_request.SESSION.modified
                         
                         # Ensure session saved
                         await self.ensure_session_saved(request=request)

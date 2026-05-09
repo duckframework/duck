@@ -50,6 +50,7 @@ class DuckSightReloader:
         """
         try:
             event_handler = Handler()
+
             self.observer.schedule(event_handler, self.watch_dir, recursive=True)
             self.observer.start()
             
@@ -112,8 +113,11 @@ class Handler(FileSystemEventHandler):
         """
         from duck.app import App
         
-        mainapp = App.get_main_app()
-        mainapp.stop(
+        # Get the main app instance
+        app = App.get_main_app()
+
+        # Stop the app without exiting the process or killing the reloader
+        app.stop(
             log_to_console=False,
             no_exit=True,
             kill_ducksight_reloader=False,

@@ -120,7 +120,8 @@ class PersistentFileCache(CacheBase):
         self.path = path
         self.cache_size = cache_size
         self._closed = False
-        self._cache = (diskcache.Cache(path, size_limit=cache_size, sqlite_timeout=30) if cache_size
+        self._cache = (
+            diskcache.Cache(path, size_limit=cache_size, sqlite_timeout=30) if cache_size
             else diskcache.Cache(path, sqlite_timeout=30)
         )
         
@@ -204,7 +205,6 @@ class DynamicFileCache(CacheBase):
             size = sum(f.stat().st_size for f in dir_entry.iterdir())
             if size < self.cache_limit:
                 return str(dir_entry)
-
         new_path = self._create_new_cache_path()
         self._cache_files.append(Path(new_path))
         return new_path
@@ -342,7 +342,7 @@ class KeyAsFolderCache(CacheBase):
         cache_data = cache_obj.get(key)
 
         if cache_data is None:
-            # remove cache data folder because the key might have expired
+            # Remove cache data folder because the key might have expired
             try:
                 shutil.rmtree(cache_data_path)
             except OSError:
