@@ -893,15 +893,9 @@ class App:
                     
         # Cleanup session cache
         try:
-            if (
-                hasattr(self, "last_request")
-                and self.last_request
-                and hasattr(self.last_request.SESSION, "session_storage_connector") 
-                and self.last_request.SESSION.session_storage_connector
-            ):
-                # Close the session storage connector
-                self.last_request.SESSION.session_storage_connector.close()
-                    
+            # Close the session storage connector
+            SettingsLoaded.SESSION_STORAGE_CONNECTOR.close()
+            
         except Exception as e:
             logger.log_raw('\n')
             logger.log(f"Error while closing session storage: {e}", level=logger.WARNING)

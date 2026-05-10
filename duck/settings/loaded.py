@@ -378,6 +378,7 @@ class Loaded:
     """
     def __init__(self):
         from duck.etc.templatetags import BUILTIN_TEMPLATETAGS
+        from duck.http.session.session_storage_connector import SessionStorageConnector
         
         self.WSGI = Lazy(get_wsgi)
         self.ASGI = Lazy(get_asgi)
@@ -408,6 +409,7 @@ class Loaded:
         self.NORMALIZERS = Lazy(get_normalizers)
         self.SESSION_STORAGE = get_session_storage()
         self.SESSION_STORE = Lazy(get_session_store)
+        self.SESSION_STORAGE_CONNECTOR = Lazy(lambda: SessionStorageConnector(self.SESSION_STORAGE))
         self.REQUEST_HANDLING_TASK_EXECUTOR = Lazy(get_request_handling_task_executor)
         self.PREFERRED_LOG_STYLE = Lazy(get_preferred_log_style)
         
