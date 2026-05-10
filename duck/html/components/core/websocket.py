@@ -570,7 +570,7 @@ class EventHandler:
                         request.parse_request(topheader, headers, content=b'')
                         
                         # Update the request session from the latest request.
-                        latest_request = ws_view.request
+                        latest_request = self.ws_view.request
 
                         request.SESSION.session_key = latest_request.SESSION.session_key
                         request.SESSION.update(latest_request.SESSION)

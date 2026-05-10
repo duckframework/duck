@@ -6,6 +6,7 @@ The session cookie is established once on the initial HTTP handshake.
 Lively events share that same request object, so they only need to
 persist any session mutations — no cookie header can be sent mid-WebSocket.
 """
+from typing import Optional
 
 from duck.settings import SETTINGS
 from duck.http.middlewares import BaseMiddleware
