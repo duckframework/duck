@@ -204,5 +204,4 @@ class SessionMiddleware(BaseMiddleware):
         cookie_str = "; ".join(cookie_parts)
 
         # Set on client — only way to deliver a cookie over WebSocket
-        await ws.execute_js(f"document.cookie = {cookie_str!r};")
-
+        await ws.execute_js(f"document.cookie = {cookie_str!r};", wait_for_result=True)

@@ -1238,6 +1238,7 @@ Before writing code that uses a Duck component you're unsure about:
   As a consequence, lifecycle hooks that depend on an established component hierarchy—such as `on_root_finalized` and `on_parent`—are never triggered for these root components, since no `parent/root` linkage is formed during initialization. Bear this behavior in mind before making changes.
 - Accessing or interacting with the `root` component from a child or grandchild MUST be performed within the `on_root_finalized` lifecycle method.
 - Components MUST NOT attempt to access or rely on the root component before `on_root_finalized` has been executed, as the hierarchy may not yet be fully established.
+- Components that will be used in event handlers or other relatable methods must be attached to self.
 
 ### Strict Rule: No Reinventing Existing Components
 
@@ -1407,6 +1408,8 @@ Button()  # then later setting display
 - ❌ Skipping IDs on complex components
 - ❌ Mixing construction and mutation styles
 - ❌ Binding events before root is finalized (when root-dependent)
+- ❌ Trying to alter root/parent directly through attribute alteration
+- ❌ Binding events to components that will never be in the component tree
 
 ---
 

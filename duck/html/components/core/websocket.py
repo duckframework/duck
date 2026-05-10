@@ -297,6 +297,7 @@ class EventHandler:
         """
         try:
             handler = self.event_map.get(opcode, None)
+            
             if not handler:
                 await self.send_close(CloseCode.INVALID_DATA, reason="Unknown event opcode.")
             else:
@@ -387,6 +388,7 @@ class EventHandler:
         
         # If session changed on event, this saves session even on Lively components
         root_request = component.get_raw_root().request
+        print(root_request.SESSION, root_request.SESSION.session_key, root_request.SESSION.needs_update())
         await self.ensure_session_saved(request=root_request)
         
         async def on_force_update_patch(patch):
@@ -569,16 +571,9 @@ class EventHandler:
                         )
                         request.parse_request(topheader, headers, content=b'')
                         
-                        # Update the request session from the latest request.
-                        latest_request = self.ws_view.request
-
-                        request.SESSION.session_key = latest_request.SESSION.session_key
-                        request.SESSION.update(latest_request.SESSION)
-                        request.SESSION._loaded = latest_request.SESSION.loaded
-                        request.SESSION._modified = latest_request.SESSION.modified
-                        
-                        # Ensure session saved
-                        await self.ensure_session_saved(request=request)
+                        # Assign last session from the root component request.
+                        root_request = prev_component.get_raw_root().request
+                        request.SESSION = root_request.SESSION or self.ws_view.request.SESSION
                         
                         # Reuse CSP nonce from last session to avoid unmatching nonces on patching
                         first_request = self.ws_view.request
@@ -597,7 +592,10 @@ class EventHandler:
                             next_component = response.component
                             if not next_component.is_loaded():
                                 await convert_to_async_if_needed(next_component.load)()
-                    
+                        
+                        # Ensure that session is saved
+                        await self.ensure_session_saved(request)
+                        
                     # Check if next component has been set somehow e.g. from ComponentResponse
                     if next_component:
                         # Set dummy response and request (for logging)
