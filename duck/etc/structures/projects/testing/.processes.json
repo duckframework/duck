@@ -1,1 +1,1 @@
-{"main": {"pid": 29229, "start_time": 1774707884.9507627, "sys_argv": ["python3.13 -m unittest", "discover", "-s", "/storage/emulated/0/#code/duck/duck/tests", "-p", "test_*.py", "-t", "/storage/emulated/0/#code/duck/duck/tests"], "log_file": null}}
+{"main": {"pid": 5564, "start_time": 1778407554.3240042, "sys_argv": ["python -m unittest", "discover", "-s", "duck/tests", "-p", "test_*.py"], "log_file": null}}
