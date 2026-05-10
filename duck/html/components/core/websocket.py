@@ -364,6 +364,9 @@ class EventHandler:
         if is_document_event and event_name == "DOMContentLoaded" and getattr(component, "_domcontentloaded_event_called", False):
             return
             
+        # Initialize before event handlers in cases the component itself get removed from component tree.
+        root_request = component.get_raw_root().request
+        
         # Execute event and send patches/updates
         event_handler: Union[Callable, EventHandlerChain]
         update_targets: Set[HtmlComponent]
@@ -387,8 +390,6 @@ class EventHandler:
             event_handler_execution_results = await event_handler_chain.async_execute((component, event_name, value, self.ws_view), restart=False)
         
         # If session changed on event, this saves session even on Lively components
-        root_request = component.get_raw_root().request
-        print(root_request.SESSION, root_request.SESSION.session_key, root_request.SESSION.needs_update())
         await self.ensure_session_saved(request=root_request)
         
         async def on_force_update_patch(patch):
@@ -571,9 +572,12 @@ class EventHandler:
                         )
                         request.parse_request(topheader, headers, content=b'')
                         
-                        # Assign last session from the root component request.
-                        root_request = prev_component.get_raw_root().request
-                        request.SESSION = root_request.SESSION or self.ws_view.request.SESSION
+                        # Update the request session from the latest request.
+                        latest_request = self.ws_view.request
+                        request.SESSION.session_key = latest_request.SESSION.session_key
+                        request.SESSION.update(latest_request.SESSION)
+                        request.SESSION._loaded = latest_request.SESSION.loaded
+                        request.SESSION._modified = latest_request.SESSION.modified
                         
                         # Reuse CSP nonce from last session to avoid unmatching nonces on patching
                         first_request = self.ws_view.request
@@ -593,8 +597,8 @@ class EventHandler:
                             if not next_component.is_loaded():
                                 await convert_to_async_if_needed(next_component.load)()
                         
-                        # Ensure that session is saved
-                        await self.ensure_session_saved(request)
+                        # Ensure session saved through JS
+                        await self.ensure_session_saved(request=request)
                         
                     # Check if next component has been set somehow e.g. from ComponentResponse
                     if next_component:
