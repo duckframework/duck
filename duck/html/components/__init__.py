@@ -743,7 +743,7 @@ class HtmlComponent:
         Returns the raw root reference without evaluation,
         even if the root is self (unlike the `root` property).
         """
-        return self.__root
+        return self.__root or self
             
     def isroot(self) -> bool:
         """
