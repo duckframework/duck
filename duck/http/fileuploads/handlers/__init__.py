@@ -51,6 +51,26 @@ class BaseFileUpload(io.BytesIO):
 
         # Map additional keyword arguments to instance attributes
         map_data_to_object(self, kw)
+    
+    def normalize_filename(self) -> str:
+        """
+        Normalize the filename by spaces or invalid characters.
+
+        Returns:
+            str: The normalized filename.
+        """
+        self.filename = self.filename.strip().replace(" ", "-")
+        return self.filename
+
+    def geturl(self, absolute=True):
+        """
+        Get the URL for accessing the uploaded file.
+
+        Returns:
+            str: The URL for accessing the uploaded file.
+        """
+        from duck.shortcuts import media
+        return media(self.filename, absolute=absolute)
 
     def getsize(self):
         """
@@ -130,7 +150,7 @@ class TemporaryFileUpload(BaseFileUpload):
         """
         Save the uploaded data. In this case, the method does nothing.
         """
-        raise NotImplementedErro("TemporaryFileUpload cannot be saved as it is stored in memory, implement this method.")
+        raise NotImplementedError("TemporaryFileUpload cannot be saved as it is stored in memory, implement this method.")
 
 
 class PersistentFileUpload(BaseFileUpload):
@@ -167,9 +187,9 @@ class PersistentFileUpload(BaseFileUpload):
 
         if os.path.isfile(self.filepath) and not overwrite_existing_file:
             raise FileUploadError(
-                "File '{self.filepath}' already exists and argument 'overwrite_existing_file' is not True "
+                f"File '{self.filepath}' already exists and argument 'overwrite_existing_file' is not True "
             )
-
+            
         super().__init__(filename, initial_bytes, **kw)
 
     def save_to_file(self):

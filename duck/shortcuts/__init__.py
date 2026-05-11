@@ -10,6 +10,8 @@ The module also defines `URLResolveError`, an exception raised when
 URL resolution fails.
 """
 import io
+import inspect
+import pathlib
 
 from typing import (
     Optional,
@@ -201,9 +203,10 @@ def static_filepath(relative_filepath: str, blueprint: Optional[Blueprint] = Non
     if SETTINGS['DEBUG']:
         if blueprint:
             file = joinpaths(blueprint.root_directory, blueprint.static_dir, relative_filepath)
+            return file
         else:
             global_static_dirs = SETTINGS['GLOBAL_STATIC_DIRS']
-            
+
             if len(global_static_dirs) > 1 and not target_static_dir:
                 raise SettingsError("More than 1 global static dirs detected in settings.py. Please provide 'target_static_dir' as an argument.")
             
@@ -230,7 +233,7 @@ def static_filepath(relative_filepath: str, blueprint: Optional[Blueprint] = Non
             # Set staticdir without staticdir name
             blueprint_stripped_staticdir = str(relative_static_dir).lstrip(staticdir_name)
             target_static_dir = joinpaths(
-                static_root,
+                target_static_dir,
                 blueprint.name,
                 blueprint_stripped_staticdir,
             )
@@ -581,7 +584,7 @@ def streaming_content_replace(
                 "Wrap your content in a generator or iterable."
             )
             
-        if not isinstance(content, Iterable) and not isasyncgen(content):
+        if not isinstance(content, Iterable) and not inspect.isasyncgen(content):
             raise TypeError(
                 f"Expected an iterable, generator or async_generator, got {type(content).__name__}"
             )
@@ -603,7 +606,7 @@ def streaming_content_replace(
                 "Wrap your content in a generator or iterable."
             )
             
-        if not isinstance(content, Iterable) and not isasyncgen(content):
+        if not isinstance(content, Iterable) and not inspect.isasyncgen(content):
             raise TypeError(
                 f"Expected an iterable, generator or async_generator, got {type(content).__name__}"
             )
