@@ -30,6 +30,9 @@ class SessionStorageConnector:
     """
     This class is used to connect to the session storage and perform almost all the operations on the session storage
     """
+
+    _instance = None
+    _initialized = False
     
     CACHED_SESSIONS = InMemoryCache(maxkeys=1024 * 4)
     """
@@ -43,6 +46,13 @@ class SessionStorageConnector:
         Args:
             session_storage_cls (Callable): Class to initialize the session storage object
         """
+        if self.__class__._initialized:
+            if session_storage_cls is not self.session_storage_cls:
+                raise SessionStorageConnectorError(
+                    "SessionStorageConnector already initialized with a different session storage class."
+                )
+            return
+
         self.session_dir = SETTINGS["SESSION_DIR"]
         self.session_storage_cls = session_storage_cls
 
@@ -53,6 +63,8 @@ class SessionStorageConnector:
             self._session_storage = session_storage_cls()
         except TypeError:
             self._session_storage = session_storage_cls(self.session_dir)
+
+        self.__class__._initialized = True
 
     @staticmethod
     def generate_session_id() -> str:
@@ -128,11 +140,7 @@ class SessionStorageConnector:
     def __new__(cls, session_storage_cls: CacheBase):
         from duck.meta import Meta
 
-        if not Meta.get_metadata("SESSION_STORAGE_SET"):
+        if cls._instance is None:
             Meta.set_metadata("SESSION_STORAGE_SET", True)
-        else:
-            raise SessionStorageConnectorError(
-                "SessionStorageConnector should only be instantiated once. Multiple instances may lead to data inconsistency, "
-                "corruption, or loss. Ensure that the SessionStorageConnector is created only once throughout the application lifecycle."
-            )
-        return super().__new__(cls)
+            cls._instance = super().__new__(cls)
+        return cls._instance

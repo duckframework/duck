@@ -113,7 +113,9 @@ def to_django_uploadedfile(fileupload: BaseFileUpload) -> SimpleUploadedFile:
 
 
 def duck_to_django_request(request):
-    """Converts Duck's HTTP request to Django's HttpRequest."""
+    """
+    Converts Duck's HTTP request to Django's HttpRequest.
+    """
     meta = request.META
 
     # Create a new Django HttpRequest object
@@ -188,11 +190,22 @@ def django_to_duck_request(django_request: DjangoHttpRequest):
     payload = get_raw_django_payload(django_request)
     new_request = HttpRequest()
     body = b''
+    
     try:
         body = django_request.body
     except RawPostDataException:
         pass
-    new_request.parse_raw_request(payload + b"\r\n")
+
+    # Parse the raw request using Duck's HttpRequest parser
+    new_request.parse_raw_request(payload + b"\r\n" + body)
+    
+    # Copy authentication and session data
+    new_request.AUTH = getattr(django_request, "AUTH", new_request.AUTH)
+    new_request.SESSION = getattr(django_request, "session", new_request.SESSION)
+
+    # Set user if it exists in the Django request
     if hasattr(django_request, "user"):
         new_request.user = django_request.user
+    
+    # Return the new Duck HttpRequest object
     return new_request
