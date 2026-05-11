@@ -10,14 +10,11 @@ import string
 import datetime
 import random
 import diskcache
+import threading
 
-from pathlib import Path
 from typing import Any
-from collections import (
-    deque,
-    defaultdict,
-    OrderedDict,
-)
+from pathlib import Path
+from collections import (deque, OrderedDict)
 from functools import lru_cache
 
 
@@ -280,7 +277,7 @@ class DynamicFileCache(CacheBase):
             try:
                 obj = self.get_cache_obj(p)
                 obj.delete(key)
-            except:
+            except Exception:
                 pass
 
     def clear(self):
@@ -291,7 +288,7 @@ class DynamicFileCache(CacheBase):
             try:
                 obj = self.get_cache_obj(p)
                 obj.clear()
-            except:
+            except Exception:
                 pass
 
     def close(self):
@@ -302,7 +299,7 @@ class DynamicFileCache(CacheBase):
             try:
                 obj = self.get_cache_obj(p)
                 obj.close()
-            except:
+            except Exception:
                 pass
 
 
@@ -373,7 +370,7 @@ class KeyAsFolderCache(CacheBase):
         try:
             obj = self.get_cache_obj(key_cache_dir)
             obj.clear()
-        except:
+        except Exception:
             pass
 
     def clear(self):
@@ -384,19 +381,30 @@ class KeyAsFolderCache(CacheBase):
             try:
                 obj = self.get_cache_obj(p)
                 obj.clear()
-            except:
+            except Exception:
                 pass
 
     def close(self):
         """
         Closes the cache.
         """
-        for p in self.get_cache_files(self.cache_dir):
-            try:
-                obj = self.get_cache_obj(p)
-                obj.close()
-            except:
-                pass
+        # Close all per-key caches in a background thread so that closing
+        # the `KeyAsFolderCache` returns quickly even when there are many
+        # key-folders. The actual work of closing each `PersistentFileCache`
+        # runs asynchronously.
+        cache_paths = self.get_cache_files(self.cache_dir)
+
+        def _close_all(paths):
+            for p in paths:
+                try:
+                    # ensure we obtain the cache object for this path and close it
+                    obj = self.get_cache_obj(str(p))
+                    obj.close()
+                except Exception:
+                    pass
+
+        t = threading.Thread(target=_close_all, args=(cache_paths,), daemon=True)
+        t.start()
 
 
 class CacheSpeedTest:
@@ -441,7 +449,7 @@ class CacheSpeedTest:
     def test_get(self, instance):
         instance = instance("./test")
         start = time.time()
-        value = instance.get(self.key)
+        _ = instance.get(self.key)
         stop = time.time()
         elapse = stop - start
         return elapse
@@ -449,7 +457,7 @@ class CacheSpeedTest:
     def test_del(self, instance):
         instance = instance("./test")
         start = time.time()
-        value = instance.delete(self.key)
+        _ = instance.delete(self.key)
         stop = time.time()
         elapse = stop - start
         return elapse
@@ -457,7 +465,7 @@ class CacheSpeedTest:
     def test_clear(self, instance):
         instance = instance("./test")
         start = time.time()
-        value = instance.clear()
+        _ = instance.clear()
         stop = time.time()
         elapse = stop - start
         return elapse

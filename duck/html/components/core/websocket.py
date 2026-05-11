@@ -7,12 +7,13 @@ import msgpack
 
 from typing import (
     List,
+    Set,
     Dict,
     Union,
     Any,
-    Tuple,
     Optional,
     Iterable,
+    Callable,
 )
 
 from duck.settings import SETTINGS
@@ -20,7 +21,6 @@ from duck.logging import logger
 from duck.http.request import HttpRequest
 from duck.http.response import HttpResponse
 from duck.http.core.handler import ResponseHandler
-from duck.utils.asyncio import create_task
 from duck.contrib.sync import convert_to_async_if_needed
 from duck.contrib.websockets import (
     WebSocketView,
@@ -127,6 +127,25 @@ class LivelyWebSocketView(WebSocketView):
             JavascriptExecutionTimedOut: If the result was not received within the specified timeout.
             ValueError: If user specified a timeout yet wait_for_result is set to False.
         """
+        if SETTINGS['DEBUG'] and self.event_handler.session_save_lock.locked():
+            # Strip all whitespace (spaces, tabs, newlines) for fast token matching.
+            normalized_code = "".join((code or "").split()).lower()
+            location_calls = (
+                "window.location.href=",
+                "location.href=",
+                "window.location.replace(",
+                "location.replace(",
+                "window.location.assign(",
+                "location.assign(",
+                "window.location.reload(",
+                "location.reload(",
+            )
+            if any(token in normalized_code for token in location_calls):
+                logger.log(
+                    "Detected window.location navigation during session save. "
+                    "Consider using duckNavigate() or window.open() instead.",
+                    level=logger.WARNING,
+                )
         if not wait_for_result and timeout:
             raise ValueError("You specified a timeout yet wait_for_result is False. Set wait_for_result to True to wait for the specified timeout.") 
             
@@ -189,6 +208,26 @@ class LivelyWebSocketView(WebSocketView):
             JavascriptExecutionError: If the future is cancelled, typically due to WebSocket disconnection or the client raised an exception.
             JavascriptExecutionTimedOut: If the result is not received within the specified timeout.
         """
+        if SETTINGS['DEBUG'] and self.event_handler.session_save_lock.locked():
+            # Strip all whitespace (spaces, tabs, newlines) for fast token matching.
+            normalized_code = "".join((code or "").split()).lower()
+            location_calls = (
+                "window.location.href=",
+                "location.href=",
+                "window.location.replace(",
+                "location.replace(",
+                "window.location.assign(",
+                "location.assign(",
+                "window.location.reload(",
+                "location.reload(",
+            )
+            if any(token in normalized_code for token in location_calls):
+                logger.log(
+                    "Detected window.location navigation during session save. "
+                    "Consider using duckNavigate() or window.open() instead.",
+                    level=logger.WARNING,
+                )
+        
         # Generate random UID
         uid = generate_uid()
         
@@ -251,7 +290,7 @@ class LivelyWebSocketView(WebSocketView):
         try:
             data = self.unserialize_data(data)
         except Exception as e:
-            await self.send_close(CloseCode.INVALID_DATA, reason="Failed to decode MessagePack data.")
+            await self.send_close(CloseCode.INVALID_DATA, reason=f"Failed to decode MessagePack data: {e}.")
             return # Invalid data received
             
         if not data or not isinstance(data, list):
@@ -272,7 +311,7 @@ class EventHandler:
     """
     Event handler for incoming WebSocket messages.
     """
-    __slots__ = ("ws_view", "event_map")
+    __slots__ = ("ws_view", "event_map", "session_save_lock")
     
     def __init__(self, ws_view: LivelyWebSocketView):
        self.ws_view = ws_view
@@ -281,6 +320,7 @@ class EventHandler:
            EventOpCode.JS_EXECUTION_RESULT: self.handle_js_execution_result,
            EventOpCode.NAVIGATE_TO: self.handle_navigation,
        }
+       self.session_save_lock = asyncio.Lock()
     
     async def ensure_session_saved(self, request):
         """
@@ -289,7 +329,8 @@ class EventHandler:
         from duck.http.middlewares.contrib.session import SessionMiddleware
          
         # If session changed on event, this saves session even on Lively components
-        await SessionMiddleware.process_lively_event(self.ws_view, request=request)
+        async with self.session_save_lock:
+            await SessionMiddleware.process_lively_event(self.ws_view, request=request)
         
     async def dispatch(self, opcode: EventOpCode, data: List[Any]):
         """
@@ -390,11 +431,6 @@ class EventHandler:
             event_handler_execution_results = await event_handler_chain.async_execute((component, event_name, value, self.ws_view), restart=False)
         
         # If session changed on event, this saves session even on Lively components
-<<<<<<< HEAD
-=======
-        root_request = component.get_raw_root().request
-        print("Event session:", root_request.SESSION)
->>>>>>> 06a0d81 (Some fixes)
         await self.ensure_session_saved(request=root_request)
         
         async def on_force_update_patch(patch):
@@ -524,6 +560,11 @@ class EventHandler:
         # Send Format: [121, path, fullreload, component_uid, patches_list]
         fullpath = None
         total_patches = 0
+
+        # Navigation must wait for any in-flight session save triggered by a
+        # prior component event.
+        async with self.session_save_lock:
+            pass
         
         async def on_new_patch(patch):
             """
@@ -561,6 +602,7 @@ class EventHandler:
                 
                 # Try getting the next component if available
                 next_component = None
+
                 if next_component_uid:
                     next_component = LivelyComponentSystem.get_from_registry(
                         next_component_uid,
@@ -577,18 +619,9 @@ class EventHandler:
                             client_socket=self.ws_view.request.client_socket,
                             client_address=self.ws_view.request.client_address
                         )
+
+                        # Parse request to get the request object with all the necessary data for processing the request and generating response.
                         request.parse_request(topheader, headers, content=b'')
-                        
-<<<<<<< HEAD
-                        # Update the request session from the latest request.
-                        latest_request = self.ws_view.request
-                        request.SESSION.session_key = latest_request.SESSION.session_key
-                        request.SESSION.update(latest_request.SESSION)
-                        request.SESSION._loaded = latest_request.SESSION.loaded
-                        request.SESSION._modified = latest_request.SESSION.modified
-=======
-                        print("Navigation event session before processing:", root_request.SESSION)
->>>>>>> 06a0d81 (Some fixes)
                         
                         # Ensure that session is saved
                         await self.ensure_session_saved(root_request)
@@ -603,7 +636,7 @@ class EventHandler:
                         if first_nonce:
                             # Set the nonce from the first request.
                             # The below code will make function `csp_nonce` return the first_csp_nonce
-                            request.META["DUCK_CSP_NONCE"] = first_csp_nonce
+                            request.META["DUCK_CSP_NONCE"] = first_nonce
                             
                         # Get the new response
                         response = await SettingsLoaded.ASGI.get_response(request)
