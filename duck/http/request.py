@@ -792,6 +792,7 @@ class Request:
             print(base_url)  # "/path/"
             print(queries)   # {"query1": ["value1"], "query2": ["value2"]}
         """
+        url = url.split("#", 1)[0]  # remove fragment if so
         splits = url.split("?", 1)
         _queries = QueryDict()
     
@@ -801,6 +802,7 @@ class Request:
     
         # The URL part before the "?" and the queries after
         url, queries = splits
+
         for query in queries.split("&"):
             key_value = query.split("=", 1)
     

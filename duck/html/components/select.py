@@ -80,7 +80,13 @@ class Select(InnerComponent):
             "font-size": Theme.normal_font_size,
         }
         self.style.setdefaults(select_style)
+
+        # Set name attribute if provided
+        name = self.kwargs.get("name")
         
+        if name:
+            self.props["name"] = name
+
         # Retrieve optional options
         options = self.kwargs.get("options", [])
         

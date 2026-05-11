@@ -1751,8 +1751,10 @@ class NavigationHandler {
         const progressBarInner = progressBar.querySelector('#progress-bar-inner');
         
         // Scroll to top (if not already at top).
-        this.scrollToTop();
-      
+        if (!fullpath.includes("#")) {
+          this.scrollToTop();
+        }
+
         // Cancel navigation in progress flag.
         this.navigationInProgress = false;
         

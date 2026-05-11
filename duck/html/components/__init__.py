@@ -755,7 +755,7 @@ class HtmlComponent:
         """
         Fallback method to retrieve the html element tag.
         """
-        raise NotImplementedError(f"Fallback method `get_element` is not implemented yet the 'element' argument is empty or None.")
+        raise NotImplementedError("Fallback method `get_element` is not implemented yet the 'element' argument is empty or None.")
     
     def set_mutation_callbacks(self):
         """
@@ -1459,7 +1459,7 @@ class HtmlComponent:
             current_style_version = style._version
         except AttributeError:
             # Only do isinstance on attribute error to avoid checking excessively always
-            if not isinstance(props, StyleStore):
+            if not isinstance(style, StyleStore):
                 raise TypeError("The provided style is must be an instance of StyleStore not {type(props).__name__}.")
             raise # Reraise exception
              
@@ -1542,7 +1542,6 @@ class HtmlComponent:
         
         props = self.props
         style = self.style
-        inner_html = self.inner_html
         
         if self.accept_inner_html:
             strings = [f"<{self.element}>" if not props and not style else f"<{self.element}"]
