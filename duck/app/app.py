@@ -63,7 +63,6 @@ import sys
 import json
 import time
 import signal
-import socket
 import threading
 import setproctitle
 import multiprocessing
@@ -397,7 +396,7 @@ class App:
         if not _async and start_request_handling_eventloop_manager and not start_bg_eventloop_if_wsgi:
             raise ApplicationError("Argument 'start_request_handling_threadpool_manager' can only be True if app's `start_bg_eventloop_if_wsgi` is set to True.")
             
-        if multiprocessing.parent_process() != None:
+        if multiprocessing.parent_process() is not None:
             # Not in main process; this is a child process.
             # Reset asyncio event loop
             set_asyncio_loop()
@@ -552,11 +551,12 @@ class App:
             else:
                 url = f"http://[{host_addr}]:{port}/admin"
             
-            response = requests.get(
+            _ = requests.get(
                 url=url,
                 headers={"Host": SETTINGS["DJANGO_SHARED_SECRET_DOMAIN"]},
                 timeout=1,
             )
+
             # If we reached here, a response has been received
             return True
         except Exception:
@@ -822,7 +822,6 @@ class App:
         - `SIGINT` (Ctrl-C), `SIGTERM` (Terminate): Quits the server/application.
         """
         if sig in [signal.SIGINT, signal.SIGTERM]:
-            logger.log_raw("") # print a blank line to separate ^C and Stop message.
             self.stop(wait_for_thread_pool_executor_shutdown=False)
     
     def stop_servers(
@@ -968,11 +967,6 @@ class App:
         """
         # Record main process data
         log_file = None
-        is_reload = False
-        
-        if "--is-reload" in sys.argv:
-            # App is being restarted somehow
-            is_reload = True
             
         if SETTINGS["LOG_TO_FILE"]:
             log_file = logger.Logger.get_current_logfile()
@@ -1005,7 +999,7 @@ class App:
             # Start ducksight reloader (if not running)
             self.start_ducksight_reloader()
             logger.log(
-                f"Duck Sight Reloader watching file changes",
+                "Duck Sight Reloader watching file changes",
                 level=logger.DEBUG,
                 custom_color=logger.Fore.GREEN,
             )
@@ -1164,7 +1158,7 @@ class App:
                 elif csp_nonce_flag in style_src:
                     logger.log(
                         (
-                            f"Component system active but `csp_nonce_flag` is in style-src. "
+                            "Component system active but `csp_nonce_flag` is in style-src. "
                             "This may block inline styles from components."
                         ),
                         level=logger.WARNING,

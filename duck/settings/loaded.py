@@ -355,7 +355,24 @@ def get_request_handling_task_executor():
     request handling threads and coroutines.
     """
     try:
-        request_handling_task_executor = x_import(SETTINGS["REQUEST_HANDLING_TASK_EXECUTOR"])
+        object_path = SETTINGS["REQUEST_HANDLING_TASK_EXECUTOR"]
+        
+        if object_path.count(".") < 1:
+            request_handling_task_executor = x_import(object_path)
+            return request_handling_task_executor()
+
+        module_path, obj_name = object_path.rsplit(".", 1)
+        module = import_module_once(module_path)
+
+        try:
+            request_handling_task_executor = getattr(module, obj_name)
+        except AttributeError:
+            # On reload, the module can be partially initialized. Reload and retry once.
+            import importlib
+
+            module = importlib.reload(module)
+            request_handling_task_executor = getattr(module, obj_name)
+
         return request_handling_task_executor()
     except Exception as e:
         raise SettingsError(f"Error loading request handling task executor: {e}") from e

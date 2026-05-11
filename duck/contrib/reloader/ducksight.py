@@ -5,7 +5,6 @@ Watches for file changes in Duck framework projects and restarts the
 webserver in DEBUG mode whenever relevant `.py` files change.
 
 """
-import os
 import sys
 import time
 import fnmatch
@@ -121,6 +120,7 @@ class Handler(FileSystemEventHandler):
             log_to_console=False,
             no_exit=True,
             kill_ducksight_reloader=False,
+            wait_for_thread_pool_executor_shutdown=False,
             close_log_file=True,
         )
         
