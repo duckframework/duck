@@ -390,6 +390,11 @@ class EventHandler:
             event_handler_execution_results = await event_handler_chain.async_execute((component, event_name, value, self.ws_view), restart=False)
         
         # If session changed on event, this saves session even on Lively components
+<<<<<<< HEAD
+=======
+        root_request = component.get_raw_root().request
+        print("Event session:", root_request.SESSION)
+>>>>>>> 06a0d81 (Some fixes)
         await self.ensure_session_saved(request=root_request)
         
         async def on_force_update_patch(patch):
@@ -488,7 +493,7 @@ class EventHandler:
             
             # Send patches.
             await self.ws_view.send_patches([patch])
-                       
+            
             # Props/events now synced with client, reset the event bindings changed flag.
             resolved_component._event_bindings_changed = False
                 
@@ -563,6 +568,8 @@ class EventHandler:
                     )
                     
                 if prev_component:
+                    root_request = prev_component.get_raw_root().request
+
                     if not next_component:
                         # This is the last rendered component which was used to fill up the client whole page., usually the Page component.
                         topheader = f"GET {fullpath} HTTP/1.1"
@@ -572,13 +579,23 @@ class EventHandler:
                         )
                         request.parse_request(topheader, headers, content=b'')
                         
+<<<<<<< HEAD
                         # Update the request session from the latest request.
                         latest_request = self.ws_view.request
                         request.SESSION.session_key = latest_request.SESSION.session_key
                         request.SESSION.update(latest_request.SESSION)
                         request.SESSION._loaded = latest_request.SESSION.loaded
                         request.SESSION._modified = latest_request.SESSION.modified
+=======
+                        print("Navigation event session before processing:", root_request.SESSION)
+>>>>>>> 06a0d81 (Some fixes)
                         
+                        # Ensure that session is saved
+                        await self.ensure_session_saved(root_request)
+
+                        # Assign last session from the root component request.
+                        request.SESSION = root_request.SESSION
+
                         # Reuse CSP nonce from last session to avoid unmatching nonces on patching
                         first_request = self.ws_view.request
                         first_nonce = first_request.META.get("DUCK_CSP_NONCE")
@@ -590,7 +607,7 @@ class EventHandler:
                             
                         # Get the new response
                         response = await SettingsLoaded.ASGI.get_response(request)
-                    
+
                         if isinstance(response, ComponentResponse):
                             # This is easy to diff
                             next_component = response.component
