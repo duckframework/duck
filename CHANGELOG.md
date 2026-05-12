@@ -26,6 +26,7 @@ and this project adheres to Semantic Versioning.
 - Made the middleware `duck.http.middlewares.contrib.WWWRedirectMiddleware` optional, it's no longer included in MIDDLEWARES by default.
 - Changed `create()` method of `SessionStore` to a clearer name `assign_new_session_key`.
 - Made request sessions to be lazily loaded upon access or modification.
+- Improved Request object and changed method `_extract_and_process_request_data` to a clearer name `_set_request_fields`
 
 ### Fixed
 

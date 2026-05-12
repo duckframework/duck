@@ -1,16 +1,10 @@
 """
 H2 Event handler module.
 """
-import ssl
-import time
 import asyncio
-import threading
 
 from typing import (
-    Dict,
-    Optional,
     List,
-    Tuple,
     Callable,
 )
 from functools import partial
@@ -23,17 +17,16 @@ from h2.events import (
     StreamReset,
     WindowUpdated
 )
-from h2.exceptions import ProtocolError
 from h2.errors import ErrorCodes
 from h2.settings import SettingCodes
 
 from duck.settings import SETTINGS
 from duck.http.request_data import RequestData
-from duck.http.response import HttpResponse
 from duck.contrib.sync import iscoroutinefunction, convert_to_async_if_needed
 from duck.utils.threading import SyncFuture
 from duck.utils.asyncio import create_task
 from duck.logging import logger
+from duck.exceptions.all import SettingsError
 
 
 class EventHandler:

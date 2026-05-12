@@ -129,12 +129,12 @@ def get_django_formatted_log(
     color = get_status_code_debug_color(response.status_code)
     h2_handling = False
     
-    if request and request.request_store.get("h2_handling") == True:
+    if request and request.request_store.get("h2_handling"):
         h2_handling = True
     
     # Add optional debug message if available
     if debug_message:
-        debug_message = "\n".join(debug_message) if instance(debug_message, list) else debug_message
+        debug_message = "\n".join(debug_message) if isinstance(debug_message, list) else debug_message
         info += reset + debug_message.strip() + "\n"
     else:
         debug_message = get_status_debug_msg(response, request)
@@ -180,7 +180,7 @@ def get_duck_formatted_log(
     addr = ("unknown", "unknown")
     h2_handling = False
     
-    if request and request.request_store.get("h2_handling") == True:
+    if request and request.request_store.get("h2_handling"):
         h2_handling = True
     
     if request and request.client_address:
@@ -347,7 +347,7 @@ class ResponseHandler:
         h2_handling = False
         
         if not strictly_http1 and hasattr(sock, 'h2_protocol'):
-            if request and request.request_store.get('h2_handling') == False:
+            if request and request.request_store.get('h2_handling'):
                 pass
             else:
                 # Set H2 handling to True
@@ -432,7 +432,7 @@ class ResponseHandler:
         if not hasattr(sock, 'h2_protocol'):
             raise AttributeError("The provided socket seem to have no associated HTTP/2 connection, socket should have attribute `h2_protocol` set.")
         
-        if request and request.request_store.get("h2_handling") == False:
+        if request and not request.request_store.get("h2_handling"):
             raise ValueError("The provided socket seem to have HTTP/2 connection, but the key `h2_handling` in `request.request_store` is False.")
         
         protocol = sock.h2_protocol
@@ -533,7 +533,7 @@ class ResponseHandler:
         h2_handling = False
         
         if not strictly_http1 and hasattr(sock, 'h2_protocol'):
-            if request and request.request_store.get('h2_handling') == False:
+            if request and not request.request_store.get('h2_handling'):
                 pass
             else:
                 # Set H2 handling to True
@@ -611,7 +611,7 @@ class ResponseHandler:
         if not hasattr(sock, 'h2_protocol'):
             raise AttributeError("The provided socket seem to have no associated HTTP/2 connection, socket should have attribute `h2_protocol` set.")
         
-        if request and request.request_store.get("h2_handling") == False:
+        if request and not request.request_store.get("h2_handling"):
             raise ValueError("The provided socket seem to have HTTP/2 connection, but the key `h2_handling` in `request.request_store` is False.")
         
         protocol = sock.h2_protocol

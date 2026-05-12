@@ -1,33 +1,28 @@
 """
 Module containing proxy handler class.
 """
-import ssl
-import asyncio
 import socket
 
-from http.cookies import SimpleCookie
-from collections import defaultdict
+from http.cookies import CookieError
 from typing import (
     Optional,
     Tuple,
     Generator,
     AsyncGenerator,
-    Union
+    Dict,
+    List,
 )
 from duck.settings import SETTINGS
 from duck.http.content import Content
-from duck.http.headers import Headers
 from duck.http.request import HttpRequest
 from duck.http.response import StreamingHttpResponse
 from duck.http.response_payload import (
     BaseResponsePayload,
     SimpleHttpResponsePayload,
 )
-from duck.meta import Meta
 from duck.utils.net import is_domain
 from duck.utils.importer import x_import
 from duck.utils.headers import parse_headers_from_bytes
-from duck.utils.importer import import_module_once
 from duck.utils.xsocket import xsocket, create_xsocket
 from duck.utils.xsocket.io import SocketIO
 

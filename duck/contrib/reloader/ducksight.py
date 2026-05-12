@@ -26,6 +26,7 @@ class DuckSightReloader:
     def __init__(self, watch_dir: str):
         # Set a dynamic timeout
         timeout = SETTINGS.get("AUTO_RELOAD_POLL", 1.0)
+        
         if platform.system().lower() == "windows":
             timeout = max(timeout, 2.0)
         
@@ -147,6 +148,7 @@ class Handler(FileSystemEventHandler):
         
         # Check for overlapping reloads
         now = time.time()
+
         if now - self.last_restart_time < 0.5:
             return  # avoid overlapping reloads
 

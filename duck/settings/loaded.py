@@ -5,16 +5,13 @@ Provides functions to retrieve various components and configurations dynamically
 from typing import (
     Any,
     List,
-    Dict,
     Tuple,
     Type,
-    Coroutine,
 )
 
 from duck.template.templatetags import (
     TemplateTag,
     TemplateFilter,
-    TemplateTagError,
 )
 from duck.exceptions.all import (
     MiddlewareLoadError,
@@ -31,7 +28,6 @@ from duck.html.components.core.system import LivelyComponentSystem
 from duck.settings import SETTINGS
 from duck.utils.importer import (import_module_once, x_import)
 from duck.utils.lazy import Lazy
-from duck.logging import logger
 
 
 def get_wsgi() -> Any:
@@ -63,7 +59,6 @@ def get_asgi() -> Any:
     
     if not asgi_path:
         raise SettingsError("Please define ASGI in `settings.py`.")
-    
     try:
         return x_import(asgi_path)(SETTINGS)
     except Exception as e:
@@ -360,20 +355,13 @@ def get_request_handling_task_executor():
         if object_path.count(".") < 1:
             request_handling_task_executor = x_import(object_path)
             return request_handling_task_executor()
-
+        
+        # If the object path contains a dot, we treat it as a module path and an object name
         module_path, obj_name = object_path.rsplit(".", 1)
         module = import_module_once(module_path)
-
-        try:
-            request_handling_task_executor = getattr(module, obj_name)
-        except AttributeError:
-            # On reload, the module can be partially initialized. Reload and retry once.
-            import importlib
-
-            module = importlib.reload(module)
-            request_handling_task_executor = getattr(module, obj_name)
-
+        request_handling_task_executor = getattr(module, obj_name)
         return request_handling_task_executor()
+
     except Exception as e:
         raise SettingsError(f"Error loading request handling task executor: {e}") from e
 

@@ -7,40 +7,34 @@ The final touches include:
 - Content encoding determination and insertion.
 - etc.
 """
-import re
+
 import io
-import fnmatch
 
 from inspect import isasyncgen
 from typing import (
     Dict,
-    Optional,
     Callable,
 )
 from duck.http.content import COMPRESS_STREAMING_RESPONSES
 from duck.http.request import HttpRequest
 from duck.http.response import (
     HttpResponse,
-    FileResponse,
     ComponentResponse,
     StreamingHttpResponse,
     StreamingRangeHttpResponse,
     HttpRangeNotSatisfiableResponse,
 )
-from duck.logging import logger
 from duck.logging.logger import (
     handle_exception as log_failsafe,
 )
 from duck.settings import SETTINGS
 from duck.utils.dateutils import gmt_date
-from duck.utils.asyncio import in_async_context
 from duck.shortcuts import (
     replace_response,
     template_response,
     simple_response,
     to_response,
 )
-from duck.meta import Meta
 from duck.csp import csp_nonce, csp_nonce_flag
 
 
@@ -66,9 +60,6 @@ def set_compressable_iter_content(response):
     from duck.http.content import (
         COMPRESSION_ENCODING,
         COMPRESSION_LEVEL,
-        COMPRESSION_MAX_SIZE,
-        COMPRESSION_MIN_SIZE,
-        CONTENT_COMPRESSION,
         COMPRESSION_MIMETYPES,
      )
     
@@ -89,7 +80,7 @@ def set_compressable_iter_content(response):
             content_obj.compression_min_size = 0
             content_obj.compression_max_size = len(chunk) + 1
             content_obj.compression_mimetypes = COMPRESSION_MIMETYPES
-            compressed = content_obj.compress(COMPRESSION_ENCODING)
+            _ = content_obj.compress(COMPRESSION_ENCODING)
             compressed_data = content_obj.data
             
             yield compressed_data
@@ -116,7 +107,7 @@ def set_compressable_iter_content(response):
                     content_obj.compression_min_size = 0
                     content_obj.compression_max_size = len(chunk) + 1
                     content_obj.compression_mimetypes = COMPRESSION_MIMETYPES
-                    compressed = content_obj.compress(COMPRESSION_ENCODING)
+                    _ = content_obj.compress(COMPRESSION_ENCODING)
                     compressed_data = content_obj.data
                     
                     yield compressed_data
@@ -133,7 +124,7 @@ def set_compressable_iter_content(response):
                     content_obj.compression_min_size = 0
                     content_obj.compression_max_size = len(chunk) + 1
                     content_obj.compression_mimetypes = COMPRESSION_MIMETYPES
-                    compressed = content_obj.compress(COMPRESSION_ENCODING)
+                    _ = content_obj.compress(COMPRESSION_ENCODING)
                     compressed_data = content_obj.data
                          
                     yield compressed_data
@@ -348,7 +339,6 @@ class ResponseFinalizer:
         - If response is an instance of `StreamingHttpResponse`, the `Content-Length` header is removed as a safe measure. The size
             of the response content can become unpredictable especially when data is compressed as it is being sent.
         """
-        from duck.http.content import COMPRESSION_ENCODING
         from duck.http.core.proxyhandler import HttpProxyResponse
         
         # Set some content headers if not set.

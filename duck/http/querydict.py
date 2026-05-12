@@ -13,7 +13,9 @@ class QueryDict(dict):
         return f"<{self.__class__.__name__} {super().__repr__()}>"
 
     def appendlist(self, key: str, value) -> None:
-        """Appends a value to a key's list."""
+        """
+        Appends a value to a key's list.
+        """
         if key in self:
             if isinstance(super().__getitem__(key), list):
                 if value not in super().__getitem__(key):  # Avoid duplicates
@@ -123,8 +125,8 @@ class QueryDict(dict):
 
     def copy(self):
         """
-        Returns a copy of the QueryDict
-        ."""
+        Returns a copy of the QueryDict.
+        """
         return QueryDict(self)
 
     def clear(self) -> None:

@@ -27,9 +27,8 @@ from duck.http.fileuploads.multipart import BytesMultiPartParser
 from duck.http.headers import Headers
 from duck.http.querydict import FixedQueryDict, QueryDict
 from duck.http.request_data import RequestData, RawRequestData
-from duck.utils.importer import import_module_once
 from duck.utils.object_mapping import map_data_to_object
-from duck.utils.urldecode import url_decode
+from duck.utils.urldecode import url_decode, url_encode
 from duck.utils.urlcrack import URL
 from duck.utils.path import build_absolute_uri
 from duck.utils.xsocket import xsocket
@@ -94,13 +93,14 @@ class Request:
         # print(request.request_store["something"]) # Outputs 'anything'
         
         self.__meta: Dict = {}  # meta for the request
-        self.__session = SettingsLoaded.SESSION_STORE(None)  # session for the request
+        self.__session = None  # session object for the request
         self.__remote_addr: Tuple[str, int] = None  # client remote address and port
         self.__headers: Headers = Headers()  # request headers
         self.__fullpath: str = None  # full path for the request
         self.__path: str = None  # path stripped of queries if so
         self.__id: str = None  # request unique identifier
         
+        # Some important attributes
         self.client_socket: xsocket = None # client socket which made this request
         self.client_address: Tuple[str, int] = None # client remote address
         self.application = None
@@ -114,27 +114,31 @@ class Request:
         self.request_data: RequestData = None # Will be set when Request.parse is used
         self.uses_ipv6 = Meta.get_metadata("DUCK_USES_IPV6")
         
+        # Initialize default fields
         self.AUTH: Dict = dict()
         self.META: Dict = self.__meta
         self.FILES: Dict = dict()
         self.COOKIES: Dict = dict()
         self.GET: QueryDict = QueryDict()
         self.POST: QueryDict = QueryDict()
-        self.QUERY: FixedQueryDict[str, QueryDict] = FixedQueryDict({
-            "CONTENT_QUERY": QueryDict(),
-            "URL_QUERY": QueryDict(),
-        })
+        self.QUERY: FixedQueryDict[str, QueryDict] = FixedQueryDict({"CONTENT_QUERY": QueryDict(), "URL_QUERY": QueryDict()})
+        self.SESSION: SettingsLoaded.SESSION_STORE = SettingsLoaded.SESSION_STORE(None)
         
+        # Only accept content or content_obj not both
         if kwargs.get("content_obj", None) and kwargs.get("content", None):
             raise RequestError(
                 "Please provide one of these arguments ['content', 'content_obj'] not both"
             )
         
         # Setting all key, value pairs in kwargs as attributes and attribute values
+        # This will also set content_obj if provided
         map_data_to_object(self, kwargs)
         
-        if kwargs.get("content", None):
-            self.set_content(kwargs.get("content"))
+        # Set content if provided
+        content = kwargs.get("content", None)
+        
+        if content is not None:
+            self.set_content(content)
 
     @property
     def ID(self):
@@ -223,11 +227,17 @@ class Request:
             - If `path` is falsy (empty or `None`), the path is cleared.
         """
         if not path:
+            # Clear path if falsy value is provided
             self.__path = path
             return
-        if "?" in path:
+        
+        if "?" in path or "#" in path:
+            # If path contains query parameters, update fullpath to include them
             self.fullpath = path
-        self.__path = path.split("?")[0]
+        
+        # Store only the path part without query parameters
+        decoded_path = url_decode(path.split("?")[0].split("#")[0])
+        self.__path = decoded_path
     
     @property
     def fullpath(self):
@@ -257,15 +267,20 @@ class Request:
             path (str): The full URL path to set, which may include query parameters.
     
         Notes:
-            - If the `path` contains a query string (e.g., `/home?q=12`), the `fullpath` will store the full path,
-              and `path` will store only the portion before the `?` (i.e., `/home`).
-            - If the `path` is falsy (empty or `None`), both `fullpath` and `path` are cleared.
+        - If the `path` contains a query string (e.g., `/home?q=12`), the `fullpath` will store the full path,
+            and `path` will store only the portion before the `?` (i.e., `/home`).
+        - If the `path` is falsy (empty or `None`), both `fullpath` and `path` are cleared.
         """
         self.__fullpath = path
+        
         if not path:
+            # Clear path if falsy value is provided
             self.__path = path
             return
-        self.__path = path.split("?")[0]
+        
+        # Set path as well
+        decoded_path = url_decode(path.split("?")[0].split("#")[0])
+        self.__path = decoded_path
 
     @property
     def SESSION(self):
@@ -455,7 +470,7 @@ class Request:
         Get the version number of the request as a string.
 
          Notes:
-                This is very different from attr `http_version` as it only includes version number as a string
+            This is very different from attr `http_version` as it only includes version number as a string
         """
         if not self.http_version:
             return
@@ -534,7 +549,7 @@ class Request:
         - The `build_meta` method is called each time this property is accessed 
               to ensure the metadata is fresh.
         """
-        self.build_meta()
+        self.build_meta() # Build meta lazily
         return self.__meta
     
     @META.setter
@@ -590,6 +605,60 @@ class Request:
         return self.__remote_addr
         
     @staticmethod
+    def add_queries_to_url(url: str, queries: Dict) -> str:
+        """
+        This adds queries to a URL.
+        """
+        if not isinstance(queries, dict):
+            raise RequestError(f"Argument `queries` should be a dict not {type(queries)}")
+        
+        # Initialize counter to track the number of queries added
+        counter = 0
+        url = (url.strip("?") + "?" if queries else url.strip("?"))  # remove existing if so and add new (?)
+        
+        for key in queries.keys():
+            url += "&" if counter >= 1 else ""
+            url += f"{key}=" + url_encode("%s") % queries.get(key)
+            counter += 1
+        return url
+        
+    @staticmethod
+    def extract_url_queries(url: str) -> QueryDict:
+        """
+        Extracts the query parameters from a given URL.
+        """
+        # NOTE: This is has custom implementation rather than using urllib parse_qs 
+        # because we want to support multiple values for the same key in queries e.g. /home?q=12&q=4
+        url = url.split("#", 1)[0]  # remove fragment if so
+        splits = url.split("?", 1)
+        query_obj = QueryDict()
+    
+        if len(splits) == 1:
+            # No queries present
+            return query_obj
+    
+        # The URL part before the "?" and the queries after
+        queries = splits[-1]
+
+        for query in queries.split("&"):
+            key_value = query.split("=", 1)
+    
+            if len(key_value) == 1:
+                # Key is present but no value (e.g., "key=")
+                query_obj[key_value[0].strip()] = []
+            
+            else:
+                key, value = key_value
+                key = key.strip()
+                value = url_decode(value.strip())
+                
+                # Appending values to the key in QueryDict
+                query_obj.appendlist(key, value)
+        
+        # Return final queries
+        return query_obj
+
+    @staticmethod
     def extract_cookies_from_request(request) -> Dict[str, str]:
         """
         Extracts and returns the cookies from the given request.
@@ -622,7 +691,7 @@ class Request:
         return cookies
 
     @staticmethod
-    def extract_auth_from_request(request) -> Dict[str, str]:
+    def extract_auth_from_request(request: "Request") -> Dict[str, str]:
         """
         Extracts authentication-related information from the request headers.
     
@@ -664,74 +733,76 @@ class Request:
         return data
 
     @staticmethod
-    def extract_content_queries(request) -> QueryDict:
+    def extract_content_queries(request: "Request") -> Dict:
         """
-         Extract query parameters and file uploads from the request content.
-    
-         This method retrieves all query parameters from the request body,
-         including files and form data. However, uploaded files are not
-         automatically saved—you must manually call `save()` on
-         `request.FILES[query_key]` where necessary.
+        Extracts query parameters from the request content based on the Content-Type header.
     
          Args:
             request (HttpRequest): The incoming HTTP request object.
     
          Returns:
-            QueryDict: A dictionary-like object containing extracted query parameters
-                       and file data from the request.
+            Dict: A dictionary object containing extracted content queries.
         """
-        from duck.settings.loaded import SettingsLoaded
-        
         content_type = request.get_header("content-type", "").strip()
 
         if content_type.lower().startswith("application/json"):
             try:
-                return QueryDict(json.loads(request.content.decode("utf-8")))
-            except json.JSONDecodeError and ValueError:
-                # except json.JSONDecodeError, ValueError or any other error
-                pass
+                return json.loads(request.content.decode("utf-8"))
+            except (json.JSONDecodeError, ValueError):
+                return {}
 
-        elif content_type.lower().startswith(
-                "application/x-www-form-urlencoded"):
+        elif content_type.lower().startswith("application/x-www-form-urlencoded"):
             try:
-                post = QueryDict()
-                [
-                    post.update({key: val[0]}) for key, val in parse_qs(
-                        request.content.decode("utf-8")).items()
-                ]
-                return post
+                return parse_qs(request.content.decode("utf-8"))
             except Exception:
-                pass
+                return {}
 
-        elif content_type.lower().startswith("multipart/"):
+    @staticmethod
+    def extract_files_from_request(request: "Request") -> Dict:
+        """
+        Extracts files from the request content based on the Content-Type header.
+    
+         Args:
+            request (HttpRequest): The incoming HTTP request object.
+        """
+        from duck.settings.loaded import SettingsLoaded
+
+        content_type = request.get_header("content-type", "").strip()
+        uploaded_file_cls = SettingsLoaded.FILE_UPLOAD_HANDLER
+        files = {}
+
+        if content_type.lower().startswith("multipart/"):
             headers = {"Content-Type": content_type}
             input_data = request.content
             parser = BytesMultiPartParser(headers, input_data)
-            queries = QueryDict()
 
             for headers, content in parser.get_parts():
-                # get content disposition from headers
+                # Get content disposition from headers
                 content_disposition = headers.get("Content-Disposition")
-                data = content_disposition.split(
-                    ";"
-                )[1:]  # skip first data value as it indicate the content-disposition e.g. form-data
+                data = content_disposition.split(";")[1:] # Skip first data value as it indicate the content-disposition e.g. form-data
                 dictdata = {}
+                
                 for i in data:
                     if not i:
                         continue
+                    
                     if "=" in i:
                         key, value = i.split("=")
+                    
                     else:
                         key, value = i, ""
-                    key, value = key.strip().replace("'", "").replace(
-                        '"', ""), value.strip().replace("'",
-                                                        "").replace('"', "")
+                    
+                    # Strip and remove quotes from key and value
+                    key, value = (
+                        key.strip().replace("'", "").replace('"', ""),
+                        value.strip().replace("'", "").replace('"', "")
+                    )
+
+                    # Add key and value to dictdata
                     dictdata[key] = value
 
-                # dictdata is in form
-                # {'name': 'field1'} or
-                # {'name': 'field1', 'filename': 'filename'}
-                query_content = content
+                # dictdata is in form {'name': 'field1'}
+                # or {'name': 'field1', 'filename': 'filename'}
                 query_key = dictdata["name"]
 
                 if "filename" in dictdata:
@@ -743,94 +814,24 @@ class Request:
                         # no file has been selected or attached in html form, skip
                         continue
 
-                    # create an uploadedfile object
+                    # Create additional_kw to pass to file upload handler which includes content type and content disposition
                     additional_kw = {
                         "name": query_key,
                         "content_type": headers.get("Content-Type"),
                         "content_disposition": content_disposition,
                     }
 
-                    file_upload_handler = SettingsLoaded.FILE_UPLOAD_HANDLER(filename, content, **additional_kw)
+                    # Initialize uploaded file
+                    uploaded_file = uploaded_file_cls(filename, content, **additional_kw)
 
-                    # Add file in request.FILES
-                    request.FILES[query_key] = file_upload_handler
+                    # Add file to files
+                    files[query_key] = uploaded_file
                     
                     # Skip to next content disposition
                     continue
-
-                # record some data
-                queries[query_key] = query_content.decode("utf-8")
-            return queries
-        return QueryDict()
         
-    @staticmethod
-    def extract_url_queries(url: str) -> Tuple[str, QueryDict]:
-        """
-        Extracts the query parameters from a given URL.
-    
-        This method splits the provided URL into two parts:
-            - The base URL (without the query string).
-            - A `QueryDict` containing the parsed query parameters.
-    
-        Args:
-            url (str): The URL containing the query string (e.g., `/path/?query1=value1&query2=value2`).
-    
-        Returns:
-            Tuple[str, QueryDict]: A tuple where the first element is the base URL 
-            (without the query string) and the second element is a `QueryDict` 
-            containing the query parameters.
-    
-        Notes:
-            - The `QueryDict` object is a specialized dictionary that can handle multiple 
-              values for the same query key.
-            - If the URL does not contain query parameters, the second element of the 
-              returned tuple will be an empty `QueryDict`.
-    
-        Example:
-            url = "/path/?query1=value1&query2=value2"
-            base_url, queries = extract_url_queries(url)
-            print(base_url)  # "/path/"
-            print(queries)   # {"query1": ["value1"], "query2": ["value2"]}
-        """
-        url = url.split("#", 1)[0]  # remove fragment if so
-        splits = url.split("?", 1)
-        _queries = QueryDict()
-    
-        if len(splits) == 1:
-            # No queries present
-            return url, _queries
-    
-        # The URL part before the "?" and the queries after
-        url, queries = splits
-
-        for query in queries.split("&"):
-            key_value = query.split("=", 1)
-    
-            if len(key_value) == 1:
-                # Key is present but no value (e.g., "key=")
-                _queries[key_value[0].strip()] = []
-            else:
-                key, value = key_value
-                key = key.strip()
-                value = value.strip()
-                # Appending values to the key in QueryDict
-                _queries.appendlist(key, value)
-        return url, _queries
-
-    @staticmethod
-    def add_queries_to_url(url: str, queries: Dict) -> str:
-        """
-        This adds queries to a URL.
-        """
-        if not isinstance(queries, dict):
-            raise RequestError(f"Argument `queries` should be a dict not {type(queries)}")
-        url = (url.strip("?") + "?" if queries else url.strip("?"))  # remove existing if so and add new (?)
-        counter = 0
-        for key in queries.keys():
-            url += "&" if counter >= 1 else ""
-            url += f"{key}=" + "%s" % queries.get(key)
-            counter += 1
-        return url
+        # Finally return files
+        return files
     
     def build_meta(self) -> Dict:
         """
@@ -976,7 +977,7 @@ class Request:
         self.content_obj.set_content(data, )
         
         if auto_add_content_headers:
-            # add content headers
+            # Add content headers
             # For Content-Type and Content-Encoding, try to obtain these from headers but if not set,
             # use values guessed when content was parsed to content_obj
             self.set_header("Content-Length", self.content_obj.size)
@@ -1005,10 +1006,13 @@ class Request:
             self.parse_raw_request(request_data.data)
         else:
             topheader = request_data.headers.pop("topheader")
+            
+            # Parse request
             self.parse_request(
                 topheader=topheader,
                 headers=request_data.headers,
-                content=request_data.content)
+                content=request_data.content,
+            )
     
     def parse_request(self, topheader: str, headers: Dict[str, str], content: bytes):
         """
@@ -1025,8 +1029,7 @@ class Request:
         try:
             self._parse_request(topheader, headers, content)
         except Exception as e:
-            if not isinstance(e, RequestSyntaxError) and not isinstance(
-                    e, RequestUnsupportedVersionError):
+            if not isinstance(e, RequestSyntaxError) and not isinstance(e, RequestUnsupportedVersionError):
                 e = RequestError(f"General request parse error: {e}")
             self.error = e
     
@@ -1048,8 +1051,7 @@ class Request:
         try:
             self._parse_raw_request(raw_request)
         except Exception as e:
-            if not isinstance(e, RequestSyntaxError) and not isinstance(
-                    e, RequestUnsupportedVersionError):
+            if not isinstance(e, RequestSyntaxError) and not isinstance(e, RequestUnsupportedVersionError):
                 e = RequestError(f"General request parse error: {e}")
             self.error = e
     
@@ -1090,7 +1092,7 @@ class Request:
                 
                 # Decode Fields
                 self.method = method
-                self.fullpath = url_decode(path)
+                self.fullpath = path
                 self.http_version = http_version
                 
             else:
@@ -1099,11 +1101,12 @@ class Request:
         if headers:
             for header in headers:
                 if not header.strip():
-                    headers_done = True
+                    break
                 
                 if len(header.split(b":", 1)) != 2:
                     raise RequestSyntaxError("Bad headers format")
                 
+                # Decode header and value
                 header, value = header.split(b":", 1)
                 header, value = (
                     header.decode("utf-8").strip(),
@@ -1132,12 +1135,10 @@ class Request:
                                   request, or any data transmitted after the headers.
     
         Notes:
-            - This method assumes the content is properly formatted in the request.
-            - The left stripping of `\r\n` ensures that no unnecessary line breaks remain before 
-              storing the content.
-            - The method does not automatically add content-related headers (e.g., 
-              `Content-Length`) by setting `auto_add_content_headers=False` in the call to 
-              `set_content`.
+        - This method assumes the content is properly formatted in the request.
+        - The left stripping of `\r\n` ensures that no unnecessary line breaks remain before storing the content.
+        - The method does not automatically add content-related headers (e.g., `Content-Length`) 
+          by setting `auto_add_content_headers=False` in the call to `set_content`.
         """
         content = raw_content
         
@@ -1152,12 +1153,6 @@ class Request:
         Raises:
             RequestSyntaxError: If the request has an invalid format or contains errors.
             RequestUnsupportedVersionError: If the HTTP version is not supported.
-        
-        Updates:
-            - self.COOKIES: Extracted cookies from the request.
-            - self.AUTH: Extracted authentication data from the request.
-            - self.QUERY: Updated global QueryDict with URL and content query data.
-            - self.method.upper(): A QueryDict containing the combined URL and content queries.
         """
         # Setting some attributes
         self.topheader = topheader = topheader.strip()
@@ -1180,8 +1175,8 @@ class Request:
         # Parse Content
         self._parse_content(content)
         
-        # Extract and process request data
-        self._extract_and_process_request_data()
+        # Finalize parse
+        self._set_request_fields_and_finalize()
         
     def _parse_raw_request(self, raw_request: bytes,):
         """
@@ -1199,15 +1194,8 @@ class Request:
     
         Raises:
             RequestSyntaxError: If the request has an invalid format or contains errors.
-        
-        Updates:
-            - self.COOKIES: Extracted cookies from the request.
-            - self.AUTH: Extracted authentication data from the request.
-            - self.QUERY: Updated global QueryDict with URL and content query data.
-            - self.method.upper(): A QueryDict containing the combined URL and content queries.
         """
         request_parts = raw_request.split(b"\r\n\r\n", 1)
-
         headers_part = request_parts[0].strip().split(b"\r\n")
         content = request_parts[1] if len(request_parts) > 1 else b""
         
@@ -1218,38 +1206,25 @@ class Request:
         self._parse_content(content)
         
         # Extract and process request data
-        self._extract_and_process_request_data()
+        self._set_request_fields_and_finalize()
         
-    def _extract_and_process_request_data(self):
+    def _set_request_fields_and_finalize(self):
         """
-        Extracts and processes session, authentication, URL queries, and content queries 
-        from the incoming request and updates the global QueryDict.
+        Set request fields such as FILES, COOKIES, AUTH, URL_QUERY, CONTENT_QUERY and method-specific query attributes (e.g., GET, POST).
         
-        This method handles:
-        - Extracting cookies and authentication data from the request.
-        - Extracting URL and content-related query parameters.
-        - Updating the global `QUERY` dictionary with extracted values.
-        - Combining the URL and content queries into a single query and attaching it 
-          to the request method as a QueryDict.
-    
-        Updates:
-        - `self.COOKIES`: Extracted cookies from the request.
-        - `self.AUTH`: Extracted authentication data from the request.
-        - `self.QUERY`: Updated global QueryDict with URL and content query data.
-        - `self.method`.upper(): A QueryDict containing the combined URL and content queries.
+        Notes:
+        - This also finalizes the request parsing process by ensuring that all relevant data is set
         """
-        # Extract session, auth, and query data
-        self.COOKIES = self.extract_cookies_from_request(self)
-        self.AUTH = self.extract_auth_from_request(self)
-    
+        
+        # Extract auth, and query data
+        self.COOKIES.update(self.extract_cookies_from_request(self))
+        self.AUTH.update(self.extract_auth_from_request(self))
+        self.FILES.update(self.extract_files_from_request(self))
+        
         # Extract URL and Content Queries
-        self.path, url_query = self.extract_url_queries(self.fullpath)
+        url_query = self.extract_url_queries(self.fullpath)
         content_query = self.extract_content_queries(self)
-        
-        # Update topheader with decoded url path
-        self.topheader = " ".join(
-            [self.method.upper(), self.path, self.http_version])
-        
+
         # Update the global QueryDict
         self.QUERY.update({"URL_QUERY": url_query})
         self.QUERY.update({"CONTENT_QUERY": content_query})
@@ -1257,7 +1232,9 @@ class Request:
         # Combine the queries and set as a method attribute (e.g., GET, POST)
         combined_query = url_query.copy()
         combined_query.update(content_query)
-        setattr(self, self.method.upper(), QueryDict(combined_query))
+
+        # Set the combined query as an attribute named after the HTTP method (e.g., self.GET, self.POST)
+        setattr(self, self.method.upper(), combined_query)
         
     def _set_auth_headers(self):
         """
