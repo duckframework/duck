@@ -738,7 +738,7 @@ class ssl_xsocket(xsocket):
                 return b''
             
             except ssl.SSLError as e:
-                raise # Reraise SSLError
+                raise e # Reraise SSLError
             
             finally:
                 if not self.ssl_state != SSLObjectReadOrWrite.WRITING:

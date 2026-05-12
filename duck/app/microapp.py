@@ -11,7 +11,6 @@ import threading
 
 from typing import Union, Optional
 
-from duck.settings import SETTINGS
 from duck.http.core.httpd.servers import MicroHTTPServer
 from duck.http.core.processor import (
     AsyncRequestProcessor,
@@ -48,7 +47,7 @@ class MicroApp:
         self,
         addr: str = "localhost",
         port: int = 8080,
-        parent_app: "App" = None,
+        parent_app = None,
         domain: str = None,
         uses_ipv6: bool = False,
         enable_https: bool = False,

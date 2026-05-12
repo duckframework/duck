@@ -45,9 +45,14 @@ def generate_server_cert():
 
     This uses variables set in settings.py
     """
-    csr_path = SETTINGS["SSL_CSR_LOCATION"]
-    certfile_path = SETTINGS["SSL_CERTFILE_LOCATION"]
-    private_key_path = SETTINGS["SSL_PRIVATE_KEY_LOCATION"]
+    base_dir = SETTINGS.get("BASE_DIR")
+    ssl_dir = os.path.join(str(base_dir), "etc", "ssl") if base_dir else os.getcwd()
+
+    csr_path = SETTINGS.get("SSL_CSR_LOCATION") or os.path.join(ssl_dir, "server.csr")
+    certfile_path = SETTINGS.get("SSL_CERTFILE_LOCATION") or os.path.join(ssl_dir, "server.crt")
+    private_key_path = SETTINGS.get("SSL_PRIVATE_KEY_LOCATION") or os.path.join(ssl_dir, "server.key")
+
+    os.makedirs(os.path.dirname(str(certfile_path)), exist_ok=True)
     
     logger.log(
         "Generating SSL certificate to use for HTTPS",
@@ -77,33 +82,15 @@ def generate_server_cert():
                        level=logger.DEBUG)
             return
 
-    domain = SETTINGS["SERVER_DOMAIN"]
-    country = SETTINGS["SERVER_COUNTRY"]
-    state = SETTINGS["SERVER_STATE"]
-    locality = SETTINGS["SERVER_LOCALITY"]
-    organization = SETTINGS["SERVER_ORGANIZATION"]
-    organization_unit = SETTINGS["SERVER_ORGANIZATION_UNIT"]
-
-    if not domain:
-        raise SettingsError("Please set SERVER_DOMAIN in settings.py")
+    domain = SETTINGS.get("SERVER_DOMAIN") or "localhost"
+    country = SETTINGS.get("SERVER_COUNTRY") or "US"
+    state = SETTINGS.get("SERVER_STATE") or "State"
+    locality = SETTINGS.get("SERVER_LOCALITY") or "Locality"
+    organization = SETTINGS.get("SERVER_ORGANIZATION") or "Duck"
+    organization_unit = SETTINGS.get("SERVER_ORGANIZATION_UNIT") or "Development"
 
     if len(country) != 2:
-        raise SettingsError(
-            "SERVER_COUNTRY should be a two-letter country code in settings.py"
-        )
-
-    if not state:
-        raise SettingsError("SERVER_STATE should be set in settings.py")
-
-    if not locality:
-        raise SettingsError("SERVER_LOCALITY should be set in settings.py")
-
-    if not organization:
-        raise SettingsError("SERVER_ORGANIZATION should be set in settings.py")
-
-    if not organization_unit:
-        raise SettingsError(
-            "SERVER_ORGANIZATION_UNIT should be set in settings.py")
+        country = "US"
 
     # checking for openssl availability
     try:
@@ -148,28 +135,32 @@ def generate_server_cert():
         return
 
     # create commands
-    private_key_cmd = ["openssl", "genrsa", "-out", "server.key", "2048"]
+    private_key_cmd = ["openssl", "genrsa", "-out", str(private_key_path), "2048"]
 
     csr_cmd = [
         "openssl",
         "req",
         "-new",
         "-key",
-        "server.key",
+        str(private_key_path),
         "-out",
-        csr_path,
+        str(csr_path),
+        "-subj",
+        f"/C={country}/ST={state}/L={locality}/O={organization}/OU={organization_unit}/CN={domain}",
     ]
 
     certfile_signing_cmd = [
         "openssl",
-        "req",
-        "-new",
-        "-key",
-        private_key_path,
+        "x509",
+        "-req",
+        "-in",
+        str(csr_path),
+        "-signkey",
+        str(private_key_path),
         "-out",
-        csr_path,
-        "-subj",
-        f"/C={country}/ST={state}/L={locality}/O={organization}/OU={organization_unit}/CN={domain}",
+        str(certfile_path),
+        "-days",
+        "365",
     ]
 
     # generate private key
