@@ -626,7 +626,8 @@ class EventHandler:
                         # Ensure that session is saved
                         await self.ensure_session_saved(root_request)
 
-                        # Assign last session from the root component request.
+                        # Assign request fields from root component request.
+                        request.META = {**root_request.META, **request.META}
                         request.SESSION = root_request.SESSION
 
                         # Reuse CSP nonce from last session to avoid unmatching nonces on patching
