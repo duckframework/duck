@@ -84,7 +84,6 @@ def csrf_exempt(view_func):
             
     # Set csrf exempt flag
     wrapped_view.csrf_exempt = True
-    #print(wrapped_view)
     return wrapped_view
 
 

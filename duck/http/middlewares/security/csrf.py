@@ -299,6 +299,7 @@ class CSRFMiddleware(BaseMiddleware):
 
         if not csrf_secret_from_cookie:
             cls.debug_message: str = "CSRFMiddleware: CSRF cookie not set"
+            
             raise CSRFCookieError(
                 "CSRF Cookie not set. This is required to ensure that your browser is not being hijacked by third parties"
             )
