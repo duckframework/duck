@@ -103,9 +103,14 @@ class RequestProcessor:
         Args:
                 request (HttpRequest): HttpRequest object to process
         """
-        assert isinstance(request, HttpRequest), f"Request should be an instance of HttpRequest not `{type(request)}`."
+        assert isinstance(request, HttpRequest), f"Request should be an instance of HttpRequest not {type(request)}."
+        
+        # Set request
         self.request = request
+        
+        # Perform some imnediate actions
         self.normalize_request()
+        self.process_view_decorators()
     
     @property
     def route_info(self) -> Dict[str, Any]:
@@ -385,9 +390,6 @@ class RequestProcessor:
             Exception: Any other exceptions.
         """
         self.check_base_errors() # check base errors like request syntax error, etc
-        
-        # Process view decorators
-        self.process_view_decorators()
         
         # Process request further after confirmation that request has no base errors
         # like RequestSyntaxError, RequestUnsupportedVersionError, etc.
@@ -717,9 +719,6 @@ class AsyncRequestProcessor(RequestProcessor):
             Exception: Any other exceptions.  
         """
         self.check_base_errors() # check base errors like request syntax error, etc
-        
-        # Process view decorators
-        self.process_view_decorators()
         
         # Process request further after confirmation that request has no base errors
         # like RequestSyntaxError, RequestUnsupportedVersionError, etc.
