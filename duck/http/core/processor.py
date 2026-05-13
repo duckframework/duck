@@ -363,7 +363,13 @@ class RequestProcessor:
         which influence request handling behavior. This method inspects those
         attributes and updates request metadata accordingly.
         """
-        view = self.route_info["handler"]
+        try:
+            view = self.route_info["handler"]
+        except Exception:
+            # This may be RouteNotFoundError
+            return
+            
+        # Process view here
         view_func = view
         
         if type(view) == type and issubclass(view, View):
