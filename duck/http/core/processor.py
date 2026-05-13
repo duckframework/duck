@@ -366,7 +366,7 @@ class RequestProcessor:
             
         # Process decorators now.
         csrf_exempt = getattr(view_func, "csrf_exempt", False)
-        print("Csrf exempt for", view_func, csrf_exempt)
+        logger.log(f"Csrf exempt for {view_func}, {csrf_exempt}")
         
         if csrf_exempt:
             self.request.META["CSRF_EXEMPT"] = True
