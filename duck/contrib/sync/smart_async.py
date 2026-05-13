@@ -101,7 +101,7 @@ class TransactionThread(threading.Thread):
         self.task_queue = queue.Queue()
         self._busy = threading.Event()   # NEW: busy indicator
         self._current_task_executing = None
-        self._max_task_duration = 0.2 # Seconds for optimal task duration
+        self._max_task_duration = 0.3 # Seconds for optimal task duration
         self.start()
 
     def is_free(self) -> bool:
@@ -167,9 +167,18 @@ class TransactionThread(threading.Thread):
                     
                     # Warn user if task too long
                     if exec_time > self._max_task_duration:
+                        taskname = getattr(task, "__name__", None)
+                        
+                        if not taskname:
+                            taskname = getattr(task, "__qualname__", None)
+                    
+                        if not taskname:
+                            taskname = task.__class__.__name__
+                        
+                        # Warn user
                         logger.warn(
                             (
-                                f"Task took too long to finish: {exec_time:.2f} s, task: {task}. "
+                                f"Task took too long to finish: {exec_time:.2f} s, task: {taskname}. "
                                 f"This might cause hanging or performance degradation. "
                                 f"Max task duration: {self._max_task_duration: .2f} seconds. "
                                 "Consider splitting task into smaller sub-tasks."

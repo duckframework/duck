@@ -753,85 +753,84 @@ class Request:
 
         elif content_type.lower().startswith("application/x-www-form-urlencoded"):
             try:
-                return parse_qs(request.content.decode("utf-8"))
+                return parse_qs(request.content.decode("utf-8")) or {}
             except Exception:
                 return {}
+        return {} 
 
     @staticmethod
-    def extract_files_from_request(request: "Request") -> Dict:
+    def extract_files_from_request(request: "Request") -> Tuple[Dict, Dict]:
         """
-        Extracts files from the request content based on the Content-Type header.
+        Extracts files and content queries from the request content based on the Content-Type header.
     
          Args:
             request (HttpRequest): The incoming HTTP request object.
+        
+        Returns:
+            Tuple[Dict, Dict]: A tuple of extracted multipart queries and files.
         """
         from duck.settings.loaded import SettingsLoaded
-
+    
         content_type = request.get_header("content-type", "").strip()
         uploaded_file_cls = SettingsLoaded.FILE_UPLOAD_HANDLER
         files = {}
-
+        queries = {}
+    
         if content_type.lower().startswith("multipart/"):
             headers = {"Content-Type": content_type}
             input_data = request.content
             parser = BytesMultiPartParser(headers, input_data)
-
-            for headers, content in parser.get_parts():
+    
+            for part_headers, content in parser.get_parts():
                 # Get content disposition from headers
-                content_disposition = headers.get("Content-Disposition")
-                data = content_disposition.split(";")[1:] # Skip first data value as it indicate the content-disposition e.g. form-data
-                dictdata = {}
+                content_disposition = part_headers.get("Content-Disposition")
+                
+                if not content_disposition:
+                    continue
+    
+                data = content_disposition.split(";")[1:]  # Skip first token (e.g. "form-data")
+    
+                # Build a fresh dict of disposition params for each part
+                part_params = {}
                 
                 for i in data:
+                    i = i.strip()
+                    
                     if not i:
                         continue
-                    
+    
                     if "=" in i:
-                        key, value = i.split("=")
-                    
+                        key, value = i.split("=", 1)  # maxsplit=1 to handle '=' in values
                     else:
                         key, value = i, ""
-                    
-                    # Strip and remove quotes from key and value
+    
                     key, value = (
                         key.strip().replace("'", "").replace('"', ""),
                         value.strip().replace("'", "").replace('"', "")
                     )
-
-                    # Add key and value to dictdata
-                    dictdata[key] = value
-
-                # dictdata is in form {'name': 'field1'}
-                # or {'name': 'field1', 'filename': 'filename'}
-                query_key = dictdata["name"]
-
-                if "filename" in dictdata:
-                    # this is a file, skip adding it queries but to request.FILES instead
-                    # with key dictdata.name
-                    filename = dictdata["filename"]
-
-                    if not filename:
-                        # no file has been selected or attached in html form, skip
-                        continue
-
-                    # Create additional_kw to pass to file upload handler which includes content type and content disposition
+                    part_params[key] = value
+    
+                query_key = part_params.get("name")
+                
+                if not query_key:
+                    continue
+    
+                filename = part_params.get("filename")
+    
+                if filename:
+                    # File has been chosen
                     additional_kw = {
                         "name": query_key,
-                        "content_type": headers.get("Content-Type"),
+                        "content_type": part_headers.get("Content-Type"),
                         "content_disposition": content_disposition,
                     }
-
-                    # Initialize uploaded file
                     uploaded_file = uploaded_file_cls(filename, content, **additional_kw)
-
-                    # Add file to files
                     files[query_key] = uploaded_file
-                    
-                    # Skip to next content disposition
-                    continue
-        
-        # Finally return files
-        return files
+                else:
+                    # Regular form field — store its content as the value
+                    queries[query_key] = content.decode("utf-8")
+    
+        return queries, files
     
     def build_meta(self) -> Dict:
         """
@@ -922,9 +921,7 @@ class Request:
         Sets the request connection mode by modifying the connection header.
         """
         if mode.lower() not in ["close", "keep-alive"]:
-            raise RequestError(
-                "Connection mode can only be between 'close' and 'keep-alive' "
-            )
+            raise RequestError("Connection mode can only be between 'close' and 'keep-alive' ")
         self.set_header("Connection", mode)
 
     def set_header(self, header: str, value: str):
@@ -1217,13 +1214,15 @@ class Request:
         """
         
         # Extract auth, and query data
+        multipart_queries, files = self.extract_files_from_request(self)
+        
         self.COOKIES.update(self.extract_cookies_from_request(self))
         self.AUTH.update(self.extract_auth_from_request(self))
-        self.FILES.update(self.extract_files_from_request(self))
+        self.FILES.update(files)
         
         # Extract URL and Content Queries
         url_query = self.extract_url_queries(self.fullpath)
-        content_query = self.extract_content_queries(self)
+        content_query = {**multipart_queries, **self.extract_content_queries(self)}
 
         # Update the global QueryDict
         self.QUERY.update({"URL_QUERY": url_query})
@@ -1232,7 +1231,7 @@ class Request:
         # Combine the queries and set as a method attribute (e.g., GET, POST)
         combined_query = url_query.copy()
         combined_query.update(content_query)
-
+        
         # Set the combined query as an attribute named after the HTTP method (e.g., self.GET, self.POST)
         setattr(self, self.method.upper(), combined_query)
         

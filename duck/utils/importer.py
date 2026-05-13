@@ -46,7 +46,7 @@ def x_import(object_path, package: str = None):
         return getattr(module, obj_name)
     except AttributeError as e:
         # Avoid recursive reload loops while the module is still initializing.
-        if _is_partial_module(module):
+        if not _is_partial_module(module):
             raise e
 
         # On reload, module can be partially initialized; retry after reload once.
