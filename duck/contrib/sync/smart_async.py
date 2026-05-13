@@ -163,6 +163,7 @@ class TransactionThread(threading.Thread):
                         future.set_exception(result)
                     else:
                         future.set_result(result)
+                    
                     exec_time = time.time() - start_time
                     
                     # Warn user if task too long
@@ -175,7 +176,8 @@ class TransactionThread(threading.Thread):
                         if not taskname:
                             taskname = task.__class__.__name__
                         
-                        # Warn user
+                        # Warn user - ignore for now
+                        """
                         logger.warn(
                             (
                                 f"Task took too long to finish: {exec_time:.2f} s, task: {taskname}. "
@@ -185,6 +187,7 @@ class TransactionThread(threading.Thread):
                             ),
                             TaskTookTooLongWarning,
                         )
+                        """
                     
                 except (asyncio.InvalidStateError, asyncio.CancelledError):
                     pass

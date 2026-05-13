@@ -202,7 +202,7 @@ class RequestProcessor:
         
         if methods and self.request.method.upper() not in methods:
             raise MethodNotAllowedError("The requested method is not allowed for this request.")
-            
+    
     def get_view_response(self) -> HttpResponse:
         """
         Processes the appropriate view for the request and returns appropriate response.
@@ -265,6 +265,7 @@ class RequestProcessor:
                     run = convert_to_sync_if_needed(view.run)
                     response = view_wrapper(run)()
             else:
+                # Continue with request processing
                 view_callable = convert_to_sync_if_needed(view_callable)
                 response = view_wrapper(view_callable)(request=self.request, **view_kwargs)
             
@@ -349,6 +350,26 @@ class RequestProcessor:
         response = SettingsLoaded.WSGI.get_response(request)
         return response
         
+    def process_view_decorators(self):
+        """
+        Process view-level decorators and apply their effects to the request context.
+    
+        Some decorators expose attributes on the view function (e.g. `csrf_exempt`)
+        which influence request handling behavior. This method inspects those
+        attributes and updates request metadata accordingly.
+        """
+        view = self.route_info["handler"]
+        view_func = view
+        
+        if type(view) == type and issubclass(view, View):
+            view_func = view.run
+            
+        # Process decorators now.
+        csrf_exempt = getattr(view_func, "csrf_exempt", False)
+    
+        if csrf_exempt:
+            self.request.META["CSRF_EXEMPT"] = True
+            
     def process_request(self) -> HttpResponse:
         """
         Processes the http request and returns the appropriate http response.
@@ -364,6 +385,9 @@ class RequestProcessor:
             Exception: Any other exceptions.
         """
         self.check_base_errors() # check base errors like request syntax error, etc
+        
+        # Process view decorators
+        self.process_view_decorators()
         
         # Process request further after confirmation that request has no base errors
         # like RequestSyntaxError, RequestUnsupportedVersionError, etc.
@@ -590,10 +614,13 @@ class AsyncRequestProcessor(RequestProcessor):
             
             if is_ws_view or (type(view_callable) == type and issubclass(view_callable, View)):
                 view = view_callable(self.request, **view_kwargs) # initialize view
+                
+                # Continue processing
                 run = convert_to_async_if_needed(view.run)
                 response = await async_view_wrapper(run)()
                 
             else:
+                # Continue with processing.
                 view_callable = convert_to_async_if_needed(view_callable)
                 response = await async_view_wrapper(view_callable)(request=self.request, **view_kwargs)
         
@@ -690,6 +717,9 @@ class AsyncRequestProcessor(RequestProcessor):
             Exception: Any other exceptions.  
         """
         self.check_base_errors() # check base errors like request syntax error, etc
+        
+        # Process view decorators
+        self.process_view_decorators()
         
         # Process request further after confirmation that request has no base errors
         # like RequestSyntaxError, RequestUnsupportedVersionError, etc.

@@ -152,6 +152,7 @@ def get_csrf_token(request):
         # add_new_csrf_cookie adds these to request.META:
         #    1) CSRF_COOKIE
         #    2) CSRF_COOKIE_NEEDS_UPDATE
+    
     try:
         csrf_token = mask_cipher_secret(csrf_secret)
     except Exception:
@@ -162,6 +163,7 @@ def get_csrf_token(request):
     
     if CSRF_USE_SESSIONS:
         request.session[CSRF_SESSION_KEY] = csrf_secret
+    
     return csrf_token
 
 
@@ -315,6 +317,9 @@ class CSRFMiddleware(BaseMiddleware):
 
     @classmethod
     def get_error_response(cls, request):
+        """
+        Return error response on csrf check failure.
+        """
         if SETTINGS["DEBUG"]:
             csrf_error_context = {"reason": "CSRFMiddleware error"}
 
@@ -336,6 +341,9 @@ class CSRFMiddleware(BaseMiddleware):
 
     @classmethod
     def process_response(cls, response, request):
+        """
+        Process outgoing response.
+        """
         if request.META.get("CSRF_COOKIE_NEEDS_UPDATE"):
             # Csrf cookie needs to be sent to client
             csrf_secret = request.META.get("CSRF_COOKIE")
@@ -370,15 +378,25 @@ class CSRFMiddleware(BaseMiddleware):
             
     @classmethod
     def process_request(cls, request: HttpRequest):
+        """
+        Process incoming request.
+        """
         from duck.http.core.processor import (
             is_django_side_url,
             is_duck_explicit_url,
         )
         
+        # Assume that anything not defined as 'safe' by RFC 9110 needs protection
+        if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
+            return cls.request_ok
+            
+        if request.META.get('CSRF_EXEMPT', False):
+            return cls.request_ok
+            
         if SETTINGS["USE_DJANGO"] and (is_django_side_url(request.path) or not is_duck_explicit_url(request.path)):
             # This request is meant for Django to handle, no need to do Csrf middleware checks (Django will do it).
             return cls.request_ok
-            
+        
         csrf_token_name = "csrfmiddlewaretoken"
         csrf_session_key = CSRF_SESSION_KEY
         csrf_cookie_name = SETTINGS["CSRF_COOKIE_NAME"]
@@ -387,11 +405,7 @@ class CSRFMiddleware(BaseMiddleware):
 
         if csrf_secret_from_cookie:
             request.META["CSRF_COOKIE"] = csrf_secret_from_cookie
-
-        # Assume that anything not defined as 'safe' by RFC 9110 needs protection
-        if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
-            return cls.request_ok
-
+            
         if SETTINGS["CSRF_USE_SESSIONS"]:
             correct_csrf_secret = request.SESSION.get(csrf_session_key)
         else:
@@ -403,7 +417,7 @@ class CSRFMiddleware(BaseMiddleware):
             request.csrf_error_reason = str(e)
             return cls.request_bad
 
-        # perform origin and referer checks
+        # Perform origin and referer checks
         try:
             cls._check_origin_ok(request)
             cls._check_referer_ok(request)
@@ -418,20 +432,20 @@ class CSRFMiddleware(BaseMiddleware):
                 "Request might have expired, try reloading page")
             return cls.request_bad
 
-        sent_token = request.QUERY["CONTENT_QUERY"].get(
-            csrf_token_name, "") or request.get_header(csrf_header_name, "")
+        sent_token = (
+            request.QUERY["CONTENT_QUERY"].get(csrf_token_name, "")
+            or request.get_header(csrf_header_name, "")
+        )
+        
         try:
-            sent_csrf_token_secret = (
-                unmask_cipher_token(sent_token)
-                or "<no-token>")
+            sent_csrf_token_secret = (unmask_cipher_token(sent_token) or "<no-token>")
         except:
             sent_csrf_token_secret = "<invalid-token>"
 
         if not (constant_time_compare(sent_csrf_token_secret, correct_csrf_secret)
             and len(correct_csrf_secret) == CSRF_SECRET_LENGTH
             and len(sent_csrf_token_secret) == CSRF_SECRET_LENGTH):
-            request.csrf_error_reason = (
-                "CSRF token missing or invalid, try reloading page")
+            request.csrf_error_reason = ("CSRF token missing or invalid, try reloading page")
             return cls.request_bad
 
         # Warning: don't rotate csrf_token yet as this might mean user needs to reload web form every time.

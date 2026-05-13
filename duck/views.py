@@ -60,6 +60,34 @@ class ViewCachingWarning(UserWarning):
     """
 
 
+def csrf_exempt(view_func):
+    """
+    Decorator that marks a view as exempt from CSRF middleware checks.
+
+    Usage:
+        @csrf_exempt
+        def my_view(request):
+            ...
+
+        @csrf_exempt
+        async def my_async_view(request):
+            ...
+    """
+    if iscoroutinefunction(view_func):
+        @wraps(view_func)
+        async def wrapped_view(request, *args, **kwargs):
+            return await view_func(request, *args, **kwargs)
+    else:
+        @wraps(view_func)
+        def wrapped_view(request, *args, **kwargs):
+            return view_func(request, *args, **kwargs)
+            
+    # Set csrf exempt flag
+    wrapped_view.csrf_exempt = True
+    #print(wrapped_view)
+    return wrapped_view
+
+
 def cached_view(
     targets: Union[Dict[Union[str, Callable], Dict[str, Any]], List[str]],
     expiry: Optional[float] = None,

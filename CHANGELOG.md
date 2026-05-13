@@ -18,6 +18,7 @@ and this project adheres to Semantic Versioning.
 - Added a method `update_now` to `LivelyWebsocketView` for syncing the current state of an HTML/Lively component with the client. It behaves more like `ForceUpdate` and can be used in the middle of component event event handler.
 - Added session persistence for Lively events: sessions are now automatically saved when modified within a Lively event handler.
 - Added method `set_meta` to Page component.
+- Added `csrf_exempt` decorator in `duck.views` module.
 
 ### Changed
 
