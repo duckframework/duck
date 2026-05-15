@@ -3,8 +3,10 @@ Provides access to application settings.
 """
 import os
 import sys
+import warnings
 
 from functools import lru_cache
+from typing import List, Tuple
 
 from duck.exceptions.all import SettingsError
 from duck.utils.importer import import_module_once
@@ -12,47 +14,48 @@ from duck.utils.importer import import_module_once
 
 # Set default settings if not provided
 os.environ.setdefault("DUCK_SETTINGS_MODULE", "web.settings")
+
+# Retrieve settings module from the environment
 SETTINGS_MODULE = os.environ.get("DUCK_SETTINGS_MODULE")
+
+# Deprecated settings
+DEPRECATED_SETTINGS: List[Tuple[str, str]] = [
+    (
+        "FORCE_HTTPS",
+        "Setting 'FORCE_HTTPS' is deprecated, please use "
+        "'HTTPS_REDIRECT' instead.",
+    ),
+    (
+        "FORCE_HTTPS_BIND_PORT",
+        "Setting 'FORCE_HTTPS_BIND_PORT' is deprecated, please use "
+        "'HTTPS_REDIRECT_BIND_PORT' instead.",
+    ),
+]
+
+
+def warn_deprecated_settings(settings: "Settings"):
+    """
+    Warn about deprecated settings currently in use.
+
+    Args:
+        settings:
+            Loaded settings object to inspect.
+    """
+    for setting_name, message in DEPRECATED_SETTINGS:
+        if setting_name in settings:
+            warnings.warn(message, DeprecationWarning)
 
 
 class Settings(dict):
     """
     A class for managing **Duck** settings.
-    
-    This class extends the built-in `dict` to store settings in a dictionary-like format.
-    It also provides a custom representation of the settings for debugging and logging.  
-    
-    **Notes:**
-    - These settings can be altered at runtime once imported but the `SETTINGS` should be imported and
-      edited at top level before importing anything related to **Duck**.  
-       
-       **Example:**
-       ```py
-       from duck.settings import SETTINGS
-       
-       # Edit settings inplace .e.g.,
-       SETTINGS['ENABLE_HTTPS'] = True
-       
-       from duck.app import App
-       
-       app = App()
-       
-       if __name__ == '__main__':
-           app.run()
-       ``` 
     """
     
     source = None
-    """
-    The source of settings e.g., `web.settings`.
-    """
     
     def reload(self):
         """
         Re-execute the settings module and update this dict in-place.
-        
-        Notes:
-            The settings module will be the latest one set in `DUCK_SETTINGS_MODULE`.
         """
         import importlib
         
@@ -62,7 +65,7 @@ class Settings(dict):
         
         if mod:
             importlib.reload_module(mod)
-            mods.append(mod) 
+            mods.append(mod)
         else:
             mod = import_module_once(mod_str)
             mods.append(import_module_once("duck.etc.settings"))
@@ -70,14 +73,16 @@ class Settings(dict):
             
         # Apply settings inplace
         self.source = mod
+        
         for mod in mods:
             for var in dir(mod):
                 if var.isupper():
-                    # is a valid setting variable
                     self[var] = getattr(mod, var)
+                    
+        # Warn deprecated settings
+        warn_deprecated_settings(self)
                 
     def __repr__(self):
-        # Provide a more detailed and readable string representation of the Settings object
         return (
            "<" + f"{self.__class__.__name__} "
             f"source={repr(self.source)}".replace('<', "[").replace('>', "]") + ">"
@@ -87,40 +92,33 @@ class Settings(dict):
 @lru_cache
 def settings_to_dict(settings_module: str) -> Settings:
     """
-    Converts a settings module to a dictionary.
-
-    Args:
-        settings_module (str): The path to the settings module.
-
-    Returns:
-        Settings: Settings object derived from a dictionary containing the settings.
-
-    Raises:
-        ImportError: If the settings module cannot be imported.
+    Convert a settings module into a Settings object.
     """
     settings_mod = import_module_once(settings_module)
+    
+    # Initialize and update settings
     settings = Settings({})
     settings.source = settings_mod
     
     for var in dir(settings_mod):
         if var.isupper():
-            # is a valid setting variable
             settings[var] = getattr(settings_mod, var)
+            
+    # Finally, return settings.
     return settings
 
 
 def get_combined_settings() -> Settings:
     """
-    Combines default and user settings into a single dictionary.
-
-    Reads the default settings from `duck.etc.settings` and attempts to
-    read user settings from a `settings` module in the current directory.
+    Combine default and user settings into a single settings object.
 
     Returns:
-        Settings: Settings object derived from a dictionary containing the settings.
+        Settings:
+            Combined settings object.
 
     Raises:
-        SettingsError: If there's an error loading user settings.
+        SettingsError:
+            Raised if the user settings module cannot be loaded.
     """
     default_settings = settings_to_dict("duck.etc.settings")
     
@@ -128,13 +126,22 @@ def get_combined_settings() -> Settings:
         user_settings = settings_to_dict(SETTINGS_MODULE)
     except Exception as e:
         raise SettingsError(
-            f"Error loading Duck settings module, ensure environment variable DUCK_SETTINGS_MODULE is set correctly: {e}."
+            "Error loading Duck settings module, ensure "
+            "environment variable DUCK_SETTINGS_MODULE "
+            f"is set correctly: {e}."
         ) from e
     
-    # Update the default settings with custom ones.
+    # Override defaults with user settings
     default_settings.update(user_settings)
+    
+    # Create and update Settings object.
     settings = Settings(default_settings)
     settings.source = user_settings.source
+    
+    # Warn deprecated settings
+    warn_deprecated_settings(settings)
+    
+    # Return final settings.
     return settings
 
 
@@ -157,6 +164,9 @@ if not SETTINGS_MODULE.startswith("web") and SETTINGS['DJANGO_SETTINGS_MODULE'].
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', SETTINGS['DJANGO_SETTINGS_MODULE'])
 
 
-if (os.getenv("DUCK_USE_DJANGO", None) == "true"
-    or "-dj" in sys.argv or "--use-django" in sys.argv):
+if (
+    os.getenv("DUCK_USE_DJANGO", None) == "true"
+    or "-dj" in sys.argv 
+    or "--use-django" in sys.argv
+):
     SETTINGS["USE_DJANGO"] = True

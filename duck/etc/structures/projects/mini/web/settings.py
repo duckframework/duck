@@ -53,17 +53,16 @@ BLUEPRINTS: list[str] = [
 MIDDLEWARES: list[str] = middlewares
 
 
-# HTTPS
-# Specifies whether to enable HTTPS for the server.
-# - When `ENABLE_HTTPS=True`, HTTPS is enabled on the specified port.
-# - Ensure you have valid SSL certificates configured for secure communication.
-ENABLE_HTTPS: bool = False
-
-
-# Force HTTPS
+# HTTPS Redirect
 # Enforces HTTPS by redirecting unencrypted HTTP traffic to HTTPS.
-# When `FORCE_HTTPS=True`, all HTTP requests will be redirected to HTTPS.
-FORCE_HTTPS: bool = False
+# - When `HTTPS_REDIRECT=True`, all HTTP requests will be redirected to HTTPS.
+HTTPS_REDIRECT: bool = False
+
+
+# HTTPS Rediret Bind Port
+# Specifies the port for the redirection app to handle HTTP to HTTPS redirection.
+# - This port will listen for unencrypted traffic and redirect it to the HTTPS-enabled app.
+HTTPS_REDIRECT_BIND_PORT: int = 8080
 
 
 # Asynchronous Request Handling

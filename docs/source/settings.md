@@ -155,16 +155,16 @@ SUPPORT_HTTP_2: bool = True
 ENABLE_HTTPS: bool = False
 
 
-# Force HTTPS
+# HTTPS Redirect
 # Enforces HTTPS by redirecting unencrypted HTTP traffic to HTTPS.
-# - When `FORCE_HTTPS=True`, all HTTP requests will be redirected to HTTPS.
-FORCE_HTTPS: bool = False
+# - When `HTTPS_REDIRECT=True`, all HTTP requests will be redirected to HTTPS.
+HTTPS_REDIRECT: bool = False
 
 
-# Force HTTPS Bind Port
+# HTTPS Redirect Bind Port
 # Specifies the port for the redirection app to handle HTTP to HTTPS redirection.
 # - This port will listen for unencrypted traffic and redirect it to the HTTPS-enabled app.
-FORCE_HTTPS_BIND_PORT: int = 8080
+HTTPS_REDIRECT_BIND_PORT: int = 8080
 
 
 # Web Server Gateway Interface (WSGI) to use within Duck.

@@ -121,7 +121,7 @@ class Handler(FileSystemEventHandler):
             log_to_console=False,
             no_exit=True,
             kill_ducksight_reloader=False,
-            wait_for_thread_pool_executor_shutdown=False,
+            wait_for_runtime_executor_shutdown=False,
             close_log_file=True,
         )
         

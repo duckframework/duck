@@ -59,8 +59,9 @@ class Meta:
     """
     
     exceptional_keys: list = [
-        "DUCK_SERVER_DOMAIN",
+        "DUCK_SERVER_DOMAIN", # For straight IPs
         "DUCK_SERVER_ADDR",
+        "DUCK_SERVER_URL",
         "DUCK_DJANGO_ADDR",
     ]
     """
@@ -91,6 +92,11 @@ class Meta:
         Returns:
             str: The absolute server URL.
         """
+        server_url = cls.get_metadata("DUCK_SERVER_URL", None)
+        
+        if server_url:
+            return server_url
+        
         domain = cls.get_metadata("DUCK_SERVER_DOMAIN", None)
         port = cls.get_metadata("DUCK_SERVER_PORT", None)
         protocol = cls.get_metadata("DUCK_SERVER_PROTOCOL", None)
@@ -122,6 +128,15 @@ class Meta:
         Returns:
             str: The absolute WebSockets server URL.
         """
+        from duck.utils.path import URL
+        
+        server_url = cls.get_metadata("DUCK_SERVER_URL", None)
+        
+        if server_url:
+            server_url_obj = URL(server_url)
+            server_url_obj.scheme = "ws" if server_url_obj.scheme == "http" else "wss"
+            return server_url_obj.to_str()
+            
         domain = cls.get_metadata("DUCK_SERVER_DOMAIN", None)
         port = cls.get_metadata("DUCK_SERVER_PORT", None)
         protocol = cls.get_metadata("DUCK_SERVER_PROTOCOL", None)
@@ -233,6 +248,8 @@ class Meta:
                 # Only raise if key is not DUCK_SERVER_DOMAIN/DUCK_SERVER_ADDR as this may be an ipv6 address
                 raise MetaError(f"Multiple value separators (';' or ':') are not supported for \"{key}\" except in a dictionary.")
 
+        # Update the environment
         os.environ[key] = f"{str_value}@{var_type}"
+        
         if key not in cls.meta_keys:
           cls.meta_keys.append(key)

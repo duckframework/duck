@@ -9,53 +9,6 @@ This module provides the core application class, `App`, for setting up and runni
 - **Ducksight Reloader**: Watches for file changes and enables dynamic reloading in **DEBUG mode**.
 - **Port Management**: Ensures that application ports are available.
 - **Signal Handling**: Gracefully handles termination signals (e.g., `Ctrl+C`) for clean shutdown.
-
----
-
-## Attributes
-
-| Attribute                  | Description |
-|----------------------------|-------------|
-| `DJANGO_ADDR`              | The address and port for the Django server. |
-| `DOMAIN`                   | The domain name for the application. |
-| `DJANGO_SERVER_WAIT_TIME`  | Time to wait for the Django server to start. |
-| `server_up`                | Indicates if the main application server is running. |
-| `django_server_up`         | Indicates if the Django server is responsive. |
-
----
-
-## Methods
-
-### **Application Control**
-- `run()`: Starts the application and all services.
-- `stop()`: Stops the application.
-- `restart()`: Restarts the application.
-
-### **Server Management**
-- `start_server()`: Starts the main application server.
-- `start_django_server()`: Starts Django and configures Duck as a reverse proxy.
-- `start_force_https_server()`: Launches the HTTPS redirection service.
-
-### **Background Services**
-- `start_ducksight_reloader()`: Monitors file changes for live reloading.
-- `start_automations_dispatcher()`: Handles scheduled automation scripts.
-
-### **Event Handling & Security**
-- `register_signals()`: Registers signal handlers for clean exits.
-- `on_app_start()`: Event triggered when the application setup is complete.
-
----
-
-## **Application Instance Management**
-The `App` class ensures that only **one instance** of the application is running at a time.  
-For **microservices or smaller applications**, use the `MicroApp` class instead.
-
----
-
-## **Exceptions Handled**
-- **`ApplicationError`**: Raised if multiple instances of `App` are created.
-- **`SettingsError`**: Raised for misconfigurations in application settings.
-- **`SSLError`**: Raised if SSL certificates or private keys are missing/invalid.
 """
 
 import os
@@ -73,271 +26,254 @@ from typing import (
     Any,
     Union,
 )
-from concurrent.futures import ThreadPoolExecutor, Future
+from concurrent.futures import Future
 
-from duck import processes
 from duck.settings import SETTINGS
 from duck.settings.loaded import SettingsLoaded
-from duck.app.microapp import HttpsRedirectMicroApp
-from duck.contrib.reloader.ducksight import DuckSightReloader
 from duck.exceptions.all import (
+    SSLError,
     ApplicationError,
     SettingsError,
-    SSLError,
 )
 from duck.http.core.httpd.servers import HTTPServer
 from duck.logging import logger
 from duck.meta import Meta
-from duck.setup import setup, set_asyncio_loop
 from duck.csp import csp_nonce_flag
 from duck.art import display_duck_art
 from duck.version import version
-from duck.utils import ipc
-from duck.utils.net import (is_ipv4, is_ipv6)
-from duck.utils.path import url_normalize
-from duck.utils.port_recorder import PortRecorder
 from duck.utils.lazy import Lazy
 from duck.utils.asyncio.eventloop import get_or_create_loop_manager
 from duck.utils.threading.threadpool import get_or_create_thread_manager
+from duck.app.base import BaseApp
 
 
-if SETTINGS['USE_DJANGO']:
-    from duck.backend.django import bridge
-else:
-    # Bridge for starting Django server.
-    bridge = None
-
-
-class App:
+class App(BaseApp):
     """
     Initializes and configures the **Duck** application.
     """
+    DEFAULT_ADDR = "localhost"
+    DEFAULT_PORT = 8000
     
-    DJANGO_ADDR: tuple[str, int] = None
-    """
-	Specifies the host address and port for the Django server. 
-	For enhanced security, ensure that uncommon ports are used.
-	"""
-
-    DOMAIN: str = None
-    """
-    Domain for the application used in building the application absolute URI.
-    """
-
-    DJANGO_SERVER_WAIT_TIME: int = SETTINGS["DJANGO_SERVER_WAIT_TIME"]
-    """
-    Time in seconds to wait before checking if the Django server is up and running. 
-    This variable is used to periodically verify the server's status during the initial startup or 
-    maintenance routines, ensuring that the server is ready to handle incoming requests.
-    """
-    
-    __instances__: int = 0
-    """
-    The number of App instances, must be <= 1.
-    """
-    
+    __instances__ = 0
     __mainapp__ = None
-    """
-    This is the main application instance.
-    """
     
     def __init__(
         self,
-        addr: str = "localhost",
-        port: int = 8000,
-        domain: str = None,
+        name: Optional[str] = None,
+        
+        # Network configuration
+        addr: str = DEFAULT_ADDR,
+        port: int = DEFAULT_PORT,
+        domain: Optional[str] = None,
+        server_url: Optional[str] = None,
         uses_ipv6: bool = False,
-        no_checks: bool = False,
+    
+        # Process configuration
+        process_name: Optional[str] = None,
+        workers: Optional[int] = None,
+        force_worker_processes: bool = False,
+    
+        # HTTPS redirect server
+        https_redirect_logs: bool = False,
+        https_redirect_workers: Optional[int] = None,
+        https_redirect_force_worker_processes: bool = False,
+    
+        # Runtime behavior
+        start_bg_eventloop_if_wsgi: bool = True,
         disable_signal_handler: bool = False,
         disable_ipc_handler: bool = False,
+    
+        # Development / internal flags
+        no_checks: bool = False,
         skip_setup: bool = False,
-        enable_force_https_logs: bool = False,
-        start_bg_eventloop_if_wsgi: bool = True,
-        process_name: str = "duck-server",
-        workers: Optional[int] = None,
-        force_https_workers: Optional[int] = None,
-        force_worker_processes: bool = False,
-        force_https_force_worker_processes: bool = False,
-    ):
+    ) -> None:
         """
-        Initializes the main Duck application instance.
-    
-        This constructor sets up the application server, including optional Django integration,
-        HTTPS redirection, and automation dispatching. It validates IP configuration, initializes
-        environment settings, performs startup checks, and prepares runtime threads for the
-        core services.
-    
+        Initialize the main Duck application instance.
+        
+        Sets up the application runtime, networking configuration, worker handling,
+        HTTPS redirect support, and internal runtime services.
+        
         Args:
-            addr (str): The IP address or hostname the server will bind to. Defaults to "localhost".
-            port (int): The port number to run the application on. Defaults to 8000.
-            domain (str, optional): The public-facing domain for the app. If not provided, defaults to `addr`.
-            uses_ipv6 (bool): Whether to use IPv6 for networking. Defaults to False.
-            no_checks (bool): If True, skips initial environment checks. Defaults to False.
-            disable_signal_handler (bool): If True, disables setup of OS-level signal handlers. Defaults to False.
-            disable_ipc_handler (bool): If True, disables setup of inter-process communication handlers. Defaults to False.
-            skip_setup (bool): If True, skips setting up Duck environment, e.g. setting up urlpatterns and blueprints.
-            enable_force_https_logs (bool): If True, force https microapp logs will be outputed to console. Defaults to False.
-            start_bg_eventloop_if_wsgi (bool): If True, it starts a request handling event loop in background thread for offloading coroutines in `WSGI` environment.
-                This is useful for running asynchronous protocols like `HTTP/2` and `WebSockets` even in `WSGI` environment.
-            process_name (str): The name of the process for this application. Defaults to "duck-server".
-            workers (Optional[int]): Number of workers to use. None will disable workers.
-            force_https_workers (Optional[int]): Number of workers to use for HTTPS redirects. None will disable workers.
-            force_worker_processes (bool): Determines whether to use worker **processes** instead of the default worker **threads**. 
-                    By default, when `workers` is greater than 1, the server will use worker **threads**.  
-                    Threads avoid cross-process synchronization issues—such as component registry mismatches 
-                    (e.g., issues with Lively components) that occur when state lives in separate processes.  
-                    
-                    Set this flag to `True` only when process isolation is explicitly desired **and** you do not
-                    require shared in-memory synchronization between workers.
-            force_https_force_worker_processes (bool): Whether to force use of multiple processes for `HTTPS` redirect app. Defaults to False. 
-                    
+            name:
+                Optional application name.
+                
+            addr:
+                Address or hostname to bind the server to.
+        
+            port:
+                Port to bind the server to.
+        
+            domain:
+                Public-facing domain name for the application. If not provided,
+                the bound address is used.
+            
+            server_url:
+                Optional public-facing absolute server URL.
+            
+            uses_ipv6:
+                Whether to use IPv6 networking.
+        
+            process_name:
+                Optional process name used for runtime identification.
+        
+            no_checks:
+                Whether to skip startup and environment checks.
+        
+            skip_setup:
+                Whether to skip automatic framework setup such as URL and
+                blueprint registration.
+        
+            disable_signal_handler:
+                Whether to disable OS signal handlers.
+        
+            disable_ipc_handler:
+                Whether to disable the internal IPC handler.
+        
+            start_bg_eventloop_if_wsgi:
+                Whether to start a background asyncio event loop when running
+                in a WSGI environment. This allows async protocols such as
+                WebSockets and HTTP/2 to run under WSGI.
+        
+            workers:
+                Number of workers to use for the main application server.
+                `None` disables workers.
+        
+            force_worker_processes:
+                Whether to use worker processes instead of threads for the
+                main application server.
+        
+                By default, Duck uses threads because they avoid cross-process
+                synchronization issues involving shared in-memory state such as
+                component registries.
+        
+                Enable this only when process isolation is explicitly required.
+        
+            https_redirect_logs:
+                Whether to enable console logs for the HTTPS redirect server.
+        
+            https_redirect_workers:
+                Number of workers to use for the HTTPS redirect server.
+                `None` disables workers.
+        
+            https_redirect_force_worker_processes:
+                Whether to use worker processes instead of threads for the
+                HTTPS redirect server.
+        
         Raises:
-            ApplicationError: If the provided address is invalid or if multiple main application
-            instances are created (only one is allowed).
-    
-        Side Effects:
-        - Validates IP address format (IPv4 or IPv6).
-        - Initializes HTTPS redirect server if `FORCE_HTTPS` is enabled.
-        - Starts Django server if `USE_DJANGO` is set.
-        - Starts the main application server.
-        - Registers automation triggers if `RUN_AUTOMATIONS` is enabled.
-        - Adds the application port to a port registry to prevent conflicts.
+            ApplicationError:
+                Raised if the provided address is invalid or if multiple
+                main application instances are created.
         
         Notes:
-        - Only a single instance of the main `App` should be created. For additional services or sub-applications, use `MicroApp`.
-            
-        - Set `disable_ipc_handler=False` **only** in a test environment.
-              The IPC handler introduces a blocking mechanism that keeps the main interpreter running.
-              Disabling it in production may lead to unhandled or improperly managed requests, as the blocking behavior is essential for proper execution.
-              The app will be run in background and `app.run` won't be blocking anymore.
+            - Only one main `App` instance should exist per process.
+              Use `MicroApp` for additional services or sub-applications.
+        
+            - Disabling the IPC handler is intended mainly for testing.
+              In normal environments, the IPC handler keeps the runtime
+              alive and coordinated correctly.
         """
-        if uses_ipv6 and not is_ipv6(addr) and not str(addr).isalnum():
-            raise ApplicationError("Argument uses_ipv6=True yet addr provided is not a valid IPV6 address.")
-
-        if not uses_ipv6 and not is_ipv4(addr) and not str(addr).isalnum():
-            raise ApplicationError("Argument `addr` is not a valid IPV4 address.")
+        from duck.utils.threading.threadpool import get_or_create_thread_manager
+        from duck.app.microapp import HttpsRedirectMicroApp
         
-        self.addr = addr
-        self.port = port
-        self.uses_ipv6 = uses_ipv6
-        self.no_checks = no_checks
-        self.is_domain_set = True if domain else False
-        self.started = False
-        self._restart_success = False  # state on whether last restart operation has been successfull
-        
-        # Set appropriate domain
-        self.domain = domain or (addr if not uses_ipv6 else f"[{addr}]")
-        
-        if is_ipv4(self.domain) and self.domain.startswith("0"):
-            # IP "0.x.x.x" not allowed as domain because most browsers cannot resolve this.
-            self.domain = "localhost"
-            
-        self.enable_https: bool = SETTINGS["ENABLE_HTTPS"]
-        self.DOMAIN = self.domain
-        self.SETTINGS = SETTINGS
-        self.DJANGO_ADDR = addr, SETTINGS["DJANGO_BIND_PORT"]
-        self.force_https = SETTINGS["FORCE_HTTPS"]
-        self.force_https_port = SETTINGS["FORCE_HTTPS_BIND_PORT"]
-        self.enable_force_https_logs = enable_force_https_logs
-        self.use_django = SETTINGS["USE_DJANGO"]
-        self.run_automations = SETTINGS["RUN_AUTOMATIONS"]
+        # Runtime behavior
+        self.skip_setup = skip_setup
         self.disable_signal_handler = disable_signal_handler
         self.disable_ipc_handler = disable_ipc_handler
-        self.skip_setup = skip_setup
         self.start_bg_eventloop_if_wsgi = start_bg_eventloop_if_wsgi
-        self.process_name = process_name or "duck-server"
-        self.workers = workers
-        self.force_https_workers = force_https_workers
-        self.force_worker_processes = force_worker_processes
-        self.force_https_force_worker_processes = force_https_force_worker_processes
         
-        # Initialize some attributes
+        # Process configuration
+        self.process_name = process_name or "duck-server"
+        
+        # Django configuration
+        self.use_django = SETTINGS["USE_DJANGO"]
+        self.django_server_wait_time = SETTINGS["DJANGO_SERVER_WAIT_TIME"]
+        self.django_addr = addr
+        self.django_bind_port = SETTINGS["DJANGO_BIND_PORT"]
+        
+        # HTTPS redirect configuration
+        self.https_redirect = SETTINGS["HTTPS_REDIRECT"]
+        self.https_redirect_addr = addr
+        self.https_redirect_port = SETTINGS["HTTPS_REDIRECT_BIND_PORT"]
+        self.https_redirect_logs = https_redirect_logs
+        self.https_redirect_workers = https_redirect_workers
+        self.https_redirect_force_worker_processes = https_redirect_force_worker_processes
+        
+        # Automation configuration
+        self.run_automations = SETTINGS["RUN_AUTOMATIONS"]
+
+        # Runtime objects
         self.automations_dispatcher = None
         self.ducksight_reloader = None
-        self.force_https_app = None
-        self.last_request = None # Will be updated everytime by either ASGI/WSGI
+        self.https_redirect_app = None
         
-        # Set the app thread pool executor
-        def thread_pool_submit(task) -> Future:
-            # Custom submit callable to always handle exceptions gracefully.
-            @logger.handle_exception
-            def on_task_done(task):
-                err = task.exception() # May sometimes raise exception
-                if err:
-                    raise err # Reraise exception
-            future = self.thread_pool_executor._super_submit(task)
-            future.add_done_callback(on_task_done)
-            return future
-            
-        # Modify default thread pool executor submit method
-        self.thread_pool_executor = ThreadPoolExecutor()
-        self.thread_pool_executor._super_submit = self.thread_pool_executor.submit
-        self.thread_pool_executor.submit = thread_pool_submit
-        
-        # Initialize some concurrent futures
-        self.duck_server_future = None
+        # Concurrent futures / threads
+        self.server_future = None
         self.django_server_future = None
         self.automations_dispatcher_future = None
         self.ducksight_reloader_thread = None
         
-        # Create some child processes (will be set later when necessary)
-        self.force_https_app_process = None
+        # Child processes
+        self.https_redirect_process = None
         
-        # Add application port to used ports
-        PortRecorder.add_new_occupied_port(port, f"{self}")
-        PortRecorder.add_new_occupied_port(
-            SETTINGS["DJANGO_BIND_PORT"],
-            "DJANGO_BIND_PORT",
-        ) if self.use_django else None
+        # Runtime executor
+        self.runtime_executor = get_or_create_thread_manager(id="app-runtime-executor")
         
-        if not no_checks:
-            # Run some checks
-            self.run_checks()
-            
-        # Vital objects creation
-        if self.force_https:
-            self.force_https_addr = addr
-            self.force_https_app = Lazy(
-                HttpsRedirectMicroApp,
-                location_root_url=self.absolute_uri,
-                addr=self.force_https_addr,
-                port=self.force_https_port,
-                parent_app=self,
-                domain=self.domain,
-                uses_ipv6=uses_ipv6,
-                enable_https=False,
-                no_logs=not enable_force_https_logs,
-                workers=force_https_workers,
-                force_worker_processes=force_https_force_worker_processes,
-            )  # Create https redirect micro application.
-            
-            # Set the process safe state for the force https app. 
-            self.force_https_process_safe_running_state = multiprocessing.Value('i', 0)
-            
-        # Create a server object.
-        self.server = HTTPServer(
-            (addr, port),
-            application=self,
-            domain=self.domain,
+        # Super initialize
+        super().__init__(
+            name=name,
+            addr=addr,
+            port=port,
+            domain=domain,
+            server_url=server_url,
             uses_ipv6=uses_ipv6,
-            enable_ssl=self.enable_https,
-            no_logs=False,
+            enable_https=SETTINGS['ENABLE_HTTPS'],
+            no_checks=no_checks,
             workers=workers,
             force_worker_processes=force_worker_processes,
         )
         
-        # Set process title
+        # HTTPS redirect app
+        if self.https_redirect:
+            self.https_redirect_app = Lazy(
+                HttpsRedirectMicroApp,
+                server_url=self.server_url,
+                addr=self.https_redirect_addr,
+                port=self.https_redirect_port,
+                domain=self.domain,
+                uses_ipv6=self.uses_ipv6,
+                enable_https=False,
+                no_logs=not self.https_redirect_logs,
+                workers=self.https_redirect_workers,
+                force_worker_processes=self.https_redirect_force_worker_processes,
+            )
+            
+            # Set HTTPS redirect state.
+            self.https_redirect_process_running_state = multiprocessing.Value("i", 0)
+        
+        # Main HTTP server
+        self.server = HTTPServer(
+            (addr, port),
+            application=self,
+            domain=self.domain,
+            uses_ipv6=self.uses_ipv6,
+            enable_ssl=self.enable_https,
+            no_logs=False,
+            workers=self.workers,
+            force_worker_processes=self.force_worker_processes,
+        )
+        
+        # Process setup
         self.set_process_name()
         
-        # Set app instances count
-        if type(self).__instances__ == 0:
-            type(self).__instances__ += 1
-            type(self).__mainapp__ = self
-        else:
+        # Main app singleton guard
+        if type(self).__instances__ > 0:
             raise ApplicationError(
-                "Application limit reached: Only one main application is permitted. "
-                "To create additional functionalities, consider using a MicroApp."
+                "Application limit reached: only one main application is permitted. "
+                "Use MicroApp for additional services or sub-applications."
             )
+        
+        type(self).__instances__ += 1
+        type(self).__mainapp__ = self
 
     @classmethod
     def instances(cls) -> int:
@@ -357,7 +293,7 @@ class App:
         
     @staticmethod
     def start_background_workers(
-        application: Union['App', 'MicroApp'],
+        application: BaseApp,
         start_request_handling_threadpool_manager,
         start_request_handling_eventloop_manager,
         start_component_threadpool_manager: bool = True,
@@ -368,7 +304,7 @@ class App:
         Starts or restarts background workers, e.g. `AsyncioLoopManager` & `ThreadPoolManager`.
         
         Args:
-            application (Union['App', 'MicroApp']): The target application.
+            application (BaseApp): The target application.
             start_request_handling_threadpool_manager (bool): Whether to start request handling threadpool in `WSGI` environment. This is only valid in WSGI environment only.
             start_request_handling_eventloop_manager (bool): Whether to start asyncio event loop either in `WSGI` or `ASGI` environment.
             start_component_threadpool_manager (bool): Whether to start the background threadpool manager for HTML components rendering, assistance, etc. Defaults to True.
@@ -385,6 +321,7 @@ class App:
         - The thread manager is only run in `WSGI` mode but loop manager can be run in any environment (ASGI or WSGI).
          """
         from duck.utils.threading import get_max_workers
+        from duck.setup import set_asyncio_loop
         
         _async = SETTINGS['ASYNC_HANDLING']
         start_bg_eventloop_if_wsgi = getattr(application, "start_bg_eventloop_if_wsgi", True)
@@ -455,18 +392,11 @@ class App:
                 "SSL private key provided in settings.py not found. You may use command `python3 -m duck ssl-gen` to "
                 "generate a new self signed certificate and key pair."
             )
-    
-    @property
-    def running(self) -> bool:
-        """
-        Returns True if the main server running else False.
-        """
-        return self.server.running
-        
+            
     @property
     def meta(self) -> Dict[str, Any]:
         """
-        Get application metadata.
+        Get global application metadata.
         """
         return Meta.compile()
 
@@ -482,48 +412,16 @@ class App:
     @property
     def absolute_uri(self) -> str:
         """
-        Returns application server absolute `URL`.
+        Returns application server absolute `URL` - this is fetched using `duck.meta.Meta`.
         """
-        scheme = "http"
-        
-        if self.enable_https:
-            scheme = "https"
-        
-        uri = f"{scheme}://{self.domain}"
-        uri = uri.strip("/").strip("\\")
-        
-        if not (self.port == 80 or self.port == 443):
-            uri += f":{self.port}"
-        
-        return uri
+        return Meta.get_absolute_server_url()
         
     @property
     def absolute_ws_uri(self) -> str:
         """
-        Returns application server absolute WebSockets `URL`.
+        Returns application server absolute WebSockets `URL` - this is fetched using `duck.meta.Meta`.
         """
-        scheme = "ws"
-        
-        if self.enable_https:
-            scheme = "wss"
-        
-        uri = f"{scheme}://{self.domain}"
-        uri = uri.strip("/").strip("\\")
-        
-        if not (self.port == 80 or self.port == 443):
-            uri += f":{self.port}"
-        
-        return uri
-        
-    @property
-    def server_up(self) -> bool:
-        """
-        Checks whether the main application server is up and running.
-
-        Returns:
-            bool: True if up else False
-        """
-        return self.server.running
+        return Meta.get_absolute_ws_server_url()
 
     @property
     def django_server_up(self) -> bool:
@@ -536,7 +434,7 @@ class App:
         import requests
 
         try:
-            host_addr, port = self.DJANGO_ADDR
+            host_addr, port = self.django_addr
             
             if host_addr.startswith("0") and not self.uses_ipv6:
                 # Host 0.0.0.0 not allowed on windows
@@ -564,26 +462,31 @@ class App:
         return False
 
     @property
-    def force_https_server_up(self) -> bool:
+    def https_redirect_server_up(self) -> bool:
         """
-        Checks whether force HTTPS redirect micro application is running.
+        Checks whether HTTPS redirect micro application is running.
 
         Returns:
             bool: True if up else False
         """
-        if self.force_https_app_process:
-            if self.force_https_app_process.is_alive():
-                return bool(self.force_https_process_safe_running_state.value)
+        if self.https_redirect_process:
+            if self.https_redirect_process.is_alive():
+                return bool(self.https_redirect_process_running_state.value)
             else:
                 return False
         else:
-            return self.force_https_app.server.running
+            return self.https_redirect_app.server.running
                
-    def set_process_name(self):
+    def register_ports(self):
         """
-        Set the whole process name.
+        Register occupied ports.
         """
-        setproctitle.setproctitle(self.process_name)
+        from duck.utils.port_registry import PortRegistry
+        
+        super().register_ports()
+        
+        if self.use_django:
+            PortRegistry.register_port(self.django_bind_port, "DJANGO_BIND_PORT")
         
     def run_checks(self):
         """
@@ -591,41 +494,90 @@ class App:
         """
         if self.enable_https:
             self.check_ssl_credentials()
-
-        # HTTPS checks
-        if self.force_https:
-            if not self.enable_https:
-                raise SettingsError("FORCE_HTTPS has been set in settings.py, also ensure ENABLE_HTTPS=True.")
+            
+    def set_process_name(self):
+        """
+        Set the whole process name.
+        """
+        setproctitle.setproctitle(self.process_name)
     
-    def build_absolute_uri(self, path: str) -> str:
+    def register_signals(self):
         """
-        Builds and returns absolute URL from provided path.
+        Register and bind signals to appropriate signal handler.
         """
-        return url_normalize(self.absolute_uri + "/" + path)
+        signal.signal(signal.SIGINT, self.handle_signal)
+        signal.signal(signal.SIGTERM, self.handle_signal)
         
-    def build_absolute_ws_uri(self, path: str) -> str:
+    def handle_signal(self, sig, frame):
         """
-        Builds and returns absolute WebsSockets URL from provided path.
+        Method for handling process signals.
+
+        Signals:
+        - `SIGINT` (Ctrl-C), `SIGTERM` (Terminate): Quits the server/application.
         """
-        return url_normalize(self.absolute_ws_uri + "/" + path)
+        if sig in [signal.SIGINT, signal.SIGTERM]:
+            self.stop(wait_for_runtime_executor_shutdown=False)
+            
+    def handle_ipc_messages(self):
+        """
+        Handles incoming IPC messages from the shared file.
         
-    def start_server(self):
+        Notes:
+        - This usually holds the main process from exiting because of the blocking behavior.
+        """
+        from duck.utils import ipc
+        
+        with ipc.get_reader() as reader:
+            with ipc.get_writer() as writer:
+                # Clear IPC writer file
+                writer.write_message("")  # Clear ipc shared file
+            
+            while True:
+                # Handle any incoming message.
+                message = reader.read_message().strip()
+                
+                if message:
+                    if any({message.lower() == i for i in ["bye", "quit", "exit"]}):
+                        self.stop()
+                        break
+                                
+                # Simulate some delay
+                time.sleep(1)
+                
+    def record_metadata(self):
+        """
+        Sets or updates the metadata for the app, these changes will
+        be globally available in `duck.meta.Meta` class.
+        """
+        # Security reasons not mentioning real servername but 'webserver' is safer.
+        data = {
+            "DUCK_SERVER_URL": self.server_url,
+            "DUCK_SERVER_NAME": "webserver",
+            "DUCK_SERVER_PORT": self.port,
+            "DUCK_SERVER_DOMAIN": self.domain,
+            "DUCK_SERVER_PROTOCOL": ("https" if self.enable_https else "http"),
+            "DUCK_DJANGO_ADDR": self.django_addr,
+            "DUCK_USES_IPV6": self.uses_ipv6,
+            "DUCK_SERVER_BUFFER": SETTINGS["SERVER_BUFFER"],
+            "DUCK_WORKERS": int(self.workers or 0), # Meta.update doesnt support NoneType
+        }
+        
+        # Update global metadata.
+        Meta.update_meta(data)
+    
+    def start_server(self) -> None:
         """
         Starts the app server in new thread.
         """  
-        def start_server():
-            """
-            Starts Duck application main server.
-            """
-            self.server.start_server()
-            
-        if not self.duck_server_future or not self.duck_server_future.running():
-            self.duck_server_future = self.thread_pool_executor.submit(start_server)
+        if not self.server_future or not self.server_future.running():
+            self.server_future = self.runtime_executor.submit_task(self.server.start_server)
                 
-    def start_django_server(self):
+    def start_django_server(self) -> None:
         """
         Starts Django server and use Duck as reverse proxy server for Django.
         """
+        from duck.backend.django import bridge
+        
         # We were starting Django in new process but we shouldn't because it isolates 
         # memory spaces which may make using Lively component system at Django side difficult.
         # If we used a new process, synchronization between django process and main process Lively Component System registry 
@@ -635,63 +587,75 @@ class App:
             """
             Starts Django application server
             """
-            host = self.DJANGO_ADDR
+            # Set the host to start Django on.
+            host = self.django_addr
             
             # Start django server
             bridge.start_django_server(*host, uses_ipv6=self.uses_ipv6)
             
         if self.use_django:
             if not self.django_server_future or not self.django_server_future.is_running():
-                self.django_server_future = self.thread_pool_executor.submit(start_django_server)
+                self.django_server_future = self.runtime_executor.submit_task(start_django_server)
                 
-    def start_force_https_server(self, log_message: bool = True):
+    def start_https_redirect_server(self, log_message: bool = True):
         """
-        Starts force HTTPS redirect micro application.  
+        Starts HTTPS redirect micro application in a new process.  
         
         Args:
             log_message (bool): Whether to log something before starting the micro app.
-        
-        Conditions:
-         - `ENABLE_HTTPS = True`
-         - `FORCE_HTTPS = True`
         """
-        def start_force_https(process_safe_running_state: multiprocessing.Value):
+        def start_https_redirect(process_safe_running_state: multiprocessing.Value):
             """
             Starts app for redirecting non encrypted traffic to main app using https.
             """
             p = multiprocessing.current_process()
+            
+            # Set process name.
             setproctitle.setproctitle(p.name)
-            signal.signal(signal.SIGINT, lambda *a: self.force_https_app.stop())
+            
+            # Register signal handler
+            signal.signal(signal.SIGINT, lambda *a: self.https_redirect_app.stop())
             
             # Restart background workers
             # Recreate managers recreates and attaches new managers fot the current 
             # thread and all its descendents.
             
-            # This only restarts request handling threadpool/eventloop manager plus component threadpool manager
-            App.start_background_workers(self, recreate_managers=True)
+            # Restart only request handling threadpool/eventloop manager
+            _async = SETTINGS['ASYNC_HANDLING']
+            start_bg_eventloop_if_wsgi = getattr(self, "start_bg_eventloop_if_wsgi", True)
+            start_eventloop = _async or (not _async and start_bg_eventloop_if_wsgi)
+            
+            App.start_background_workers(
+                self,
+                start_request_handling_threadpool_manager=not _async,
+                start_request_handling_eventloop_manager=start_eventloop,
+                start_component_threadpool_manager=False,
+                start_automations_eventloop_manager=False,    
+                recreate_managers=True,
+            )
             
             # Start the microapp
-            self.force_https_app.on_app_start = lambda: setattr(process_safe_running_state, 'value', int(self.force_https_app.server.running))
-            self.force_https_app.run(run_forever=True) # This is blocking; run_forever=True is blocking.
+            self.https_redirect_app.on_app_start = lambda: setattr(process_safe_running_state, 'value', int(self.https_redirect_app.server.running))
+            self.https_redirect_app.run(run_forever=True) # This is blocking; run_forever=True is blocking.
             
-        if self.enable_https and self.force_https:
+        if self.https_redirect:
             # Log something if applicable.
             if log_message:
                 logger.log(
-                    f"Forcing HTTPS to all incoming traffic [{SETTINGS['FORCE_HTTPS_BIND_PORT']} -> {self.port}]",
+                    f"Redirecting incoming HTTP traffic [{self.https_redirect_port} -> {self.port}]",
                     level=logger.DEBUG,
                 )
                 
-            # Start https redirect process
-            if not self.force_https_app_process or not self.force_https_app_process.is_alive():
-                self.force_https_app_process = multiprocessing.Process(
-                    target=start_force_https,
-                    name="duck-force-https-server",
-                    args=(self.force_https_process_safe_running_state, ),
+            # Start HTTP redirect process
+            if not self.https_redirect_process or not self.https_redirect_process.is_alive():
+                self.https_redirect_process = multiprocessing.Process(
+                    target=start_https_redirect,
+                    name="duck-https-redirect-server",
+                    args=(self.https_redirect_process_running_state, ),
                 )
                 
-                # Start the force https process
-                self.force_https_app_process.start()
+                # Start the HTTPS redirect process
+                self.https_redirect_process.start()
     
     def start_automations_dispatcher(self, log_message: bool = True):
         """
@@ -699,9 +663,6 @@ class App:
         
         Args:
             log_message (bool): Whether to log something before starting the micro app.
-            
-        Conditions:
-        - `RUN_AUTOMATIONS = True`
         """
         def start_automations_dispatcher():
             """
@@ -720,251 +681,59 @@ class App:
             for trigger, automation in SettingsLoaded.AUTOMATIONS:
                 # Register trigger and automation
                 self.automations_dispatcher.register(trigger, automation)
+            
+            # Start automations dispatcher
             self.automations_dispatcher.start()
                 
         if self.run_automations:
             # Submit task to the pool
             if not self.automations_dispatcher_future or not self.automations_dispatcher_future.running():
-                self.automations_dispatcher_future = self.thread_pool_executor.submit(start_automations_dispatcher)
+                self.automations_dispatcher_future = self.runtime_executor.submit_task(start_automations_dispatcher)
                         
     def start_ducksight_reloader(self):
         """
         Starts the DuckSight Reloader for reloading app on file modifications, deletions, etc.
         
         Notes:
-        - Unlike other tasks like starting Duck server, HTTPS redirect server, etc which will be run by the app 
-              `thread_pool_executor`, this runs in an independant background thread with `daemon=True`.
-              
-        Conditions:
-        - `DEBUG = True`
+        - Unlike other tasks like starting Duck server, HTTPS redirect server, etc which will be run by the app's `runtime_executor`,
+          this runs in an independant background thread with `daemon=True`.
         """
+        from duck.contrib.reloader.ducksight import DuckSightReloader
+        
         # Note: Production server should not be restarted at any point only start duck sight reloader on DEBUG
         def start_reloader():
+            """
+            Start the app's reloader.'
+            """
             if not self.ducksight_reloader:
                 self.ducksight_reloader = DuckSightReloader(SETTINGS['BASE_DIR'])
             self.ducksight_reloader.run()
             
         if SETTINGS["DEBUG"] and SETTINGS['AUTO_RELOAD']:
-            # Start ducksight reloader
             if not self.ducksight_reloader_thread or not self.ducksight_reloader_thread.is_alive():
                 if not self.ducksight_reloader_thread:
                     self.ducksight_reloader_thread = threading.Thread(target=start_reloader)
                 self.ducksight_reloader_thread.start()
                             
-    def get_threadpool_futures(self) -> Dict[str, Optional[Future]]:
+    def get_runtime_futures(self) -> Dict[str, Optional[Future]]:
         """
-        Returns a dictionary of all application concurrent futures as a result of submitting tasks 
-        to the `ThreadPoolExector`.
+        Returns a dictionary of all application runtime concurrent futures.
         
         Notes:
-        - The `DuckSightReloader` task is run on an independent thread, so no future for it will 
-               be included in the dictionary.
+        - The `DuckSightReloader` task is run on an independent thread, so no future for it will be included.
         """
         return {
-            "duck_server": self.duck_server_future,
+            "duck_server": self.server_future,
             "automations_dispatcher": self.automations_dispatcher_future,
             "django_server": self.django_server_future,
         }
         
-    def register_signals(self):
-        """
-        Register and bind signals to appropriate signal handler.
-        """
-        signal.signal(signal.SIGINT, self.handle_signal)
-        signal.signal(signal.SIGTERM, self.handle_signal)
-        
-    def handle_ipc_messages(self):
-        """
-        Handles incoming IPC messages from the shared file.
-        
-        Notes:
-        - This usually holds the main process from exiting because of the blocking behavior.
-        """
-        with ipc.get_reader() as reader:
-            # Clear ipc writer file
-            with ipc.get_writer() as writer:
-                writer.write_message("")  # clear ipc shared file
-            
-            # Handle any incoming message.    
-            while True:
-                message = reader.read_message().strip()
-                if message:
-                    if any({message.lower() == i for i in ["bye", "quit", "exit"]}):
-                        self.stop()
-                        break
-                                
-                # Simulate some delay
-                time.sleep(1)
-                
-    def record_metadata(self):
-        """
-        Sets or updates the metadata for the app, these changes will
-        be globally available in `duck.meta.Meta` class.
-        """
-        # Security reasons not mentioning real servername but 'webserver' is safer.
-        data = {
-            "DUCK_SERVER_NAME": "webserver",
-            "DUCK_SERVER_PORT": self.port,
-            "DUCK_SERVER_DOMAIN": self.domain,
-            "DUCK_SERVER_PROTOCOL": ("https" if self.enable_https else "http"),
-            "DUCK_DJANGO_ADDR": self.DJANGO_ADDR,
-            "DUCK_USES_IPV6": self.uses_ipv6,
-            "DUCK_SERVER_BUFFER": SETTINGS["SERVER_BUFFER"],
-            "DUCK_WORKERS": int(self.workers or 0), # Meta.update doesnt support NoneType
-        }
-        Meta.update_meta(data)
-        
-    def handle_signal(self, sig, frame):
-        """
-        Method for handling process signals.
-
-        Signals:
-        - `SIGINT` (Ctrl-C), `SIGTERM` (Terminate): Quits the server/application.
-        """
-        if sig in [signal.SIGINT, signal.SIGTERM]:
-            self.stop(wait_for_thread_pool_executor_shutdown=False)
-    
-    def stop_servers(
-        self,
-        stop_force_https_server: bool = True,
-        log_to_console: bool = True,
-        wait: bool = True,
-    ):
-        """
-        Stop all running servers i.e., Duck main server, Force HTTPS server & Django server.
-
-        Args:
-            stop_force_https_server (bool): Whether to stop Force HTTPS redirect microapp.
-            log_to_console (bool): Whether to an exit message log to console.
-            wait (bool): Whether to wait for termination. Defaults to True but with a timeout.
-        """
-        self.server.stop_server(log_to_console=log_to_console, wait=wait)
-        
-        if (
-            stop_force_https_server
-            and self.force_https_app_process
-            and self.force_https_app_process.is_alive()
-        ):
-            self.force_https_app_process.terminate()
-            self.force_https_app_process.join(1)
-            
-    def on_pre_stop(self):
-        """
-        Event called before final application termination.
-        """
-        if self.run_automations:
-            self.automations_dispatcher.stop()
-
-    def stop(
-        self,
-        log_to_console: bool = True,
-        no_exit: bool = False,
-        call_on_pre_stop_handler: bool = True,
-        kill_ducksight_reloader: bool = True,
-        wait_for_thread_pool_executor_shutdown: bool = True,
-        close_log_file: bool = True,
-    ):
-        """
-        Stops the application and terminates the whole program.
-
-        Args:
-            no_exit (bool): Whether to terminate everything but keep the program running.
-            log_to_console (bool): Whether to log an exit message.
-            call_on_pre_stop_handler (bool): Whether to call method `on_pre_stop`. Defaults to True.
-            kill_ducksight_reloader (bool): This attempts to kill the `DuckSightReloader`. Useful if `no_exit=True`,
-            wait_for_thread_pool_executor_shutdown (bool): Whether to wait for the thread pool executor to complete shutdown, 
-                meaning waiting for current tasks to finish/cancel. This is only used if argument `no_exit=True` else it is automatically `False`.
-            close_log_file (bool): Whether to close the log file. Defaults to True.
-        """
-        if "--is-reload" in sys.argv:
-            log_to_console = False
-            
-        def stop_future(future):
-            """
-            Stops a running running future safely.
-            """
-            if future and future.running():
-                try:
-                    future.cancel()
-                except Exception:
-                    # Ignore as the thread_pool_executor is going to be shut down anyway if it's still running.
-                    pass
-                    
-        # Cleanup session cache
-        try:
-            # Close the session storage connector
-            SettingsLoaded.SESSION_STORAGE_CONNECTOR.close()
-            
-        except Exception as e:
-            logger.log_raw('\n')
-            logger.log(f"Error while closing session storage: {e}", level=logger.WARNING)
-
-        try:
-            # Stop all servers
-            self.stop_servers(log_to_console=log_to_console, wait=wait_for_thread_pool_executor_shutdown if no_exit else False)
-        except Exception as e:
-            logger.log_raw('\n')
-            logger.log(f"Error stopping servers: {e}", level=logger.ERROR)
-            if SETTINGS['DEBUG']:
-                logger.log_exception(e)
-                
-        if call_on_pre_stop_handler:
-            try:
-                # Execute a pre stop method before final termination.
-                self.on_pre_stop()
-            except Exception as e:
-                logger.log_exception(e) # Log the exception.
-        
-        # Try cancel other cancelable components.
-        if self.run_automations:
-            try:
-                self.automations_dispatcher.stop()
-            except Exception as e:
-                logger.log_exception(e)
-        
-        # Try cancel other cancelable components.
-        if SETTINGS['DEBUG'] and SETTINGS['AUTO_RELOAD'] and kill_ducksight_reloader:
-            try:
-                self.ducksight_reloader.stop() if self.ducksight_reloader else None
-            except Exception as e:
-                logger.log_exception(e)
-                
-        # Cancel all running futures
-        concurrent_futures = self.get_threadpool_futures()
-        for name, future in concurrent_futures.items():
-            stop_future(future)
-        
-        # Shutdown threadpool executor if not stopped.            
-        if self.thread_pool_executor:
-            try:
-                self.thread_pool_executor.shutdown(wait=wait_for_thread_pool_executor_shutdown if no_exit else False)
-            except Exception as e:
-                logger.log_exception(e)
-        
-        if no_exit and kill_ducksight_reloader and wait_for_thread_pool_executor_shutdown:
-            try:
-                if self.ducksight_reloader_thread.is_alive():
-                    self.ducksight_reloader_thread.join()
-            except Exception as e:
-                logger.log_exception(e)
-                
-        if close_log_file:
-            # Close logging file
-            if SETTINGS['LOG_TO_FILE']:
-                try:
-                    logger.Logger.close_logfile()
-                except Exception as e:
-                    logger.log(f"Error closing log file: {e}", level=logger.WARNING)
-            
-        # Perform forceful termination if needed
-        if not no_exit:
-            # Force exit (avoids lingering threads/processes)
-            os._exit(0)
-    
     def on_app_start(self):
         """
         Event called when application has successfully been started.
         """
+        from duck import processes
+        
         # Record main process data
         log_file = None
             
@@ -985,7 +754,7 @@ class App:
             )
         except json.JSONDecodeError:
             # The file used by duck.processes is corrupted
-            pass  # ignore for now, maybe writting is still in progress
+            pass  # Ignore for now, maybe writting is still in progress
         
         if not self.disable_signal_handler:
             self.register_signals()  # bind signals to appropriate signal handlers
@@ -996,7 +765,7 @@ class App:
             ) 
         
         if SETTINGS["AUTO_RELOAD"] and SETTINGS["DEBUG"]:
-            # Start ducksight reloader (if not running)
+            # Start duck sight reloader (if not running)
             self.start_ducksight_reloader()
             logger.log(
                 "Duck Sight Reloader watching file changes",
@@ -1004,41 +773,188 @@ class App:
                 custom_color=logger.Fore.GREEN,
             )
         
-        # Continue logging
+        # Log a success message
         logger.log(
             "Waiting for incoming requests :-) \n",
             level=logger.DEBUG,
             custom_color=logger.Fore.GREEN,
         )
         
-        # Update application state
-        self.started = True
-        
-        # Handle any incoming IPC messages.
         if not self.disable_ipc_handler:
-            self.handle_ipc_messages() # this is a blocking operation
+            # Handle any incoming IPC messages.
+            # This is a blocking operation, it prevents app from exiting.
+            self.handle_ipc_messages()
             
+    def on_pre_stop(self):
+        """
+        Event called before final application termination.
+        """
+        pass
+        
     def run(self, print_ansi_art: bool = True):
         """
         Runs the Duck application.
         """
-        # Setup Duck environment and the entire application.
+        from duck.setup import setup
+        
         if not self.skip_setup:
+            # Setup Duck environment and the entire application.
             setup()
             
         # Record application metadata and run the server
         self.record_metadata()
+        
+        # Start runtime executor
+        self.runtime_executor.start(max_workers=5)
+        
+        # Run the main application
         return self._run(print_ansi_art=print_ansi_art)
         
+    def stop_servers(
+        self,
+        stop_https_redirect_server: bool = True,
+        log_to_console: bool = True,
+        wait: bool = True,
+    ):
+        """
+        Stop all running servers i.e., Duck main server, HTTPS redirect server & Django server.
+
+        Args:
+            stop_https_redirect_server (bool): Whether to stop HTTPS redirect microapp server.
+            log_to_console (bool): Whether to an exit message log to console.
+            wait (bool): Whether to wait for termination. Defaults to True but with a timeout.
+        """
+        self.server.stop_server(log_to_console=log_to_console, wait=wait)
+        
+        if (
+            stop_https_redirect_server
+            and self.https_redirect_process
+            and self.https_redirect_process.is_alive()
+        ):
+            self.https_redirect_process.terminate()
+            
+            if wait:
+                # Wait for termination
+                self.https_redirect_process.join(1)
+    
+    def stop(
+        self,
+        log_to_console: bool = True,
+        no_exit: bool = False,
+        call_on_pre_stop_handler: bool = True,
+        kill_ducksight_reloader: bool = True,
+        wait_for_runtime_executor_shutdown: bool = True,
+        close_log_file: bool = True,
+    ):
+        """
+        Stops the application and terminates the whole program.
+
+        Args:
+            no_exit (bool): Whether to terminate everything but keep the program running.
+            log_to_console (bool): Whether to log an exit message.
+            call_on_pre_stop_handler (bool): Whether to call method `on_pre_stop`. Defaults to True.
+            kill_ducksight_reloader (bool): This attempts to kill the `DuckSightReloader`. Useful if `no_exit=True`,
+            wait_for_runtime_executor_shutdown (bool): Whether to wait for the runtime executor to complete shutdown. 
+                                                                                            This mean waiting for current tasks to finish/cancel.
+                                                                                            This is only used if argument `no_exit=True` else it is automatically `False`.
+            close_log_file (bool): Whether to close the log file. Defaults to True.
+        """
+        if "--is-reload" in sys.argv:
+            log_to_console = False
+            
+        def stop_future(future):
+            """
+            Stops a running running future safely.
+            """
+            if future and future.running():
+                try:
+                    future.cancel()
+                except Exception:
+                    # Ignore as the thread_pool_executor is going to be shut down anyway if it's still running.
+                    pass
+                    
+        # Call on_pre_stop event
+        if call_on_pre_stop_handler:
+            self.on_pre_stop()
+        
+        try:
+            # Close the session storage connector in new thread
+            SettingsLoaded.SESSION_STORAGE_CONNECTOR.close()
+        except Exception as e:
+            logger.log_raw('\n')
+            logger.log(f"Error closing session storage: {e}", level=logger.WARNING)
+
+        try:
+            # Stop all started servers
+            self.stop_servers(log_to_console=log_to_console, wait=wait_for_runtime_executor_shutdown if no_exit else False)
+        except Exception as e:
+            logger.log_raw('\n')
+            logger.log(f"Error stopping servers: {e}", level=logger.ERROR)
+            
+            if SETTINGS['DEBUG']:
+                logger.log_exception(e)
+                
+        # Try cancel other cancelable components.
+        if self.run_automations:
+            try:
+                self.automations_dispatcher.stop()
+            except Exception as e:
+                logger.log_exception(e)
+        
+        # Try cancel other cancelable components.
+        if SETTINGS['DEBUG'] and SETTINGS['AUTO_RELOAD'] and kill_ducksight_reloader:
+            try:
+                self.ducksight_reloader.stop() if self.ducksight_reloader else None
+            except Exception as e:
+                logger.log_exception(e)
+                
+        # Cancel all running futures
+        concurrent_futures = self.get_runtime_futures()
+        
+        for name, future in concurrent_futures.items():
+            stop_future(future)
+        
+        # Shutdown runtime executor if not stopped.            
+        if self.runtime_executor:
+            try:
+                self.runtime_executor.stop(wait=wait_for_runtime_executor_shutdown if no_exit else False)
+            except Exception as e:
+                logger.log_exception(e)
+        
+        if (
+            no_exit
+            and kill_ducksight_reloader
+            and wait_for_runtime_executor_shutdown
+        ):
+            try:
+                if self.ducksight_reloader_thread.is_alive():
+                    self.ducksight_reloader_thread.join()
+            except Exception as e:
+                logger.log_exception(e)
+                
+        if close_log_file:
+            # Close logging file
+            if SETTINGS['LOG_TO_FILE']:
+                try:
+                    logger.Logger.close_logfile()
+                except Exception as e:
+                    logger.log(f"Error closing log file: {e}", level=logger.WARNING)
+            
+        # Perform forceful termination if needed
+        if not no_exit:
+            # Force exit (avoids lingering threads/processes)
+            os._exit(0)
+    
     def _run(self, print_ansi_art: bool = True):
         """
         Runs the Duck application.
         """
-        # Fine tune threadpool for executing sync_to_async calls (Only in ASGI because in WSGI, the app is already flooding with many Threads).
         from duck.contrib.sync.smart_async import _TRANSACTION_THREAD_POOL
-                
+        from duck.art import display_duck_art
+        
+        # Fine tune threadpool for executing sync_to_async calls
         default_sync_to_async_workers = _TRANSACTION_THREAD_POOL.max_threads
-                
+        
         # Update max_threads according to app workers
         _TRANSACTION_THREAD_POOL.max_threads = (default_sync_to_async_workers * self.workers) if self.workers else default_sync_to_async_workers
                 
@@ -1054,13 +970,16 @@ class App:
             logger.log_raw("")
             
         if not is_reload and print_ansi_art and not SETTINGS["SILENT"]:
-            display_duck_art()  # print duck art
+            # Display duck art
+            display_duck_art()
+            
+            # Print some app start header
             settings_mod = "DUCK_SETTINGS_MODULE"
             settings_mod = os.environ.get(settings_mod, 'settings')
-            print(f"{bold_start}VERSION {version}{bold_end}")
+            (f"{bold_start}VERSION {version}{bold_end}")
 
-        # Redirect all console output to log file
         if SETTINGS["LOG_TO_FILE"]:
+            # Redirect all console output to log file
             logger.Logger.redirect_console_output()
         
         # Log the current settings module in use
@@ -1071,7 +990,7 @@ class App:
         if not SETTINGS['DEBUG'] and "*" in SETTINGS['ALLOWED_HOSTS']:
             logger.log("WARNING: ALLOWED_HOSTS seem to have global host (*)", level=logger.WARNING)
             
-        if not self.is_domain_set:
+        if not self.original_domain:
             logger.log(
                 f'WARNING: Domain not set, using "{self.domain}" ',
                 level=logger.WARNING,
@@ -1180,8 +1099,8 @@ class App:
         self.start_server()
         
         # Log some info message and sleep for 2 minutes.
-        logger.log("Waiting 2s to read server state...", level=logger.DEBUG)
-        time.sleep(2)
+        logger.log("Waiting 1s to read server state...", level=logger.DEBUG)
+        time.sleep(1)
 
         # Check server start attempt
         if not self.server_up:
@@ -1189,13 +1108,13 @@ class App:
             self.stop()
             return
             
-        if self.force_https:
-            # Start force HTTPS redirect server & wait 2 seconds
-            self.start_force_https_server()
-            time.sleep(2)
+        if self.https_redirect:
+            # Start HTTPS redirect server & wait 1 second
+            self.start_https_redirect_server()
+            time.sleep(1)
 
-            # Check force HTTPS server start attempt
-            if not self.force_https_server_up:
+            # Check HTTPS redirect server start attempt
+            if not self.https_redirect_server_up:
                 logger.log("HTTPS redirect app failed to start", level=logger.ERROR)
                 self.stop()
                 return
@@ -1206,7 +1125,7 @@ class App:
                 level=logger.DEBUG,
             )
             logger.log(
-                f"Starting Django server on port [{SETTINGS['DJANGO_BIND_PORT']}]",
+                f"Starting Django server on port [self.django_port]",
                 level=logger.DEBUG,
             )
 
@@ -1224,12 +1143,11 @@ class App:
                     return
             
             # Wait for Django server to start
-            wait_t = self.DJANGO_SERVER_WAIT_TIME
-            logger.log(
-                f"Waiting for Django server to start ({wait_t} secs)\n",
-                level=logger.DEBUG,
-            )
+            wait_t = self.django_server_wait_time
+            logger.log(f"Waiting for Django server to start ({wait_t} secs)\n", level=logger.DEBUG)
             self.start_django_server()
+            
+            # Wait a little bit.
             time.sleep(wait_t)
 
             # Check if django is running
@@ -1251,7 +1169,6 @@ class App:
                 
                 # Log some info
                 host_url += f"{host}:{port}"
-                #logger.log_raw("")
                 logger.log(
                     "Django started yey, that's good!",
                     level=logger.DEBUG,

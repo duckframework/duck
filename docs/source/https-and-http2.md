@@ -51,16 +51,12 @@ To activate **HTTPS**, set the following in your `settings.py`:
 ENABLE_HTTPS = True
 ```
 
-### Force HTTPS Redirection  
+### HTTPS Redirection  
 
 To automatically redirect **all HTTP traffic to HTTPS**, enable the redirect feature:  
 
 ```py
-FORCE_HTTPS = True
-```
-
-``` {note}
-**FORCE_HTTPS** requires **ENABLE_HTTPS** to be set to **True**.
+HTTPS_REDIRECT = True
 ```
 
 ---

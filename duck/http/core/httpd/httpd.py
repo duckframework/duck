@@ -236,12 +236,13 @@ class BaseServer:
         # We were only using sock reuse in DEBUG but we are allowing it for both DEBUG and PRODUCTION for fast 
         # server restarts. 
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        
         if hasattr(socket, "SO_REUSEPORT"):
             try:
                 self.sock.setsockopt(socket.SO_REUSEPORT, socket.SO_REUSEPORT, 1)
             except OSError:
                 pass
-                    
+                
         # Bind and listen        
         self.sock.bind(self.addr)  # bind socket to (address, port)
         self.sock.listen(SETTINGS["REQUESTS_BACKLOG"]) # 200 by default

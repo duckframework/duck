@@ -19,6 +19,8 @@ and this project adheres to Semantic Versioning.
 - Added session persistence for Lively events: sessions are now automatically saved when modified within a Lively event handler.
 - Added method `set_meta` to Page component.
 - Added `csrf_exempt` decorator in `duck.views` module.
+- Added clean app structure - All app instances now inherit from `duck.app.base.BaseApp`
+- Added `server_url` argument to `BaseApp` to better support reverse proxies and deployment setups where the application instance is not accessed directly.
 
 ### Changed
 
@@ -28,6 +30,13 @@ and this project adheres to Semantic Versioning.
 - Changed `create()` method of `SessionStore` to a clearer name `assign_new_session_key`.
 - Made request sessions to be lazily loaded upon access or modification.
 - Improved Request object and changed method `_extract_and_process_request_data` to a clearer name `_set_request_fields`
+- Removed the requirement for `ENABLE_HTTPS` to be enabled when `FORCE_HTTPS` is set.
+- Renamed module `duck.utils.port_recorder` to `duck.utils.port_registry`, including a full refactor of its internal APIs and contents to better reflect its responsibility as a centralized port management registry.
+- Improved and refined `ssl-gen` command.
+- Improved `SessionStorageConnector` shutdown behavior by offloading close() operations to background threads, allowing the main application to exit faster without blocking on storage cleanup tasks.
+- Improved and refined `duck.app.microapp` module.
+- Renamed setting `FORCE_HTTPS` to `HTTPS_REDIRECT` for clearer intent and improved consistency with its actual behavior of redirecting HTTP traffic to HTTPS.
+- Improved `App` class to use better arguments, also improved the core App logic.
 
 ### Fixed
 

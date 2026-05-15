@@ -94,8 +94,8 @@ Ensure users visiting your site via `http://` are automatically redirected to `h
 In your `settings.py`, enable HTTPS redirection:  
 
 ```python
-FORCE_HTTPS = True
-FORCE_HTTPS_BIND_PORT = 80  # Optional: specify the port to redirect from
+HTTPS_REDIRECT = True
+HTTPS_REDIRECT_BIND_PORT = 80  # Optional: specify the port to redirect from
 ```
 
 Duck uses a built-in **MicroApp** called `HttpsRedirectMicroApp` to handle redirects efficiently.  
@@ -170,13 +170,13 @@ Before going live, make sure your application is optimized and secure:
   
   ```python
   # From web/main.py
-  app = App(..., workers=os.cpu_count() or 4, force_https_workers=4)
+  app = App(..., workers=os.cpu_count() or 4, https_redirect_workers=4)
   ```
   
   The above examples runs the server using worker threads, thus, utilizing. This improves overall, performance. As this brings more benefits, it 
   also uses more system resources. By default, worker threads are used for synchronization between workers but if you prefer processes instead and your app 
   does not require worker synchronization, you can use worker processes instead. This can be enabled by providing the `force_worker_processes` argument. The 
-  same can be applied to force https redirect app using argument `force_https_force_worker_processes`.
+  same can be applied to https redirect app using argument `https_redirect_force_worker_processes`.
 
 - **Turn off debug mode:**  
   ```python

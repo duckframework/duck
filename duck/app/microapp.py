@@ -3,8 +3,7 @@ Mini application of Duck app which may be used for many simple tasks.
 
 Notes:
 - `Mini applications` run independently on their own individual ports.
-- An example of a mini app is Duck's internal `HttpsRedirectApp` which is used to
-	 redirect `http` traffic to a more secure https server.
+- An example of a mini app is Duck's internal `HttpsRedirectApp` which is used to redirect HTTP traffic to a more secure HTTPS server.
 """
 import time
 import threading
@@ -17,22 +16,16 @@ from duck.http.core.processor import (
     RequestProcessor,
 )
 from duck.http.request import HttpRequest
-from duck.http.response import (
-    HttpRedirectResponse,
-    HttpResponse,
-)
-from duck.contrib.sync import (
-    convert_to_sync_if_needed,
-    convert_to_async_if_needed
-)
-from duck.utils.net import is_ipv4
-from duck.utils.port_recorder import PortRecorder
+from duck.http.response import HttpResponse
+from duck.contrib.sync import ensure_async, ensure_sync
 from duck.utils.urlcrack import URL
+from duck.shortcuts import redirect
+from duck.app.base import BaseApp
 
 
-class MicroApp:
+class MicroApp(BaseApp):
     """
-    **Duck** micro app class to create a new lightweight sub-application/server.  
+    **Duck** micro application class to create a new lightweight sub-application/server.  
 
     This micro app can be used to create a new sub-application with its own server, meaning,
     you can create multiple micro apps in a single Duck application.  
@@ -43,129 +36,122 @@ class MicroApp:
     - Everything is to be handled manually in the view/async_view method and none of all available middlewares will be applied.
     """
     
+    DEFAULT_ADDR = "localhost"
+    DEFAULT_PORT = 8000
+    
     def __init__(
         self,
-        addr: str = "localhost",
-        port: int = 8080,
-        parent_app = None,
-        domain: str = None,
+        name: Optional[str] = None,
+        addr: str = DEFAULT_ADDR,
+        port: int = DEFAULT_PORT,
+        domain: Optional[str] = None,
+        server_url: Optional[str] = None,
         uses_ipv6: bool = False,
         enable_https: bool = False,
+        no_checks: bool = False,
         no_logs: bool = True,
         workers: Optional[int] = None,
         force_worker_processes: bool = False,
     ):
         """
-        Initialize the MicroApp class.
-        
         Args:
-            add (str): Micro application address, defaults to localhost.
-            port (int): Micro application port. Defaults to 8080.
-            parent_app (App): The root Duck application instance.
-            domain (str): Micro application domain. Defaults to None.
-            uses_ipv6 (bool): Whether to use `IPV6`. Defaults to False.
-            enable_https (bool): Whether to enable `https`. Defaults to False.
-            no_logs (bool): Whether to log anything to console. Defaults to True.
-            workers (Optional[int]): Number of workers to use. None will disable workers.
-            force_worker_processes (bool): Determines whether to use worker **processes** instead of the default worker **threads**. 
+            name: Unique name to your application.
+            addr: Address the server binds to.
+            port: Port the server binds to.
+            domain: Public-facing domain. Defaults to the bind address.
+            server_url: Public-facing absolute server URL.
+            uses_ipv6: Whether the app should bind using IPv6.
+            enable_https: Whether HTTPS is enabled for this app.
+            no_checks: Whether to skip app checks. Defaults to Fa
+            no_logs: Whether to disable app logging. Defaults to False.
+            workers: Optional number of server workers.
+            force_worker_processes: Determines whether to use worker **processes** instead of the default worker **threads**. 
                     By default, when `workers` is greater than 1, the server will use worker **threads**.  
                     Threads avoid cross-process synchronization issues—such as component registry mismatches 
                     (e.g., issues with Lively components) that occur when state lives in separate processes.  
                     
                     Set this flag to `True` only when process isolation is explicitly desired **and** you do not
                     require shared in-memory synchronization between workers.
+        
+        Raises:
+            ApplicationError: If the provided bind address is invalid.
         """
-        self.addr = addr
-        self.port = port
-        self.parent_app = parent_app
-        self.uses_ipv6 = uses_ipv6
-        self.enable_https = enable_https
-        self.no_logs = no_logs
-        self.workers = workers
-        self.force_worker_processes = force_worker_processes
-        
-        # Set appropriate domain
-        self.domain = domain or addr if not uses_ipv6 else f"[{addr}]"
-        
-        if is_ipv4(self.domain) and self.domain.startswith("0"):
-            # IP "0.x.x.x" not allowed as domain because most browsers cannot resolve this.
-            self.domain = "localhost"
-        
-        # Record port as used
-        PortRecorder.add_new_occupied_port(port, f"{self}")
-        
-        self.server = MicroHTTPServer(
-            addr=(addr, port),
-            microapp=self,
-            domain=self.domain,
+        super().__init__(
+            name=name,
+            addr=addr,
+            port=port,
+            domain=domain,
+            server_url=server_url,
             uses_ipv6=uses_ipv6,
-            enable_ssl=self.enable_https,
-            no_logs=no_logs,
+            enable_https=enable_https,
+            no_checks=no_checks,
             workers=workers,
             force_worker_processes=force_worker_processes,
         )
         
-        # Assign duckserver thread to None
-        self.duck_server_thread = None
+        # Store some application attributes
+        self.no_logs = no_logs
         
-    @property
-    def absolute_uri(self) -> str:
-        """
-        Returns application server absolute `URL`.
-        """
-        scheme = "http"
+        # Create server with processed data.
+        self.server = MicroHTTPServer(
+            addr=(self.addr, self.port),
+            microapp=self,
+            domain=self.domain,
+            uses_ipv6=self.uses_ipv6,
+            enable_ssl=self.enable_https,
+            no_logs=self.no_logs,
+            workers=self.workers,
+            force_worker_processes=self.force_worker_processes,
+        )
         
-        if self.enable_https:
-            scheme = "https"
-        
-        uri = f"{scheme}://{self.domain}"
-        uri = uri.strip("/").strip("\\")
-        
-        if not (self.port == 80 or self.port == 443):
-            uri += f":{self.port}"
-        
-        return uri
-
-    def build_absolute_uri(self, path: str) -> str:
-        """
-        Builds and returns absolute URL from provided path.
-        """
-        return URL.normalize_url(self.absolute_uri + "/" + path)
-
-    @property
-    def server_up(self) -> bool:
-        """
-        Checks whether the micro-application server is up and running.
-
-        Returns:
-            bool: True if up else False
-        """
-        return self.server.running
+        # Assign server thread to None
+        self.server_thread = None
         
     def start_server(self):
         """
-        Starts the Duck Server in a new thread.
+        Starts the server in a new thread.
         """
-        # Create thread that will be run method
         def start_server_wrapper(*args, **kw):
+            """
+            Wrapper for server start.
+            """
             try:
                 self.server.start_server(*args, **kw)
             except KeyboardInterrupt:
                 pass
                 
-        if not self.duck_server_thread or not self.duck_server_thread.is_alive():
-            self.duck_server_thread = threading.Thread(
+        if not self.server_thread or not self.server_thread.is_alive():
+            # Set the server thread
+            self.server_thread = threading.Thread(
                 target=start_server_wrapper,
                 kwargs={'on_server_start_fn': self.on_app_start},
             )
-            self.duck_server_thread.start()
-
-    def on_app_start(self):
-        """
-        Called on successfull app start.
-        """
-        pass
+            
+            # Start the server thread
+            self.server_thread.start()
         
+    def run(self, run_forever: bool = True):
+        """
+        Runs the duck sub-application.
+        
+        Args:
+            run_forever (bool): Whether to run a while loop to avoid app from exiting.
+                                              Server is always run in background and setting `run_forever=False` will make this method return 
+                                              immediately after starting the background thread.
+        """
+        # Start the server in a new thread - only if not running.
+        self.start_server()
+        
+        while run_forever:
+            # Just sleep for 5 seconds
+            time.sleep(5)
+            
+    def stop(self):
+        """
+        Stops the current running micro-application.
+        """
+        self.server.stop_server(log_to_console=not self.no_logs)
+    
     def view(self, request: HttpRequest, processor: Union[AsyncRequestProcessor, RequestProcessor]) -> HttpResponse:
         """
         Entry method to response generation.
@@ -199,7 +185,7 @@ class MicroApp:
           compressed if necessary.
         """
         raise NotImplementedError("Implement this method to return HttpResponse or any data as response.")
-
+        
     def _view(self, request: HttpRequest, processor: RequestProcessor) -> HttpResponse:
         """
         Internal entry method to response generation.
@@ -209,8 +195,14 @@ class MicroApp:
             processor (RequestProcessor): Default request processor which may be used to process request.
         """
         from duck.settings.loaded import SettingsLoaded
-        response = convert_to_sync_if_needed(self.view)(request, processor)
+        
+        # Get response from view method
+        response = ensure_sync(self.view)(request, processor)
+        
+        # Finalize response using WSGI
         SettingsLoaded.WSGI.finalize_response(response, request)  # finalize response
+        
+        # Return the final response
         return response
 
     async def _async_view(self, request: HttpRequest, processor: AsyncRequestProcessor) -> HttpResponse:
@@ -222,62 +214,37 @@ class MicroApp:
             processor (AsyncRequestProcessor): Default asynchronous request processor which may be used to process request.
         """
         from duck.settings.loaded import SettingsLoaded
-        response = await convert_to_async_if_needed(self.async_view)(request, processor)
+        
+        # Get response from view method
+        response = await ensure_async(self.async_view)(request, processor)
+        
+        # Finalize response using ASGI
         await SettingsLoaded.ASGI.finalize_response(response, request)  # finalize response
+        
+        # Return final response.
         return response
-
-    def run(self, run_forever: bool = True):
-        """
-        Runs the duck sub-application.
-        
-        Args:
-            run_forever (bool): Whether to run a while loop to avoid app from exiting. Server 
-                is always run in background and setting `run_forever=False` will make this method return 
-                immediately after starting the background thread.
-        """
-        self.start_server()
-        
-        while run_forever:
-            time.sleep(2)
-            
-    def stop(self):
-        """
-        Stops the current running micro-application.
-        """
-        self.server.stop_server(log_to_console=not self.no_logs)
 
 
 class HttpsRedirectMicroApp(MicroApp):
     """
-    HttpsRedirectMicroApp class capable of redirecting http traffic to https.
+    Micro application class capable of redirecting HTTP traffic to HTTPS.
     """
-
-    def __init__(self, location_root_url: str, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.location_root_url = URL(location_root_url)
-        
     def view(self, request: HttpRequest, request_processor: RequestProcessor) -> HttpResponse:
         """
-        Returns an http redirect response.
+        Returns an HTTP redirect response.
         """
-        query = request.META.get("QUERY_STRING", "")
-        dest_url = self.location_root_url.join(request.path)
-        dest_url.query = query
-        dest_url = dest_url.to_str()
-        redirect = HttpRedirectResponse(location=dest_url, permanent=False)
+        # Create destination URL
+        dest_url_obj = URL(self.absolute_uri)
+        
+        # Edit the destination URL object inplace
+        dest_url_obj.innerjoin(request.fullpath)
         
         # Return response
-        return redirect
+        return redirect(dest_url_obj.to_str(), permanent=False)
 
     async def async_view(self, request: HttpRequest, request_processor: AsyncRequestProcessor) -> HttpResponse:
         """
-        Returns an http redirect response.
+        Returns an HTTP redirect response.
         """
-        query = request.META.get("QUERY_STRING", "")
-        dest_url = self.location_root_url.join(request.path)
-        dest_url.query = query
-        dest_url = dest_url.to_str()
-        redirect = HttpRedirectResponse(location=dest_url, permanent=False)
-        
-        # Return response
-        return redirect
+        # Just return whatever view() is returning because no async API is needed here
+        return self.view(request, request_processor)

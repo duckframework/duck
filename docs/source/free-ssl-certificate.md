@@ -72,8 +72,8 @@ domain when using the `duck runserver` command. This can be done by providing th
 ```
 
 ``` {important}
-The above configuration is the default for HTTP only. For HTTPS, make sure `ENABLE_HTTPS` and `FORCE_HTTPS` is set to `True` in settings configuration.
-Also, ensure that `FORCE_HTTPS_BIND_PORT` is set port `80` and your web application is set to run stricty on port `443`, meaning, the `HTTPS redirection` will be pointing from port `80 -> 443`.
+The above configuration is the default for HTTP only. For HTTPS, make sure `ENABLE_HTTPS` and `HTTPS_REDIRECT` is set to `True` in settings configuration.
+Also, ensure that `HTTPS_REDIRECT_BIND_PORT` is set port `80` and your web application is set to run stricty on port `443`, meaning, the `HTTPS redirection` will be pointing from port `80 -> 443`.
 ```
 
 **HTTPS Example:**
@@ -81,9 +81,9 @@ Also, ensure that `FORCE_HTTPS_BIND_PORT` is set port `80` and your web applicat
 ```py
 ENABLE_HTTPS = True
 
-FORCE_HTTPS = True
+HTTPS_REDIRECT = True
 
-FORCE_HTTPS_BIND_PORT = 80
+HTTPS_REDIRECT_BIND_PORT = 80
 ```
 
 > After renewal, your new SSL configuration will be used on all new connections.

@@ -365,7 +365,6 @@ class WSGI:
             
         request.application = application
         request.wsgi = self
-        application.last_request = request
         
         # Start sending response
         self.start_response(request)

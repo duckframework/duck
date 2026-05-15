@@ -442,7 +442,6 @@ class ASGI:
             
         request.application = application
         request.asgi = self
-        application.last_request = request
         
         # Process and start sending response
         await self.start_response(request)
