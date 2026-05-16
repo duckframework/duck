@@ -2431,10 +2431,11 @@ function reinitializePage(fireDuckNavigatedEvent=true) {
 }
 
 if (!window.LIVELY_APPLICATION) {
-  // Expose and initialize application
+   // Expose and initialize application
   // Only one app per client.
-  window.LIVELY_SCRIPT_COMPATIBLE = true; // If no syntax errors then script is ok.
-  window.addEventListener("DOMContentLoaded", () => {
+  window.LIVELY_SCRIPT_COMPATIBLE = true;
+
+  function initLively() {
     if (!window.LIVELY_APPLICATION) {
       // Avoid multiple apps here also.
       // Override window.open
@@ -2442,7 +2443,18 @@ if (!window.LIVELY_APPLICATION) {
       window.LIVELY_APPLICATION = new LivelyApp();
       window.LIVELY_APPLICATION.init();
     }
-  }); 
+  }
+  
+  // Bind event to DOMContentLoaded event.
+  window.addEventListener("DOMContentLoaded", initLively);
+
+  // Fires on every page show, including bfcache restores
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) {
+      // Page was restored from bfcache — re-run init logic
+      reinitializePage(true);
+    }
+  });
 }
 
 // Set that full lively.js has been received.
