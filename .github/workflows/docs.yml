@@ -1,5 +1,10 @@
 name: Build & Deploy Sphinx Multiversion Docs
 
+# IMPORTANT: This workflow must trigger on BOTH branches AND tags
+# - Branch triggers (main): Updates docs for the latest development version
+# - Tag triggers (*): Builds docs when new versions are released  
+# - sphinx-multiversion uses git history to build docs for all versions together
+# - fetch-depth: 0 is required to access full git history for multiversion builds
 on:
   push:
     branches:
@@ -23,6 +28,8 @@ jobs:
 
     steps:
       # Checkout full history (required for sphinx-multiversion)
+      # fetch-depth: 0 ensures all branches and tags are available
+      # so sphinx-multiversion can build docs for all versions
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
