@@ -1068,6 +1068,8 @@ class App(BaseApp):
         Returns:
             True if Django started successfully (or is not in use), False otherwise.
         """
+        from duck.backend.django import bridge
+        
         if not self.use_django:
             return True
     
