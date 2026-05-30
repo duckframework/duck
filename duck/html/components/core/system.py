@@ -56,6 +56,8 @@ class LivelyComponentSystem:
         """
         Returns the appropriate URL patterns for the whole system.
         """
+        from duck.html.components.core.browser_state import sync_browser_state
+        
         ws_view_cls = cls.get_websocket_view_cls()
         
         def serve_staticfiles(request, staticfile: str) -> HttpResponse:
@@ -66,10 +68,11 @@ class LivelyComponentSystem:
             if not os.path.isfile(staticfile):
                 return not_found404(request)
             return FileResponse(staticfile)
-                
+            
         return ([
             path("/ws/lively/", ws_view_cls, name="lively-component-system"),
             path("/lively/static/<staticfile>", serve_staticfiles, name="lively-staticfiles"),
+            path("/lively/sync", sync_browser_state, name="lively-browser-sync"),
         ])
         
     @classmethod

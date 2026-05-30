@@ -25,6 +25,7 @@ from typing import (
     Dict,
     Any,
     Union,
+    Callable,
 )
 from concurrent.futures import Future
 
@@ -39,7 +40,6 @@ from duck.http.core.httpd.servers import HTTPServer
 from duck.logging import logger
 from duck.meta import Meta
 from duck.csp import csp_nonce_flag
-from duck.art import display_duck_art
 from duck.version import version
 from duck.utils.lazy import Lazy
 from duck.utils.asyncio.eventloop import get_or_create_loop_manager
@@ -86,6 +86,7 @@ class App(BaseApp):
         # Development / internal flags
         no_checks: bool = False,
         skip_setup: bool = False,
+        events: Optional[Dict[str, Optional[Callable]]] = None,
     ) -> None:
         """
         Initialize the main Duck application instance.
@@ -159,6 +160,9 @@ class App(BaseApp):
                 Whether to use worker processes instead of threads for the
                 HTTPS redirect server.
         
+            events: 
+                Events to handle e.g. {"on_start": some_callable}. Defaults to None.
+            
         Raises:
             ApplicationError:
                 Raised if the provided address is invalid or if multiple
@@ -230,12 +234,12 @@ class App(BaseApp):
             no_checks=no_checks,
             workers=workers,
             force_worker_processes=force_worker_processes,
+            events=events,
         )
         
         # HTTPS redirect app
         if self.https_redirect:
-            self.https_redirect_app = Lazy(
-                HttpsRedirectMicroApp,
+            self.https_redirect_app = HttpsRedirectMicroApp(
                 server_url=self.server_url,
                 addr=self.https_redirect_addr,
                 port=self.https_redirect_port,
@@ -245,6 +249,7 @@ class App(BaseApp):
                 no_logs=not self.https_redirect_logs,
                 workers=self.https_redirect_workers,
                 force_worker_processes=self.https_redirect_force_worker_processes,
+                events={"on_start": lambda *_: setattr(self.https_redirect_process_running_state, 'value', int(self.https_redirect_app.server.running))}
             )
             
             # Set HTTPS redirect state.
@@ -323,14 +328,14 @@ class App(BaseApp):
         from duck.utils.threading import get_max_workers
         from duck.setup import set_asyncio_loop
         
-        _async = SETTINGS['ASYNC_HANDLING']
+        async_ = SETTINGS['ASYNC_HANDLING']
         start_bg_eventloop_if_wsgi = getattr(application, "start_bg_eventloop_if_wsgi", True)
         max_threadpool_workers = get_max_workers()
         
-        if _async and start_request_handling_threadpool_manager:
+        if async_ and start_request_handling_threadpool_manager:
             raise ApplicationError("Argument 'start_request_handling_threadpool_manager' can only be True in a WSGI environment.")
         
-        if not _async and start_request_handling_eventloop_manager and not start_bg_eventloop_if_wsgi:
+        if not async_ and start_request_handling_eventloop_manager and not start_bg_eventloop_if_wsgi:
             raise ApplicationError("Argument 'start_request_handling_threadpool_manager' can only be True if app's `start_bg_eventloop_if_wsgi` is set to True.")
             
         if multiprocessing.parent_process() is not None:
@@ -354,7 +359,7 @@ class App(BaseApp):
             )
             
         # In WSGI environment
-        if not _async:
+        if not async_:
             if start_request_handling_threadpool_manager:
                 # Start request handling threadpool
                 request_handling_threadpool_manager = get_or_create_thread_manager(id="request-handling-threadpool-manager", force_create=recreate_managers)
@@ -434,7 +439,7 @@ class App(BaseApp):
         import requests
 
         try:
-            host_addr, port = self.django_addr
+            host_addr, port = self.django_addr, self.django_bind_port
             
             if host_addr.startswith("0") and not self.uses_ipv6:
                 # Host 0.0.0.0 not allowed on windows
@@ -588,7 +593,7 @@ class App(BaseApp):
             Starts Django application server
             """
             # Set the host to start Django on.
-            host = self.django_addr
+            host = self.django_addr, self.django_bind_port
             
             # Start django server
             bridge.start_django_server(*host, uses_ipv6=self.uses_ipv6)
@@ -635,17 +640,9 @@ class App(BaseApp):
             )
             
             # Start the microapp
-            self.https_redirect_app.on_app_start = lambda: setattr(process_safe_running_state, 'value', int(self.https_redirect_app.server.running))
             self.https_redirect_app.run(run_forever=True) # This is blocking; run_forever=True is blocking.
             
         if self.https_redirect:
-            # Log something if applicable.
-            if log_message:
-                logger.log(
-                    f"Redirecting incoming HTTP traffic [{self.https_redirect_port} -> {self.port}]",
-                    level=logger.DEBUG,
-                )
-                
             # Start HTTP redirect process
             if not self.https_redirect_process or not self.https_redirect_process.is_alive():
                 self.https_redirect_process = multiprocessing.Process(
@@ -656,6 +653,13 @@ class App(BaseApp):
                 
                 # Start the HTTPS redirect process
                 self.https_redirect_process.start()
+                
+                # Log something if applicable.
+                if log_message:
+                    logger.log(
+                        f"Redirecting incoming HTTP traffic [{self.https_redirect_port} -> {self.port}]",
+                        level=logger.DEBUG,
+                    )     
     
     def start_automations_dispatcher(self, log_message: bool = True):
         """
@@ -728,88 +732,6 @@ class App(BaseApp):
             "django_server": self.django_server_future,
         }
         
-    def on_app_start(self):
-        """
-        Event called when application has successfully been started.
-        """
-        from duck import processes
-        
-        # Record main process data
-        log_file = None
-            
-        if SETTINGS["LOG_TO_FILE"]:
-            log_file = logger.Logger.get_current_logfile()
-        
-        try:
-            # Set process metadata in a file.
-            processes.set_process_data(
-                name="main",
-                data={
-                    "pid": self.process_id,
-                    "start_time": time.time(),
-                    "sys_argv": sys.argv,
-                    "log_file": log_file,
-                },
-                clear_existing_data=True,
-            )
-        except json.JSONDecodeError:
-            # The file used by duck.processes is corrupted
-            pass  # Ignore for now, maybe writting is still in progress
-        
-        if not self.disable_signal_handler:
-            self.register_signals()  # bind signals to appropriate signal handlers
-            logger.log(
-                f"Use Ctrl-C to quit [APP PID: {self.process_id}]",
-                level=logger.DEBUG,
-                custom_color=logger.Fore.GREEN,
-            ) 
-        
-        if SETTINGS["AUTO_RELOAD"] and SETTINGS["DEBUG"]:
-            # Start duck sight reloader (if not running)
-            self.start_ducksight_reloader()
-            logger.log(
-                "Duck Sight Reloader watching file changes",
-                level=logger.DEBUG,
-                custom_color=logger.Fore.GREEN,
-            )
-        
-        # Log a success message
-        logger.log(
-            "Waiting for incoming requests :-) \n",
-            level=logger.DEBUG,
-            custom_color=logger.Fore.GREEN,
-        )
-        
-        if not self.disable_ipc_handler:
-            # Handle any incoming IPC messages.
-            # This is a blocking operation, it prevents app from exiting.
-            self.handle_ipc_messages()
-            
-    def on_pre_stop(self):
-        """
-        Event called before final application termination.
-        """
-        pass
-        
-    def run(self, print_ansi_art: bool = True):
-        """
-        Runs the Duck application.
-        """
-        from duck.setup import setup
-        
-        if not self.skip_setup:
-            # Setup Duck environment and the entire application.
-            setup()
-            
-        # Record application metadata and run the server
-        self.record_metadata()
-        
-        # Start runtime executor
-        self.runtime_executor.start(max_workers=5)
-        
-        # Run the main application
-        return self._run(print_ansi_art=print_ansi_art)
-        
     def stop_servers(
         self,
         stop_https_redirect_server: bool = True,
@@ -827,10 +749,11 @@ class App(BaseApp):
         self.server.stop_server(log_to_console=log_to_console, wait=wait)
         
         if (
-            stop_https_redirect_server
-            and self.https_redirect_process
+            stop_https_redirect_server and self.https_redirect_process
             and self.https_redirect_process.is_alive()
         ):
+            
+            # Terminate https redirect app process
             self.https_redirect_process.terminate()
             
             if wait:
@@ -841,7 +764,7 @@ class App(BaseApp):
         self,
         log_to_console: bool = True,
         no_exit: bool = False,
-        call_on_pre_stop_handler: bool = True,
+        dispatch_pre_stop_event: bool = True,
         kill_ducksight_reloader: bool = True,
         wait_for_runtime_executor_shutdown: bool = True,
         close_log_file: bool = True,
@@ -852,7 +775,7 @@ class App(BaseApp):
         Args:
             no_exit (bool): Whether to terminate everything but keep the program running.
             log_to_console (bool): Whether to log an exit message.
-            call_on_pre_stop_handler (bool): Whether to call method `on_pre_stop`. Defaults to True.
+            dispatch_pre_stop_event (bool): Whether to call method `on_pre_stop`. Defaults to True.
             kill_ducksight_reloader (bool): This attempts to kill the `DuckSightReloader`. Useful if `no_exit=True`,
             wait_for_runtime_executor_shutdown (bool): Whether to wait for the runtime executor to complete shutdown. 
                                                                                             This mean waiting for current tasks to finish/cancel.
@@ -873,9 +796,9 @@ class App(BaseApp):
                     # Ignore as the thread_pool_executor is going to be shut down anyway if it's still running.
                     pass
                     
-        # Call on_pre_stop event
-        if call_on_pre_stop_handler:
-            self.on_pre_stop()
+        if dispatch_pre_stop_event:
+            # Dispatch pre stop event.
+            self.dispatch_event("on_pre_stop")
         
         try:
             # Close the session storage connector in new thread
@@ -933,255 +856,448 @@ class App(BaseApp):
                 logger.log_exception(e)
                 
         if close_log_file:
-            # Close logging file
+            # Close the logging file
             if SETTINGS['LOG_TO_FILE']:
                 try:
                     logger.Logger.close_logfile()
                 except Exception as e:
                     logger.log(f"Error closing log file: {e}", level=logger.WARNING)
             
-        # Perform forceful termination if needed
         if not no_exit:
+            # Perform forceful termination if needed
             # Force exit (avoids lingering threads/processes)
             os._exit(0)
     
-    def _run(self, print_ansi_art: bool = True):
+    def log_startup_warnings(self):
         """
-        Runs the Duck application.
+        Logs configuration warnings before the server starts.
+    
+        Covers allowed hosts, domain, and CSP policy checks
+        relevant to the component system.
         """
-        from duck.contrib.sync.smart_async import _TRANSACTION_THREAD_POOL
-        from duck.art import display_duck_art
-        
-        # Fine tune threadpool for executing sync_to_async calls
-        default_sync_to_async_workers = _TRANSACTION_THREAD_POOL.max_threads
-        
-        # Update max_threads according to app workers
-        _TRANSACTION_THREAD_POOL.max_threads = (default_sync_to_async_workers * self.workers) if self.workers else default_sync_to_async_workers
-                
-        # App is not in reload state, continue
-        bold_start = "\033[1m"
-        bold_end = "\033[0m"
-        duck_start_failure_msg = f"{bold_start}Failed to start Duck server{bold_end}"
-        is_reload = False
-        
-        if "--is-reload" in sys.argv:
-            # App is being restarted somehow
-            is_reload = True
-            logger.log_raw("")
-            
-        if not is_reload and print_ansi_art and not SETTINGS["SILENT"]:
-            # Display duck art
-            display_duck_art()
-            
-            # Print some app start header
-            settings_mod = "DUCK_SETTINGS_MODULE"
-            settings_mod = os.environ.get(settings_mod, 'settings')
-            (f"{bold_start}VERSION {version}{bold_end}")
-
-        if SETTINGS["LOG_TO_FILE"]:
-            # Redirect all console output to log file
-            logger.Logger.redirect_console_output()
-        
-        # Log the current settings module in use
-        settings_mod = "DUCK_SETTINGS_MODULE"
-        settings_mod = os.environ.get(settings_mod, 'settings')
-        logger.log_raw(f'{bold_start}USING SETTINGS{bold_end} "{settings_mod}" \n')
-        
         if not SETTINGS['DEBUG'] and "*" in SETTINGS['ALLOWED_HOSTS']:
-            logger.log("WARNING: ALLOWED_HOSTS seem to have global host (*)", level=logger.WARNING)
-            
+            logger.log(
+                "WARNING: ALLOWED_HOSTS seem to have global host (*)",
+                level=logger.WARNING,
+            )
+    
         if not self.original_domain:
             logger.log(
                 f'WARNING: Domain not set, using "{self.domain}" ',
                 level=logger.WARNING,
             )
-        
-        # Start background event loop or threadpool if needed
-        if self.workers:
-            # We are using workers, so eventloops or threadpools will be
-            # started by httpd.httpd.start_server.start_server_loop_in_worker.
             
-            # Only start automations asyncio loop (if applicable) that will be run in background outside worker
+    def log_component_system_warnings(self):
+        """
+        Warns about missing CSP flags required by the Lively component system.
+    
+        Checks script-src for 'unsafe-eval' and style-src for 'unsafe-inline',
+        logging warnings for any missing directives.
+        """
+        logger.log("Lively Component System active", level=logger.DEBUG)
+        
+        # Build CSP directives.
+        csp_directives = SETTINGS['CSP_TRUSTED_SOURCES']
+    
+        if not (SETTINGS['ENABLE_HEADERS_SECURITY_POLICY'] and csp_directives):
+            return
+    
+        script_src = set(csp_directives.get("script-src", []))
+        style_src = set(csp_directives.get("style-src", []))
+        
+        # Script flags
+        required_script_flags = {"'unsafe-eval'"}
+        missing_script_flags = [
+            flag for flag in required_script_flags
+            if flag not in script_src
+        ]
+        
+        # Style flags
+        required_style_flag = "'unsafe-inline'"
+    
+        if "'unsafe-eval'" not in script_src:
+            logger.log(
+                (
+                    f"Component system active but script flag {'unsafe-eval'} "
+                    "is missing from script-src. "
+                    "This may prevent JS execution from lively components."
+                ),
+                level=logger.WARNING,
+            )
+        
+        elif missing_script_flags:
+            logger.log(
+                (
+                    f"Component system active but script flag(s) "
+                    f"{', '.join(missing_script_flags)} are missing from script-src. "
+                    "This may prevent dynamic components from loading correctly."
+                ),
+                level=logger.WARNING,
+            )
+        
+        elif csp_nonce_flag in style_src:
+            logger.log(
+                (
+                    "Component system active but `csp_nonce_flag` is in style-src. "
+                    "This may block inline styles from components."
+                ),
+                level=logger.WARNING,
+            )
+        
+        elif required_style_flag not in style_src:
+            logger.log(
+                (
+                    f"Component system active but flag {required_style_flag} "
+                    "is missing from style-src. "
+                    "This may block inline styles from components."
+                ),
+                level=logger.WARNING,
+            )
+    
+    def start_background_event_loop(self):
+        """
+        Starts background threads and event loop(s) based on worker config.
+    
+        With workers enabled, only the automations loop is started here — the
+        rest are handled per-worker. Without workers, all managers are started
+        directly, with the event loop conditional on ASYNC_HANDLING.
+        """
+        if self.workers:
+            # Workers handle their own request loops; only start automations here
             App.start_background_workers(
                 self,
                 start_request_handling_threadpool_manager=False,
                 start_request_handling_eventloop_manager=False,
                 start_component_threadpool_manager=False,
-                start_automations_eventloop_manager=True,    
+                start_automations_eventloop_manager=True,
             )
-        else:
-            # No worker processes/threads will be responsible for starting the threads/asyncio loop manager for us
-            # Start everything that needs to be started
-            _async = SETTINGS['ASYNC_HANDLING']
-            start_bg_eventloop_if_wsgi = getattr(self, "start_bg_eventloop_if_wsgi", True)
-            start_eventloop = _async or (not _async and start_bg_eventloop_if_wsgi)
-            
-            App.start_background_workers(
-                self,
-                start_request_handling_threadpool_manager=not _async,
-                start_request_handling_eventloop_manager=start_eventloop,
-                start_component_threadpool_manager=True,
-                start_automations_eventloop_manager=True,    
-            )
-            
-        if not SETTINGS['ASYNC_HANDLING']:
-            if self.start_bg_eventloop_if_wsgi:
-                # Started asyncio loop in background
-                logger.log(
-                    "Background event loop scheduled",
-                    level=logger.DEBUG,
-                )
+            return
+    
+        # No workers — start everything ourselves
+        async_ = SETTINGS['ASYNC_HANDLING']
+        start_bg_eventloop_if_wsgi = getattr(self, "start_bg_eventloop_if_wsgi", True)
+        start_eventloop = async_ or (not async_ and start_bg_eventloop_if_wsgi)
+    
+        App.start_background_workers(
+            self,
+            start_request_handling_threadpool_manager=not async_,
+            start_request_handling_eventloop_manager=start_eventloop,
+            start_component_threadpool_manager=True,
+            start_automations_eventloop_manager=True,
+        )
+    
+        if not async_:
+            if start_bg_eventloop_if_wsgi:
+                logger.log("Background event loop scheduled", level=logger.DEBUG)
             else:
                 logger.log(
                     "App argument `start_bg_eventloop_if_wsgi` is set to False. "
                     "This may prevent protocols like `HTTP/2` or `WebSockets` from working correctly\n",
                     level=logger.WARNING,
                 )
+    
+    def wait_for_main_server(self, start_failure_msg: str) -> bool:
+        """
+        Waits briefly then checks whether the main server came up.
+    
+        Args:
+            start_failure_msg: Message to log if the server failed to start.
+    
+        Returns:
+            True if the server is up, False otherwise.
+        """
+        wait_t = 1
         
-        if SETTINGS['ENABLE_COMPONENT_SYSTEM']:
-            # Components are enabled
-            logger.log("Lively Component System active", level=logger.DEBUG)
+        # Log something to the console.
+        logger.log(f"Waiting {wait_t}s to read server state...", level=logger.DEBUG)
+        
+        # Wait for sometime.
+        time.sleep(wait_t)
+    
+        if not self.server_up:
+            # Log failure message and stop the application.
+            logger.log(start_failure_msg, level=logger.ERROR)
             
-            # Check if CSP headers are set correctly for component system to run nicely.
-            csp_directives = SETTINGS['CSP_TRUSTED_SOURCES']
-            if SETTINGS['ENABLE_HEADERS_SECURITY_POLICY'] and csp_directives:
-                script_src = set(csp_directives.get("script-src", []))
-                style_src = set(csp_directives.get("style-src", []))
-                
-                # For components, we often need 'unsafe-eval' in script-src or default-src
-                required_script_flags = {"'unsafe-eval'"}
-                missing_script_flags = [
-                    flag for flag in required_script_flags
-                    if flag not in script_src
-                ]
-                
-                # For styles, we often need 'unsafe-inline' in style-src
-                required_style_flag = "'unsafe-inline'"
-                
-                if "'unsafe-eval'" not in script_src:
-                    logger.log(
-                        (
-                            f"Component system active but script flag {'unsafe-eval'} is missing from script-src. "
-                            "This may prevent JS execution from lively components."
-                        ),
-                        level=logger.WARNING,
-                    )
-                elif missing_script_flags:
-                    logger.log(
-                        (
-                            f"Component system active but script flag(s) {', '.join(missing_script_flags)} are missing from script-src. "
-                            "This may prevent dynamic components from loading correctly."
-                        ),
-                        level=logger.WARNING,
-                    )
-                elif csp_nonce_flag in style_src:
-                    logger.log(
-                        (
-                            "Component system active but `csp_nonce_flag` is in style-src. "
-                            "This may block inline styles from components."
-                        ),
-                        level=logger.WARNING,
-                    )
-                elif required_style_flag not in style_src:
-                    logger.log(
-                        (
-                            f"Component system active but flag {required_style_flag} is missing from style-src. "
-                            "This may block inline styles from components."
-                        ),
-                        level=logger.WARNING,
-                    )
-                    
-        if self.run_automations:
-            # Start the automations dispatcher
-            self.start_automations_dispatcher()
+            # Stop the app.
+            self.stop()
+            
+            # Return failure flag.
+            return False
+    
+        return True
+    
+    def start_https_redirect_if_needed(self, start_failure_msg: str) -> bool:
+        """
+        Starts the HTTPS redirect server if configured.
+    
+        Args:
+            start_failure_msg: Fallback message used if the redirect server fails.
+    
+        Returns:
+            True if the redirect server started (or was not needed), False on failure.
+        """
+        if not self.https_redirect:
+            return True
+    
+        # Start the HTTPS redirect server.
+        self.start_https_redirect_server()
         
-        # Start the main application server.    
+        # Wait for sometime.
+        time.sleep(1)
+    
+        if not self.https_redirect_server_up:
+            # Log a failure message and stop the application.
+            logger.log(start_failure_msg, level=logger.ERROR)
+            
+            # Stop the app
+            self.stop()
+            
+            # Return failure flag.
+            return False
+    
+        return True
+    
+    def start_django_if_needed(self) -> bool:
+        """
+        Starts the Django server and waits for it to become responsive.
+    
+        Runs any configured startup commands, then waits the configured grace
+        period before checking Django's health. Logs success details on a clean
+        start or an error and stops the app on failure.
+    
+        Returns:
+            True if Django started successfully (or is not in use), False otherwise.
+        """
+        if not self.use_django:
+            return True
+    
+        logger.log(
+            "Requests will be forwarded to Django server",
+            level=logger.DEBUG,
+        )
+        logger.log(
+            f"Starting Django server on port [self.django_port]",
+            level=logger.DEBUG,
+        )
+    
+        if SETTINGS["DJANGO_COMMANDS_ON_STARTUP"]:
+            # Start Django startup commands.
+            try:
+                logger.log_raw("\n")
+                bridge.run_django_app_commands()
+            except Exception as e:
+                logger.log(f"Failed to run django commands: {e}\n", level=logger.ERROR)
+                logger.log_exception(e)
+                self.stop()
+                return False
+    
+        # Wait for Django server to start
+        wait_t = self.django_server_wait_time
+        
+        # Log something.
+        logger.log(
+            f"Waiting for Django server to start ({wait_t} secs)\n",
+            level=logger.DEBUG,
+        )
+        
+        # Start the django server.
+        self.start_django_server()
+        
+        # Wait for some time.
+        time.sleep(wait_t)
+    
+        if not self.django_server_up:
+            # Log a failure message.
+            logger.log(
+                f"Failed to get response from Django server [{wait_t} secs]",
+                level=logger.ERROR,
+            )
+            
+            # Stop the application - usally kills the whole process.
+            self.stop()
+            
+            # Return failure flag
+            return False
+    
+        # Resolve the host URL for logging
+        host_url = "http://" if not self.server.enable_ssl else "https://"
+        host, port = self.server.addr
+        
+        # Create Django host URL
+        if host.startswith("0") and not self.uses_ipv6:
+            host = "127.0.0.1"
+        
+        elif self.uses_ipv6:
+            host = f"[{host}]"
+    
+        # Add host and port to URL
+        host_url += f"{host}:{port}"
+        
+        # Log something to the console.
+        logger.log(
+            "Django started yey, that's good!",
+            level=logger.DEBUG,
+            custom_color=logger.Fore.GREEN,
+        )
+        
+        logger.log(
+            f"Duck Server listening on {host_url}",
+            level=logger.DEBUG,
+            custom_color=logger.Fore.GREEN,
+        )
+    
+        return True
+        
+    def run(self, print_ansi_art: bool = True):
+        """
+        Runs the Duck application.
+        """
+        from duck.setup import setup
+        
+        if not self.skip_setup:
+            # Setup Duck environment and the entire application.
+            setup()
+            
+        # Record application metadata and run the server
+        self.record_metadata()
+        
+        # Start runtime executor
+        self.runtime_executor.start(max_workers=5)
+        
+        # Run the main application
+        return self._run(print_ansi_art=print_ansi_art)
+        
+    def _run(self, print_ansi_art: bool = True):
+        """
+        Runs the Duck application.
+    
+        Tunes the thread pool, starts background workers, launches the main
+        server, and conditionally starts HTTPS redirect and Django servers.
+        Calls the on_app_start handler once everything is verified as running.
+    
+        Args:
+            print_ansi_art: Whether to display the Duck ASCII art on startup.
+        """
+        from duck.contrib.sync.smart_async import _TRANSACTION_THREAD_POOL
+        from duck.art import display_duck_art
+    
+        # Tune threadpool size relative to configured workers
+        default_workers = _TRANSACTION_THREAD_POOL.max_threads
+        
+        _TRANSACTION_THREAD_POOL.max_threads = (
+            (default_workers * self.workers) if self.workers else default_workers
+        )
+        
+        # Some values.
+        bold_start = "\033[1m"
+        bold_end = "\033[0m"
+        start_failure_msg = f"{bold_start}Failed to start Duck server{bold_end}"
+        settings_mod = os.environ.get("DUCK_SETTINGS_MODULE", "settings")
+        
+        # Handle reload state — skip art and extra setup if restarting
+        is_reload = "--is-reload" in sys.argv
+        
+        if is_reload:
+            logger.log_raw("")
+    
+        if not is_reload and print_ansi_art and not SETTINGS["SILENT"]:
+            display_duck_art()
+    
+        if SETTINGS["LOG_TO_FILE"]:
+            logger.Logger.redirect_console_output()
+    
+        # Log the active settings module
+        logger.log_raw(f'{bold_start}USING SETTINGS{bold_end} "{settings_mod}" \n')
+        
+        # Log warnings and start event loop.
+        self.log_startup_warnings()
+        self.start_background_event_loop()
+    
+        if SETTINGS['ENABLE_COMPONENT_SYSTEM']:
+            self.log_component_system_warnings()
+    
+        if self.run_automations:
+            self.start_automations_dispatcher()
+    
+        # Boot main server and verify it came up
         self.start_server()
         
-        # Log some info message and sleep for 2 minutes.
-        logger.log("Waiting 1s to read server state...", level=logger.DEBUG)
-        time.sleep(1)
-
-        # Check server start attempt
-        if not self.server_up:
-            logger.log(duck_start_failure_msg, level=logger.ERROR)
-            self.stop()
+        if not self.wait_for_main_server(start_failure_msg):
             return
+    
+        if not self.start_https_redirect_if_needed("HTTPS redirect app failed to start"):
+            return
+    
+        if not self.start_django_if_needed():
+            return
+    
+        # Call on app start callable.
+        self._on_app_start()
+
+    def _on_app_start(self):
+        """
+        Internal method called when application has successfully been started.
+        """
+        from duck import processes
+        
+        # Record main process data
+        logfile = None
             
-        if self.https_redirect:
-            # Start HTTPS redirect server & wait 1 second
-            self.start_https_redirect_server()
-            time.sleep(1)
-
-            # Check HTTPS redirect server start attempt
-            if not self.https_redirect_server_up:
-                logger.log("HTTPS redirect app failed to start", level=logger.ERROR)
-                self.stop()
-                return
-
-        if self.use_django:
-            logger.log(
-                "Requests will be forwarded to Django server",
-                level=logger.DEBUG,
+        if SETTINGS["LOG_TO_FILE"]:
+            logfile = logger.Logger.get_current_logfile()
+        
+        try:
+            # Set process metadata in a file.
+            processes.set_process_data(
+                name="main",
+                data={
+                    "pid": self.process_id,
+                    "sys_argv": sys.argv,
+                    "log_file": logfile,
+                    "start_time": time.time(),
+                },
+                clear_existing_data=True,
             )
+        except json.JSONDecodeError:
+            # The file used by duck.processes is corrupted
+            pass  # Ignore for now, maybe writting is still in progress
+        
+        if not self.disable_signal_handler:
+            # Bind signals to appropriate signal handlers
+            self.register_signals()
+            
+            # Log something to the console.
             logger.log(
-                f"Starting Django server on port [self.django_port]",
+                f"Use Ctrl-C to quit [APP PID: {self.process_id}]",
                 level=logger.DEBUG,
+                custom_color=logger.Fore.GREEN,
+            ) 
+        
+        if SETTINGS["AUTO_RELOAD"] and SETTINGS["DEBUG"]:
+            # Start duck sight reloader (if not running)
+            self.start_ducksight_reloader()
+            
+            # Log something to the console.
+            logger.log(
+                "Duck Sight Reloader watching file changes",
+                level=logger.DEBUG,
+                custom_color=logger.Fore.GREEN,
             )
-
-            if SETTINGS["DJANGO_COMMANDS_ON_STARTUP"]:
-                try:
-                    logger.log_raw("\n")
-                    bridge.run_django_app_commands()
-                except Exception as e:
-                    logger.log(
-                        f"Failed to run django commands: {e}\n",
-                        level=logger.ERROR,
-                    )
-                    logger.log_exception(e)
-                    self.stop()
-                    return
-            
-            # Wait for Django server to start
-            wait_t = self.django_server_wait_time
-            logger.log(f"Waiting for Django server to start ({wait_t} secs)\n", level=logger.DEBUG)
-            self.start_django_server()
-            
-            # Wait a little bit.
-            time.sleep(wait_t)
-
-            # Check if django is running
-            if not self.django_server_up:
-                logger.log(f"Failed to get response from Django server [{wait_t} secs]", level=logger.ERROR)
-                self.stop()
-                return
-                
-            else:
-                host_url = "http://" if not self.server.enable_ssl else "https://"
-                host, port = self.server.addr
-                
-                if host.startswith("0") and not self.uses_ipv6:
-                    # Convert host to browser's recognizeable
-                    host = "127.0.0.1"
-                else:
-                    if self.uses_ipv6:
-                        host = f"[{host}]"
-                
-                # Log some info
-                host_url += f"{host}:{port}"
-                logger.log(
-                    "Django started yey, that's good!",
-                    level=logger.DEBUG,
-                    custom_color=logger.Fore.GREEN,
-                )
-                logger.log(
-                    f"Duck Server listening on {host_url}",
-                    level=logger.DEBUG,
-                    custom_color=logger.Fore.GREEN,
-                )
-                
-        # Call on_app_start handler
-        self.on_app_start()
+        
+        # Log a success message
+        logger.log(
+            "Waiting for incoming requests :-) \n",
+            level=logger.DEBUG,
+            custom_color=logger.Fore.GREEN,
+        )
+        
+        # Run the super method for dispatching on_start event.
+        super()._on_app_start()
+        
+        if not self.disable_ipc_handler:
+            # Handle any incoming IPC messages.
+            # This is a blocking operation, it prevents app from exiting.
+            self.handle_ipc_messages()
 
 
 if __name__ == "__main__":

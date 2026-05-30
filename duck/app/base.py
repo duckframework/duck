@@ -2,7 +2,7 @@
 Base application primitives shared by Duck application classes.
 """
 
-from typing import Optional, Dict
+from typing import Optional, Dict, Callable
 
 from duck.exceptions.all import ApplicationError
 from duck.meta import Meta
@@ -37,6 +37,7 @@ class BaseApp:
         no_checks: bool = False,
         workers: Optional[int] = None,
         force_worker_processes: bool = False,
+        events: Optional[Dict[str, Optional[Callable]]] = None,
     ) -> None:
         """
         Initializes shared app configuration.
@@ -57,6 +58,7 @@ class BaseApp:
                     
                     Set this flag to `True` only when process isolation is explicitly desired **and** you do not
                     require shared in-memory synchronization between workers.
+            events: Events to handle e.g. {"on_start": some_callable}. Defaults to None.
         
         Raises:
             ApplicationError: If the provided bind address is invalid.
@@ -64,7 +66,13 @@ class BaseApp:
         # Note: Domain and Server URL may be different.
         # Validate bind address before storing it
         self.validate_addr(addr=addr, uses_ipv6=uses_ipv6)
-
+        
+        # Store runtime configuration
+        self.name = self.resolve_name(name)
+        self.enable_https = enable_https
+        self.workers = workers
+        self.force_worker_processes = force_worker_processes
+        
         # Store network configuration
         self.addr = addr
         self.port = port
@@ -74,11 +82,8 @@ class BaseApp:
         self.server_url = self.resolve_server_url(server_url)
         self.no_checks = no_checks
         
-        # Store runtime configuration
-        self.name = self.resolve_name(name)
-        self.enable_https = enable_https
-        self.workers = workers
-        self.force_worker_processes = force_worker_processes
+        # Event map
+        self.event_map = {"on_start": None, "on_pre_stop": None, **(events or {})}
         
         # Server is assigned by subclasses
         self.server = None
@@ -290,18 +295,6 @@ class BaseApp:
         """
         return url_normalize(f"{self.absolute_ws_uri}/{path.lstrip('/')}")
         
-    def on_app_start(self):
-        """
-        Event called on application startup.
-        """
-        pass
-     
-    def on_pre_stop(self):
-        """
-        Event called before application destruction.
-        """
-        pass
-         
     def run(self):
         """
         The method for running the web application.
@@ -313,3 +306,32 @@ class BaseApp:
         The method for stopping the web application.
         """
         raise NotImplementedError("The method 'stop' must be implemented.")
+
+    def register_event(self, event: str, handler: Optional[Callable] = None):
+        """
+        Register an event.
+        
+        Args:
+            event: The event to be handled.
+            handler: An optional callable to handle the event. Defaults to None.
+        """
+        self.event_map[event] = handler
+        
+    def dispatch_event(self, event: str):
+        """
+        Dispatch an event and make event handlers handle the event.
+        """
+        event_handler = self.event_map.get(event, None)
+        
+        if event_handler is None and event not in self.event_map:
+            raise ApplicationError(f"Event '{event}' does not appear to be registered.")
+        
+        # Execute event handler.
+        if event_handler:
+            event_handler(event, self)
+    
+    def _on_app_start(self):
+        """
+        Internal method called on application start.
+        """
+        self.dispatch_event("on_start")

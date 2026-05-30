@@ -253,16 +253,20 @@ class BaseServer:
         server_url = "https" if self.enable_ssl else "http"
         server_url += f"://{duck_host}:{port}"
         server_gateway = "WSGI" if not SETTINGS['ASYNC_HANDLING'] else "ASGI"
+        resolved_server_url = self.application.server_url
         
         if not self.no_logs:
             if SETTINGS["DEBUG"]:
                 logger.log(f"Started Duck {server_gateway} Server on {server_url}", level=logger.DEBUG)
+                logger.log(f"Resolved Server URL: {resolved_server_url}", level=logger.DEBUG)
+            
             else:
                 logger.log(
                     f"Started Duck Pro {server_gateway} Server on {server_url}\n "
                     f" └── This is a production server, stay secure! ",
                      level=logger.DEBUG,
-                 )
+                )
+                logger.log(f"Resolved Server URL: {resolved_server_url}", level=logger.DEBUG)
                  
                 if SETTINGS['SUPPORT_HTTP_2'] or SETTINGS['ASYNC_HANDLING']:
                      if SETTINGS['ASYNC_LOOP'] != "uvloop" and (platform.system() or "").lower() != "windows":

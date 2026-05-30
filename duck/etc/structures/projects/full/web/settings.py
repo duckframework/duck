@@ -436,7 +436,7 @@ DJANGO_BIND_PORT: int = 9999
 # Django Server Wait Time
 # Time in seconds to wait before checking if the Django server is up and running.
 # This variable is used to periodically verify the server's status during the initial startup or maintenance routines, ensuring that the server is ready to handle incoming requests.
-DJANGO_SERVER_WAIT_TIME: float = 2.5
+DJANGO_SERVER_WAIT_TIME: float = 1
 
 
 # These commands will be run before Django server startup if USE_DJANGO is set to True.
@@ -709,37 +709,6 @@ SSL_CERTFILE_LOCATION: str = BASE_DIR / "etc/ssl/server.crt"
 # SSL Private Key Location
 # SECURITY WARNING: Keep this safe to avoid security bridges
 SSL_PRIVATE_KEY_LOCATION: str = BASE_DIR / "etc/ssl/server.key"
-
-
-# Self-Signed Certificate Generation.
-# Settings for generating self-signed certificate using ssl-gen command
-
-# The location of the SSL Certificate Signing Request (CSR).
-SSL_CSR_LOCATION: str = BASE_DIR / "etc/ssl/server.csr"
-
-
-# Domain name for the server. Replace with fully-qualified domain name (FQDN)
-SERVER_DOMAIN: str = ""
-
-
-# Server country as Two-Letter country code as per ISO 3166-1 alpha-2 code eg US or ZW
-SERVER_COUNTRY: str = ""  # .e.g ZW
-
-
-# Server state or province e.g. California
-SERVER_STATE: str = ""
-
-
-# Server locality. Replace with the locality name (city, town, etc.) e.g. Harare
-SERVER_LOCALITY: str = ""
-
-
-# Server Organization. Replace with your legally registered organization name
-SERVER_ORGANIZATION: str = ""
-
-
-# Server Organization Unit. Replace with your legally registered organization unit
-SERVER_ORGANIZATION_UNIT: str = ""
 
 
 # Preconfigured Certbot config

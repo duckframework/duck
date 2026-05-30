@@ -21,6 +21,8 @@ and this project adheres to Semantic Versioning.
 - Added `csrf_exempt` decorator in `duck.views` module.
 - Added clean app structure - All app instances now inherit from `duck.app.base.BaseApp`
 - Added `server_url` argument to `BaseApp` to better support reverse proxies and deployment setups where the application instance is not accessed directly.
+- Added events to `App` instances. Argument `events` can now be parsed to core Apps from  `duck.apps` module  for doing  specific actions on certain events.
+- Added `JWTMiddleware` to default middlewares.
 
 ### Changed
 
@@ -37,6 +39,8 @@ and this project adheres to Semantic Versioning.
 - Improved and refined `duck.app.microapp` module.
 - Renamed setting `FORCE_HTTPS` to `HTTPS_REDIRECT` for clearer intent and improved consistency with its actual behavior of redirecting HTTP traffic to HTTPS.
 - Improved `App` class to use better arguments, also improved the core App logic.
+- Removed default settings for self-signed certificate generation from settings file - they are now optional.
+- Shortened `DJANGO_SERVER_WAIT_TIME` to 1 second by default.
 
 ### Fixed
 

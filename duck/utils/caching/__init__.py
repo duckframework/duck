@@ -1,410 +1,1174 @@
 """
-Caching module which leverages the use of diskcache python library. Essential methods mandatory to any Cache class: [set, get, delete, clear]
+Caching module built on top of the diskcache library.
+
+Provides a hierarchy of cache backends ranging from pure in-memory LRU
+caches to persistent file-backed caches with dynamic sharding and
+key-as-folder storage strategies.
+
+Every public method is safe to call from multiple threads or async tasks
+simultaneously. Sync callers use threading.RLock; async callers use
+asyncio.Lock via the async_* variants exposed on each class.
 """
 
 import os
-import time
 import uuid
 import shutil
-import string
+import asyncio
 import datetime
-import random
-import diskcache
 import threading
 
 from typing import Any
 from pathlib import Path
-from collections import (deque, OrderedDict)
+from collections import OrderedDict, deque
 from functools import lru_cache
+
+import diskcache
+
+
+# Sentinel used to detect "no default provided" without conflicting with None.
+MISSING = object()
 
 
 class CacheBase:
     """
-    Base class for caching
+    Abstract base class that all cache backends must implement.
+
+    Subclasses must override set, get, delete, pop, and clear.
+    The save() hook is optional and is a no-op by default.
+
+    Locking strategy:
+        Each subclass owns a threading.RLock (sync) and an asyncio.Lock
+        (async). The RLock is reentrant so that methods which call other
+        locking methods on the same instance do not deadlock.
     """
 
-    def set(self, key: str, value: Any, expiry: int | float = None):
-        """
-        Set a value in the cache.
-        """
-        raise NotImplementedError("Implement this method for setting keys.")
-
-    def get(self, key: str) -> Any:
-        """
-        Get a value from the cache. Returns None if the key is not found.
-        """
-        raise NotImplementedError("Implement this method to retrieve values.")
-
-    def delete(self, key: str):
-        """
-        Delete a value from the cache.
-        """
-        raise NotImplementedError("Implement this method for deleting keys.")
-
     def save(self):
-        pass
+        """
+        Optional persistence hook. No-op unless overridden.
+        """
 
-    def clear(self):
+    def set(self, key: str, value: Any, expiry: int | float | None = None) -> None:
         """
-        Clear all values from the cache.
+        Store a value under key with an optional TTL in seconds.
+
+        Args:
+            key: Cache key.
+            value: Value to store.
+            expiry: Seconds until the entry expires. None means no expiry.
         """
-        raise NotImplementedError("Implement this method for clearing key pairs.")
+        raise NotImplementedError(
+            f"'set' is not implemented on {self.__class__.__name__}."
+        )
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """
+        Retrieve the value stored under key.
+
+        Args:
+            key: Cache key to look up.
+            default: Returned when the key is absent or expired.
+
+        Returns:
+            The cached value or default.
+        """
+        raise NotImplementedError(
+            f"'get' is not implemented on {self.__class__.__name__}."
+        )
+
+    def delete(self, key: str) -> None:
+        """
+        Remove key from the cache. Silent if the key does not exist.
+
+        Args:
+            key: Cache key to remove.
+        """
+        raise NotImplementedError(
+            f"'delete' is not implemented on {self.__class__.__name__}."
+        )
+
+    def pop(self, key: str, default: Any = MISSING) -> Any:
+        """
+        Retrieve and atomically remove a value from the cache.
+
+        Args:
+            key: Cache key to retrieve and delete.
+            default: Returned when the key is absent. Raises KeyError
+                if omitted and the key does not exist.
+
+        Returns:
+            The cached value, or default when the key is absent.
+
+        Raises:
+            KeyError: When the key is missing and no default was given.
+        """
+        raise NotImplementedError(
+            f"'pop' is not implemented on {self.__class__.__name__}."
+        )
+
+    def clear(self) -> None:
+        """
+        Evict all entries from the cache.
+        """
+        raise NotImplementedError(
+            f"'clear' is not implemented on {self.__class__.__name__}."
+        )
 
 
 class InMemoryCache(CacheBase):
     """
-    InMemoryCache with LRU eviction.
+    Thread-safe in-memory cache with LRU eviction.
+
+    Entries are stored in an OrderedDict so that the least-recently-used
+    key can be evicted in O(1) when the cache is full. An optional expiry
+    map records per-key TTLs and is checked on every read.
+
+    Args:
+        maxkeys: Maximum number of keys before LRU eviction kicks in.
+            None means unbounded.
     """
-    def __init__(self, maxkeys=None, *_):
-        self.expiry_map = {}
-        self.cache = OrderedDict()
+
+    def __init__(self, maxkeys: int | None = None):
         self.maxkeys = maxkeys
 
-    def set(self, key: str, value: Any, expiry=None):
+        # Ordered mapping of key ➝ value (most-recently-used at the end).
+        self.cache: OrderedDict[str, Any] = OrderedDict()
+
+        # Per-key expiry timestamps.
+        self.expiry_map: dict[str, datetime.datetime] = {}
+
+        # RLock so that pop() (which calls get then delete) does not
+        # deadlock when both methods acquire the same lock.
+        self.lock = threading.RLock()
+        self.async_lock = asyncio.Lock()
+
+    # Internal helpers
+
+    def _is_expired(self, key: str) -> bool:
         """
-        Set a value in the cache.
+        Check whether a key has passed its expiry without side effects.
+
+        Args:
+            key: Cache key to inspect.
+
+        Returns:
+            True if the key has an expiry that has already elapsed.
         """
-        if key in self.cache:
-            self.cache.move_to_end(key)
-        self.cache[key] = value
+        expiry_dt = self.expiry_map.get(key)
+        return expiry_dt is not None and datetime.datetime.now() >= expiry_dt
 
-        if expiry:
-            self.expiry_map[key] = datetime.datetime.now() + datetime.timedelta(seconds=expiry)
-
-        if self.maxkeys and len(self.cache) > self.maxkeys:
-            oldest_key, _ = self.cache.popitem(last=False)  # LRU
-            self.expiry_map.pop(oldest_key, None)
-
-    def get(self, key: str, default: Any = None, pop: bool = False) -> Any:
+    def _evict(self, key: str) -> None:
         """
-        Get a value from the cache.
+        Remove a key from both the cache and the expiry map.
+
+        Args:
+            key: Cache key to evict.
         """
-        if key in self.expiry_map:
-            expiry_date = self.expiry_map[key]
-            if datetime.datetime.now() >= expiry_date:
-                self.cache.pop(key, None)
-                self.expiry_map.pop(key, None)
-                return None
-
-        if key in self.cache:
-            self.cache.move_to_end(key)  # Mark as recently used
-        return self.cache.pop(key, default) if pop else self.cache.get(key, default)
-
-    def has(self, key: str):
-        return key in self.cache
-        
-    def delete(self, key: str):
         self.cache.pop(key, None)
         self.expiry_map.pop(key, None)
 
-    def clear(self):
-        self.cache.clear()
-        self.expiry_map.clear()
+    # Public interface
 
-    def close(self):
+    def set(self, key: str, value: Any, expiry: int | float | None = None) -> None:
+        """
+        Insert or update key with an optional TTL.
+
+        Args:
+            key: Cache key.
+            value: Value to store.
+            expiry: Seconds until expiry. None means the entry lives forever.
+        """
+        with self.lock:
+            # Move existing key to the end (most-recently-used position).
+            if key in self.cache:
+                self.cache.move_to_end(key)
+
+            self.cache[key] = value
+
+            # Record or clear expiry.
+            if expiry is not None:
+                self.expiry_map[key] = (
+                    datetime.datetime.now() + datetime.timedelta(seconds=expiry)
+                )
+            else:
+                self.expiry_map.pop(key, None)
+
+            # Evict the oldest entry when over capacity.
+            if self.maxkeys and len(self.cache) > self.maxkeys:
+                oldest_key, _ = self.cache.popitem(last=False)
+                self.expiry_map.pop(oldest_key, None)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """
+        Retrieve the value for key, evicting it first if expired.
+
+        Args:
+            key: Cache key to look up.
+            default: Returned when the key is absent or expired.
+
+        Returns:
+            The cached value or default.
+        """
+        with self.lock:
+            if self._is_expired(key):
+                self._evict(key)
+                return default
+
+            if key in self.cache:
+                self.cache.move_to_end(key)
+                return self.cache[key]
+
+            return default
+
+    def has(self, key: str) -> bool:
+        """
+        Return True if key exists and has not expired.
+
+        Args:
+            key: Cache key to probe.
+
+        Returns:
+            True when the key is present and live.
+        """
+        with self.lock:
+            if self._is_expired(key):
+                self._evict(key)
+                return False
+            return key in self.cache
+
+    def delete(self, key: str) -> None:
+        """
+        Remove key from the cache. Silent if absent.
+
+        Args:
+            key: Cache key to remove.
+        """
+        with self.lock:
+            self._evict(key)
+
+    def pop(self, key: str, default: Any = MISSING) -> Any:
+        """
+        Retrieve and atomically remove a value.
+
+        The entire read-then-delete sequence is held under one lock
+        acquisition so no concurrent caller can observe the key between
+        the two operations.
+
+        Args:
+            key: Cache key to retrieve and delete.
+            default: Returned when the key is absent. Raises KeyError
+                if omitted and the key does not exist.
+
+        Returns:
+            The cached value, or default when absent.
+
+        Raises:
+            KeyError: When the key is missing and no default was provided.
+        """
+        with self.lock:
+            # Honour TTL before the pop.
+            if self._is_expired(key):
+                self._evict(key)
+                if default is MISSING:
+                    raise KeyError(key)
+                return default
+
+            if key not in self.cache:
+                if default is MISSING:
+                    raise KeyError(key)
+                return default
+
+            value = self.cache[key]
+            self._evict(key)
+            return value
+
+    def clear(self) -> None:
+        """
+        Evict all entries from the cache.
+        """
+        with self.lock:
+            self.cache.clear()
+            self.expiry_map.clear()
+
+    # Async variants
+
+    async def async_set(
+        self, key: str, value: Any, expiry: int | float | None = None
+    ) -> None:
+        """
+        Async-safe version of set.
+
+        Args:
+            key: Cache key.
+            value: Value to store.
+            expiry: TTL in seconds.
+        """
+        async with self.async_lock:
+            self.set(key, value, expiry)
+
+    async def async_get(self, key: str, default: Any = None) -> Any:
+        """
+        Async-safe version of get.
+
+        Args:
+            key: Cache key to look up.
+            default: Returned when absent or expired.
+
+        Returns:
+            The cached value or default.
+        """
+        async with self.async_lock:
+            return self.get(key, default)
+
+    async def async_pop(self, key: str, default: Any = MISSING) -> Any:
+        """
+        Async-safe version of pop.
+
+        Args:
+            key: Cache key to retrieve and delete.
+            default: Returned when absent. Raises KeyError if omitted.
+
+        Returns:
+            The cached value or default.
+
+        Raises:
+            KeyError: When the key is missing and no default was provided.
+        """
+        async with self.async_lock:
+            return self.pop(key, default)
+
+    async def async_delete(self, key: str) -> None:
+        """
+        Async-safe version of delete.
+
+        Args:
+            key: Cache key to remove.
+        """
+        async with self.async_lock:
+            self.delete(key)
+
+    async def async_clear(self) -> None:
+        """
+        Async-safe version of clear.
+        """
+        async with self.async_lock:
+            self.clear()
+
+    def close(self) -> None:
+        """
+        Release all resources held by this cache instance.
+        """
         self.clear()
 
 
 class PersistentFileCache(CacheBase):
     """
-    Implementation of caching using the `diskcache` library
+    Persistent file-backed cache powered by the diskcache library.
+
+    All operations are serialised behind a threading.RLock so the
+    underlying SQLite connection is never accessed from two threads
+    simultaneously. diskcache itself is thread-safe, but the RLock
+    also makes our own pop() atomic at the Python level.
+
+    Args:
+        path: Directory path used as the cache store.
+        cache_size: Maximum size in bytes. None means unlimited.
     """
-    def __init__(self, path: str, cache_size: int = None):
-        
+
+    def __init__(self, path: str, cache_size: int | None = None):
         if os.path.isfile(path):
-            raise FileExistsError(f"Path should be a directory, not a file: {path}")
-        
+            raise FileExistsError(
+                f"Path must be a directory, not a file: {path}"
+            )
+
         self.path = path
         self.cache_size = cache_size
-        self._closed = False
-        self._cache = (
-            diskcache.Cache(path, size_limit=cache_size, sqlite_timeout=30) if cache_size
-            else diskcache.Cache(path, sqlite_timeout=30)
-        )
-        
-    @property
-    def closed(self):
-        """
-        Checks whether the cache is closed.
-        """
-        return self._closed
 
-    def set(self, key: str, _obj: Any, expiry: int | float = None):
+        self.closed = False
+        self.lock = threading.RLock()
+        self.async_lock = asyncio.Lock()
+
+        # Open the diskcache store.
+        kwargs: dict[str, Any] = {"sqlite_timeout": 30}
+        if cache_size is not None:
+            kwargs["size_limit"] = cache_size
+
+        self.inner_cache = diskcache.Cache(path, **kwargs)
+
+    def _require_open(self) -> None:
         """
-        Sets the cache with an optional expiry in seconds.
+        Guard that raises RuntimeError when the cache has been closed.
+        """
+        if self.closed:
+            raise RuntimeError(
+                f"Operation on a closed PersistentFileCache at {self.path!r}."
+            )
+
+    def set(self, key: str, value: Any, expiry: int | float | None = None) -> None:
+        """
+        Store a value under key with an optional TTL.
+
+        Args:
+            key: Cache key (must be a str).
+            value: Value to persist.
+            expiry: Seconds until the entry expires.
+
+        Raises:
+            KeyError: When key is not a string.
+            RuntimeError: When the cache is closed.
         """
         if not isinstance(key, str):
-            raise KeyError(f"Key should be an instance of str, not {type(key)}")
-        self._cache.set(key, _obj, expire=expiry)
+            raise KeyError(f"Key must be str, got {type(key).__name__}.")
 
-    def get(self, key: str):
+        with self.lock:
+            self._require_open()
+            self.inner_cache.set(key, value, expire=expiry)
+
+    def get(self, key: str, default: Any = None) -> Any:
         """
-        Retrieves the key value from cache.
+        Retrieve the value stored under key.
+
+        Args:
+            key: Cache key (must be a str).
+            default: Returned when the key is absent or expired.
+
+        Returns:
+            The cached value or default.
+
+        Raises:
+            KeyError: When key is not a string.
+            RuntimeError: When the cache is closed.
         """
         if not isinstance(key, str):
-            raise KeyError(f"Key should be an instance of str, not {type(key)}")
-        return self._cache.get(key)
+            raise KeyError(f"Key must be str, got {type(key).__name__}.")
 
-    def delete(self, key: str):
-        """
-        Delete a key from the cache.
-        """
-        self._cache.delete(key)
+        with self.lock:
+            self._require_open()
+            # diskcache.Cache.get accepts a default and returns it on miss.
+            return self.inner_cache.get(key, default=default)
 
-    def clear(self):
+    def delete(self, key: str) -> None:
         """
-        Clears all data from the cache.
-        """
-        self._cache.clear()
+        Remove key from the cache. Silent if absent.
 
-    def close(self):
+        Args:
+            key: Cache key to remove.
+
+        Raises:
+            RuntimeError: When the cache is closed.
         """
-        This closes the cache.
+        with self.lock:
+            self._require_open()
+            self.inner_cache.delete(key)
+
+    def pop(self, key: str, default: Any = MISSING) -> Any:
         """
-        self._closed = True
-        self._cache.close()
+        Retrieve and atomically remove a value.
+
+        Uses diskcache's own pop() which is atomic at the SQLite level,
+        then falls back to KeyError / default handling.
+
+        Args:
+            key: Cache key to retrieve and delete.
+            default: Returned when absent. Raises KeyError if omitted.
+
+        Returns:
+            The cached value or default.
+
+        Raises:
+            KeyError: When the key is missing and no default was provided.
+            RuntimeError: When the cache is closed.
+        """
+        with self.lock:
+            self._require_open()
+
+            # diskcache.Cache.pop accepts a default sentinel.
+            value = self.inner_cache.pop(key, default=MISSING)
+
+            if value is MISSING:
+                if default is MISSING:
+                    raise KeyError(key)
+                return default
+
+            return value
+
+    def clear(self) -> None:
+        """
+        Evict all entries from the cache.
+
+        Raises:
+            RuntimeError: When the cache is closed.
+        """
+        with self.lock:
+            self._require_open()
+            self.inner_cache.clear()
+
+    # Async variants
+
+    async def async_set(
+        self, key: str, value: Any, expiry: int | float | None = None
+    ) -> None:
+        """
+        Async-safe version of set.
+
+        Args:
+            key: Cache key.
+            value: Value to persist.
+            expiry: TTL in seconds.
+        """
+        async with self.async_lock:
+            self.set(key, value, expiry)
+
+    async def async_get(self, key: str, default: Any = None) -> Any:
+        """
+        Async-safe version of get.
+
+        Args:
+            key: Cache key to look up.
+            default: Returned when absent or expired.
+
+        Returns:
+            The cached value or default.
+        """
+        async with self.async_lock:
+            return self.get(key, default)
+
+    async def async_pop(self, key: str, default: Any = MISSING) -> Any:
+        """
+        Async-safe version of pop.
+
+        Args:
+            key: Cache key to retrieve and delete.
+            default: Returned when absent. Raises KeyError if omitted.
+
+        Returns:
+            The cached value or default.
+
+        Raises:
+            KeyError: When the key is missing and no default was provided.
+        """
+        async with self.async_lock:
+            return self.pop(key, default)
+
+    async def async_delete(self, key: str) -> None:
+        """
+        Async-safe version of delete.
+
+        Args:
+            key: Cache key to remove.
+        """
+        async with self.async_lock:
+            self.delete(key)
+
+    async def async_clear(self) -> None:
+        """
+        Async-safe version of clear.
+        """
+        async with self.async_lock:
+            self.clear()
+
+    def close(self) -> None:
+        """
+        Flush pending writes and close the underlying diskcache store.
+        """
+        with self.lock:
+            if not self.closed:
+                self.closed = True
+                self.inner_cache.close()
 
 
 class DynamicFileCache(CacheBase):
     """
-    Manages a cache of files, dynamically creating new files when existing ones reach a size limit.
+    Sharded persistent cache that automatically creates new shard
+    directories when existing ones reach a configured size limit.
+
+    Each shard is a PersistentFileCache instance. Shards are created
+    lazily and are never deleted. Reads scan shards from newest to
+    oldest so the most-recently-written value is returned first.
+
+    The lru_cache on get_cache_obj is intentionally not used here
+    because closed PersistentFileCache objects must not be returned
+    from a cache. Shard instances are tracked in a plain dict instead.
+
+    Args:
+        cache_dir: Root directory that will hold shard subdirectories.
+        cache_limit: Maximum size in bytes per shard. Defaults to 1 GB.
+        cached_objs_limit: Maximum number of shard objects kept open
+            simultaneously. Oldest is closed when the limit is exceeded.
     """
+
+    DEFAULT_SHARD_SIZE: int = 1_000_000_000  # 1 GB
+
     def __init__(
         self,
         cache_dir: str,
-        cache_limit=1e9,
-        cached_objs_limit: int = 128
-    ):  # Default file limit is 1GB and number of objects to be cached is 128
+        cache_limit: int = DEFAULT_SHARD_SIZE,
+        cached_objs_limit: int = 128,
+    ):
+        if not os.path.isdir(cache_dir):
+            raise FileNotFoundError(f"Directory not found: {cache_dir}")
+
         self.cache_dir = cache_dir
         self.cache_limit = cache_limit
 
-        if not os.path.isdir(self.cache_dir):
-            raise FileNotFoundError(f"Directory {cache_dir} not found")
-        
-        self._loaded_cache_objs = deque(maxlen=cached_objs_limit)
-        self._reload_cache_files()
+        # Ordered mapping of shard path ➝ PersistentFileCache.
+        # Using an OrderedDict so we can evict the oldest open shard
+        # when cached_objs_limit is reached.
+        self.open_shards: OrderedDict[str, PersistentFileCache] = OrderedDict()
+        self.cached_objs_limit = cached_objs_limit
 
-    def _reload_cache_files(self):
+        self.lock = threading.RLock()
+        self.async_lock = asyncio.Lock()
+
+        # Discover pre-existing shard directories.
+        self.shard_paths: list[Path] = []
+        self.reload_shard_paths()
+
+    def reload_shard_paths(self) -> None:
         """
-        This reloads existing cache files in a directory.
+        Scan cache_dir and refresh the ordered list of shard paths.
+
+        Called at construction time and whenever a new shard is created
+        so the shard list is always current.
         """
-        self._cache_files = [
-            Path(dir_entry.path) for dir_entry in os.scandir(self.cache_dir)
-            if dir_entry.is_dir()
+        paths = [
+            Path(entry.path)
+            for entry in os.scandir(self.cache_dir)
+            if entry.is_dir()
         ]
-        self._cache_files.sort()
+        paths.sort()
+        self.shard_paths = paths
 
-    def _get_cache_path(self) -> str:
+    def get_writable_shard_path(self) -> str:
         """
-        Returns the path to a cache dir that is not at the size limit.
+        Return the path of a shard that has not yet reached cache_limit.
+
+        Creates a new shard directory if all existing shards are full.
+
+        Returns:
+            Absolute path string of the target shard directory.
         """
-        for dir_entry in self._cache_files:
-            size = sum(f.stat().st_size for f in dir_entry.iterdir())
+        for shard_path in self.shard_paths:
+            try:
+                size = sum(f.stat().st_size for f in shard_path.iterdir())
+            except OSError:
+                continue
             if size < self.cache_limit:
-                return str(dir_entry)
-        new_path = self._create_new_cache_path()
-        self._cache_files.append(Path(new_path))
-        return new_path
+                return str(shard_path)
 
-    def _create_new_cache_path(self):
+        # All shards full — create a new one.
+        return self.create_new_shard()
+
+    def create_new_shard(self) -> str:
         """
-        This retrieves new cache path with a unique name using uuid module.
+        Create a new uniquely named shard directory inside cache_dir.
+
+        Returns:
+            Absolute path string of the newly created shard directory.
         """
-        name = f"{len(self._cache_files)}-{str(uuid.uuid4())[:5]}"
+        name = f"{len(self.shard_paths)}-{uuid.uuid4().hex[:6]}"
         path = os.path.join(self.cache_dir, name)
         os.makedirs(path, exist_ok=True)
+
+        # Keep the shard list up to date.
+        self.shard_paths.append(Path(path))
         return path
 
-    @property
-    def cache_obj(self):
+    def get_shard(self, path: str) -> PersistentFileCache:
         """
-        Returns the Cache object for the current cache file that is not at its limit.
+        Return an open PersistentFileCache for the given shard path.
+
+        Evicts the least-recently-used open shard when the open-shard
+        limit is exceeded to avoid unbounded file-handle accumulation.
+
+        Args:
+            path: Absolute shard directory path.
+
+        Returns:
+            An open PersistentFileCache instance for that path.
         """
-        current_cache_path = self._get_cache_path()
+        if path in self.open_shards:
+            # Move to end so it is the most-recently-used.
+            self.open_shards.move_to_end(path)
+            return self.open_shards[path]
 
-        for obj in self._loaded_cache_objs:
-            if os.path.samefile(obj.path, current_cache_path):
-                return obj
+        # Evict the oldest open shard if we are at the limit.
+        if len(self.open_shards) >= self.cached_objs_limit:
+            _, oldest = self.open_shards.popitem(last=False)
+            if not oldest.closed:
+                oldest.close()
 
-        prev_obj = (self._loaded_cache_objs[-1]
-                    if self._loaded_cache_objs else None)
+        shard = PersistentFileCache(path)
+        self.open_shards[path] = shard
+        return shard
 
-        # closing prev obj cache if not closed
-        if prev_obj:
-            prev_obj.close() if not prev_obj.closed else 0
-
-        cache_obj = self.get_cache_obj(current_cache_path)
-        self._loaded_cache_objs.append(cache_obj)  # add new cache object
-
-        return cache_obj
-
-    def set(self, key: str, data: Any, expiry: float | int = None):
+    def set(self, key: str, value: Any, expiry: int | float | None = None) -> None:
         """
-        Set cache data with persistence.
-        """
-        self.cache_obj.set(key, data, expiry=expiry)
+        Write key to the current writable shard.
 
-    def get(self, key: str) -> Any:
+        Args:
+            key: Cache key.
+            value: Value to persist.
+            expiry: TTL in seconds.
         """
-        Retrieve cache data.
-        """
-        data = self.cache_obj.get(key)
-        
-        if data is not None:
-            return data
+        with self.lock:
+            path = self.get_writable_shard_path()
+            self.get_shard(path).set(key, value, expiry)
 
-        for dir_entry in reversed(self._cache_files):
-            if dir_entry.samefile(self.cache_obj.path):
-                continue
-            
-            cache = PersistentFileCache(str(dir_entry))
-            data = cache.get(key)
-            
-            if data:
-                return data
-        return None
+    def get(self, key: str, default: Any = None) -> Any:
+        """
+        Search all shards from newest to oldest and return the first hit.
 
-    @staticmethod
-    @lru_cache(maxsize=128)
-    def get_cache_obj(path: str) -> PersistentFileCache:
-        return PersistentFileCache(path)
+        Args:
+            key: Cache key to look up.
+            default: Returned when the key is not found in any shard.
 
-    def delete(self, key: str):
+        Returns:
+            The cached value or default.
         """
-        Delete a key pair from the cache.
-        """
-        for p in self._cache_files:
-            try:
-                obj = self.get_cache_obj(p)
-                obj.delete(key)
-            except Exception:
-                pass
+        with self.lock:
+            for shard_path in reversed(self.shard_paths):
+                shard = self.get_shard(str(shard_path))
+                value = shard.get(key)
+                if value is not None:
+                    return value
+            return default
 
-    def clear(self):
+    def delete(self, key: str) -> None:
         """
-        Clears all data from the cache.
-        """
-        for p in self._cache_files:
-            try:
-                obj = self.get_cache_obj(p)
-                obj.clear()
-            except Exception:
-                pass
+        Delete key from every shard that holds it.
 
-    def close(self):
+        Args:
+            key: Cache key to remove.
         """
-        Close the cache.
+        with self.lock:
+            for shard_path in self.shard_paths:
+                try:
+                    self.get_shard(str(shard_path)).delete(key)
+                except Exception:
+                    pass
+
+    def pop(self, key: str, default: Any = MISSING) -> Any:
         """
-        for p in self._cache_files:
-            try:
-                obj = self.get_cache_obj(p)
-                obj.close()
-            except Exception:
-                pass
+        Retrieve the first occurrence of key (newest shard first) and
+        delete it from all shards atomically under the instance lock.
+
+        Args:
+            key: Cache key to retrieve and delete.
+            default: Returned when absent. Raises KeyError if omitted.
+
+        Returns:
+            The cached value, or default when absent.
+
+        Raises:
+            KeyError: When the key is missing and no default was provided.
+        """
+        with self.lock:
+            # Find the value from the newest shard first.
+            value = MISSING
+            for shard_path in reversed(self.shard_paths):
+                candidate = self.get_shard(str(shard_path)).get(key)
+                if candidate is not None:
+                    value = candidate
+                    break
+
+            if value is MISSING:
+                if default is MISSING:
+                    raise KeyError(key)
+                return default
+
+            # Remove from all shards so no stale copies remain.
+            self.delete(key)
+            return value
+
+    def clear(self) -> None:
+        """
+        Evict all entries from every shard.
+        """
+        with self.lock:
+            for shard_path in self.shard_paths:
+                try:
+                    self.get_shard(str(shard_path)).clear()
+                except Exception:
+                    pass
+
+    # Async variants
+
+    async def async_set(
+        self, key: str, value: Any, expiry: int | float | None = None
+    ) -> None:
+        """
+        Async-safe version of set.
+
+        Args:
+            key: Cache key.
+            value: Value to persist.
+            expiry: TTL in seconds.
+        """
+        async with self.async_lock:
+            self.set(key, value, expiry)
+
+    async def async_get(self, key: str, default: Any = None) -> Any:
+        """
+        Async-safe version of get.
+
+        Args:
+            key: Cache key to look up.
+            default: Returned when absent.
+
+        Returns:
+            The cached value or default.
+        """
+        async with self.async_lock:
+            return self.get(key, default)
+
+    async def async_pop(self, key: str, default: Any = MISSING) -> Any:
+        """
+        Async-safe version of pop.
+
+        Args:
+            key: Cache key to retrieve and delete.
+            default: Returned when absent. Raises KeyError if omitted.
+
+        Returns:
+            The cached value or default.
+
+        Raises:
+            KeyError: When the key is missing and no default was provided.
+        """
+        async with self.async_lock:
+            return self.pop(key, default)
+
+    async def async_delete(self, key: str) -> None:
+        """
+        Async-safe version of delete.
+
+        Args:
+            key: Cache key to remove.
+        """
+        async with self.async_lock:
+            self.delete(key)
+
+    async def async_clear(self) -> None:
+        """
+        Async-safe version of clear.
+        """
+        async with self.async_lock:
+            self.clear()
+
+    def close(self) -> None:
+        """
+        Close all open shard handles in a background daemon thread.
+
+        Returns immediately; actual closing happens asynchronously so
+        that long-running shard close operations do not block the caller.
+        """
+        with self.lock:
+            shards_to_close = list(self.open_shards.values())
+            self.open_shards.clear()
+
+        def close_all(shards: list[PersistentFileCache]) -> None:
+            for shard in shards:
+                try:
+                    if not shard.closed:
+                        shard.close()
+                except Exception:
+                    pass
+
+        thread = threading.Thread(target=close_all, args=(shards_to_close,), daemon=True)
+        thread.start()
 
 
 class KeyAsFolderCache(CacheBase):
     """
-    Caching which stores cache data in folders with the name of cache keys.
+    Persistent cache that stores each key's data in a dedicated
+    subdirectory named after the key itself.
+
+    This makes it trivially easy to inspect, backup, or delete a single
+    cache entry on disk. Each subdirectory is managed by its own
+    PersistentFileCache instance.
+
+    Unlike DynamicFileCache, the per-key shard mapping is rebuilt from
+    disk on every operation via a fresh os.scandir(), so new entries
+    written by other processes are always visible.
+
+    Args:
+        cache_dir: Root directory under which per-key subdirectories
+            will be created.
+        cached_objs_limit: Maximum number of PersistentFileCache
+            instances to keep open at once.
     """
-    def __init__(self, cache_dir: str):
+
+    DEFAULT_CACHE_OBJ_LIMIT: int = 128
+
+    def __init__(
+        self,
+        cache_dir: str,
+        cached_objs_limit: int = DEFAULT_CACHE_OBJ_LIMIT,
+    ):
+        if not os.path.isdir(cache_dir):
+            raise FileNotFoundError(f"Directory not found: {cache_dir}")
+
         self.cache_dir = cache_dir
-        if not os.path.isdir(self.cache_dir):
-            raise FileNotFoundError(f"Directory {cache_dir} not found")
+        self.cached_objs_limit = cached_objs_limit
 
-    def set(self, key: str, data: Any, expiry: int | float = None):
+        # LRU mapping of shard path ➝ PersistentFileCache.
+        self.open_shards: OrderedDict[str, PersistentFileCache] = OrderedDict()
+
+        self.lock = threading.RLock()
+        self.async_lock = asyncio.Lock()
+
+    def get_key_dir(self, key: str) -> str:
         """
-        Set some cache data.
+        Return the absolute path of the subdirectory for key.
+
+        Args:
+            key: Cache key.
+
+        Returns:
+            Absolute directory path string.
         """
-        cache_data_path = os.path.join(self.cache_dir, key)
-        cache_obj = self.get_cache_obj(cache_data_path)
-        cache_obj.set(key, data, expiry=expiry)
+        return os.path.join(self.cache_dir, key)
 
-    @staticmethod
-    @lru_cache(maxsize=128)
-    def get_cache_obj(path: str) -> PersistentFileCache:
-        return PersistentFileCache(path)
-
-    def get(self, key: str) -> Any:
+    def get_shard(self, path: str) -> PersistentFileCache:
         """
-        This lookup for a folder in cache_dir with the name of the parsed key and returns the cache data.
+        Return an open PersistentFileCache for the given directory path.
+
+        Evicts the least-recently-used shard when the open-shard limit
+        is exceeded.
+
+        Args:
+            path: Absolute directory path for the shard.
+
+        Returns:
+            An open PersistentFileCache for that path.
         """
-        cache_data_path = os.path.join(self.cache_dir, key or "")
+        if path in self.open_shards:
+            self.open_shards.move_to_end(path)
+            return self.open_shards[path]
 
-        if not os.path.isdir(cache_data_path):
-            # no cache data with provided key
-            return None
+        if len(self.open_shards) >= self.cached_objs_limit:
+            _, oldest = self.open_shards.popitem(last=False)
+            if not oldest.closed:
+                oldest.close()
 
-        cache_obj = self.get_cache_obj(cache_data_path)
-        cache_data = cache_obj.get(key)
+        shard = PersistentFileCache(path)
+        self.open_shards[path] = shard
+        return shard
 
-        if cache_data is None:
-            # Remove cache data folder because the key might have expired
-            try:
-                shutil.rmtree(cache_data_path)
-            except OSError:
-                pass
-        else:
-            return cache_data
-
-    @staticmethod
-    @lru_cache
-    def get_cache_files(d: str):
+    def live_key_dirs(self) -> list[Path]:
         """
-        This gets the directories in cache_dir.
+        Return a snapshot of all current per-key subdirectories.
+
+        Performs a fresh os.scandir() on every call so newly created
+        keys (including those from other processes) are always included.
+
+        Returns:
+            List of Path objects, one per existing key subdirectory.
         """
         return [
-            Path(dir_entry.path) for dir_entry in os.scandir(d)
-            if dir_entry.is_dir()
+            Path(entry.path)
+            for entry in os.scandir(self.cache_dir)
+            if entry.is_dir()
         ]
 
-    def delete(self, key: str):
+    def set(self, key: str, value: Any, expiry: int | float | None = None) -> None:
         """
-        Delete a key pair from the cache.
-        """
-        key_cache_dir = os.path.join(self.cache_dir, key)
+        Store value in a subdirectory named after key.
 
-        if not os.path.isdir(key_cache_dir):
-            return
+        Creates the subdirectory if it does not already exist.
 
-        try:
-            obj = self.get_cache_obj(key_cache_dir)
-            obj.clear()
-        except Exception:
-            pass
+        Args:
+            key: Cache key (used as the subdirectory name).
+            value: Value to persist.
+            expiry: TTL in seconds.
+        """
+        with self.lock:
+            key_dir = self.get_key_dir(key)
+            os.makedirs(key_dir, exist_ok=True)
+            self.get_shard(key_dir).set(key, value, expiry)
 
-    def clear(self):
+    def get(self, key: str, default: Any = None) -> Any:
         """
-        Clear all data from the cache.
-        """
-        for p in self.get_cache_files(self.cache_dir):
-            try:
-                obj = self.get_cache_obj(p)
-                obj.clear()
-            except Exception:
-                pass
+        Retrieve the value stored under key.
 
-    def close(self):
-        """
-        Closes the cache.
-        """
-        # Close all per-key caches in a background thread so that closing
-        # the `KeyAsFolderCache` returns quickly even when there are many
-        # key-folders. The actual work of closing each `PersistentFileCache`
-        # runs asynchronously.
-        cache_paths = self.get_cache_files(self.cache_dir)
+        Removes the on-disk subdirectory if the key has expired so that
+        stale directories do not accumulate.
 
-        def _close_all(paths):
-            for p in paths:
+        Args:
+            key: Cache key to look up.
+            default: Returned when the key is absent or expired.
+
+        Returns:
+            The cached value or default.
+        """
+        with self.lock:
+            key_dir = self.get_key_dir(key)
+
+            if not os.path.isdir(key_dir):
+                return default
+
+            shard = self.get_shard(key_dir)
+            value = shard.get(key)
+
+            if value is None:
+                # Key has expired — clean up the on-disk remnant.
+                self._remove_key_dir(key_dir)
+                return default
+
+            return value
+
+    def delete(self, key: str) -> None:
+        """
+        Remove key's subdirectory from disk. Silent if absent.
+
+        Args:
+            key: Cache key to remove.
+        """
+        with self.lock:
+            key_dir = self.get_key_dir(key)
+            if os.path.isdir(key_dir):
+                self._remove_key_dir(key_dir)
+
+    def pop(self, key: str, default: Any = MISSING) -> Any:
+        """
+        Retrieve and atomically remove a value and its on-disk folder.
+
+        Args:
+            key: Cache key to retrieve and delete.
+            default: Returned when absent. Raises KeyError if omitted.
+
+        Returns:
+            The cached value or default.
+
+        Raises:
+            KeyError: When the key is missing and no default was provided.
+        """
+        with self.lock:
+            value = self.get(key)
+
+            if value is None:
+                if default is MISSING:
+                    raise KeyError(key)
+                return default
+
+            self.delete(key)
+            return value
+
+    def clear(self) -> None:
+        """
+        Evict all entries by clearing every per-key shard.
+        """
+        with self.lock:
+            for key_dir in self.live_key_dirs():
                 try:
-                    # ensure we obtain the cache object for this path and close it
-                    obj = self.get_cache_obj(str(p))
-                    obj.close()
+                    shard = self.get_shard(str(key_dir))
+                    shard.clear()
                 except Exception:
                     pass
 
-        t = threading.Thread(target=_close_all, args=(cache_paths,), daemon=True)
-        t.start()
+    def _remove_key_dir(self, key_dir: str) -> None:
+        """
+        Close the shard for key_dir, evict it from open_shards, and
+        remove the directory tree from disk.
+
+        Args:
+            key_dir: Absolute path of the per-key directory to remove.
+        """
+        # Close the shard before deleting its files.
+        shard = self.open_shards.pop(key_dir, None)
+        if shard and not shard.closed:
+            try:
+                shard.close()
+            except Exception:
+                pass
+
+        try:
+            shutil.rmtree(key_dir)
+        except OSError:
+            pass
+
+    # Async variants
+
+    async def async_set(
+        self, key: str, value: Any, expiry: int | float | None = None
+    ) -> None:
+        """
+        Async-safe version of set.
+
+        Args:
+            key: Cache key.
+            value: Value to persist.
+            expiry: TTL in seconds.
+        """
+        async with self.async_lock:
+            self.set(key, value, expiry)
+
+    async def async_get(self, key: str, default: Any = None) -> Any:
+        """
+        Async-safe version of get.
+
+        Args:
+            key: Cache key to look up.
+            default: Returned when absent or expired.
+
+        Returns:
+            The cached value or default.
+        """
+        async with self.async_lock:
+            return self.get(key, default)
+
+    async def async_pop(self, key: str, default: Any = MISSING) -> Any:
+        """
+        Async-safe version of pop.
+
+        Args:
+            key: Cache key to retrieve and delete.
+            default: Returned when absent. Raises KeyError if omitted.
+
+        Returns:
+            The cached value or default.
+
+        Raises:
+            KeyError: When the key is missing and no default was provided.
+        """
+        async with self.async_lock:
+            return self.pop(key, default)
+
+    async def async_delete(self, key: str) -> None:
+        """
+        Async-safe version of delete.
+
+        Args:
+            key: Cache key to remove.
+        """
+        async with self.async_lock:
+            self.delete(key)
+
+    async def async_clear(self) -> None:
+        """
+        Async-safe version of clear.
+        """
+        async with self.async_lock:
+            self.clear()
+
+    def close(self) -> None:
+        """
+        Close all open shard handles in a background daemon thread.
+        """
+        with self.lock:
+            shards_to_close = list(self.open_shards.values())
+            self.open_shards.clear()
+
+        def close_all(shards: list[PersistentFileCache]) -> None:
+            for shard in shards:
+                try:
+                    if not shard.closed:
+                        shard.close()
+                except Exception:
+                    pass
+
+        thread = threading.Thread(target=close_all, args=(shards_to_close,), daemon=True)
+        thread.start()
 
 
 class CacheSpeedTest:

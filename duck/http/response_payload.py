@@ -74,7 +74,7 @@ class BaseResponsePayload:
         Returns:
             Optional[Morsel]: The cookie object, or None if the cookie does not exist.
         """
-        return self._cookies.get(name, '') if name in self._cookies else None
+        return self.cookies.get(name, '') if name in self._cookies else None
         
     def get_cookie(self, name: str) -> str:
         """
@@ -86,7 +86,7 @@ class BaseResponsePayload:
         Returns:
             str: The cookie value, or an empty string if the cookie does not exist.
         """
-        return self._cookies.get(name, '').value if name in self._cookies else ''
+        return self.cookies.get(name, '').value if name in self._cookies else ''
         
     def get_cookie_str(self, name: str, include_cookie_name: bool = True) -> str:
         """
@@ -110,7 +110,7 @@ class BaseResponsePayload:
         Returns:
             Dict[str, str]: A dictionary of all cookies, where the key is the cookie name and the value is the cookie value (without other cookie properties).
         """
-        return {key: morsel.value for key, morsel in self._cookies.items()}
+        return {key: morsel.value for key, morsel in self.cookies.items()}
     
     def set_cookie(
         self,

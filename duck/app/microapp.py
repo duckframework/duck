@@ -8,7 +8,7 @@ Notes:
 import time
 import threading
 
-from typing import Union, Optional
+from typing import Union, Optional, Dict, Callable
 
 from duck.http.core.httpd.servers import MicroHTTPServer
 from duck.http.core.processor import (
@@ -52,6 +52,7 @@ class MicroApp(BaseApp):
         no_logs: bool = True,
         workers: Optional[int] = None,
         force_worker_processes: bool = False,
+        events: Optional[Dict[str, Optional[Callable]]] = None,
     ):
         """
         Args:
@@ -72,7 +73,8 @@ class MicroApp(BaseApp):
                     
                     Set this flag to `True` only when process isolation is explicitly desired **and** you do not
                     require shared in-memory synchronization between workers.
-        
+            events: Events to handle e.g. {"on_start": some_callable}. Defaults to None.
+            
         Raises:
             ApplicationError: If the provided bind address is invalid.
         """
@@ -87,6 +89,7 @@ class MicroApp(BaseApp):
             no_checks=no_checks,
             workers=workers,
             force_worker_processes=force_worker_processes,
+            events=events,
         )
         
         # Store some application attributes
@@ -124,7 +127,7 @@ class MicroApp(BaseApp):
             # Set the server thread
             self.server_thread = threading.Thread(
                 target=start_server_wrapper,
-                kwargs={'on_server_start_fn': self.on_app_start},
+                kwargs={'on_server_start_fn': self._on_app_start},
             )
             
             # Start the server thread
@@ -150,6 +153,7 @@ class MicroApp(BaseApp):
         """
         Stops the current running micro-application.
         """
+        self.dispatch_event("on_pre_stop")
         self.server.stop_server(log_to_console=not self.no_logs)
     
     def view(self, request: HttpRequest, processor: Union[AsyncRequestProcessor, RequestProcessor]) -> HttpResponse:

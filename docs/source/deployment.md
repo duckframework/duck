@@ -6,215 +6,245 @@
 ![HTTPS](https://img.shields.io/badge/https-supported-blue.svg)
 ![Duck](https://img.shields.io/badge/framework-Duck-orange.svg)
 
-Deploying your **Duck** web application is simple, fast, and beginner-friendly — no need for extra tools like **NGINX**, **Daphne**, or other ASGI/WSGI gateways.  
+Deploying your Duck web application is simple, fast, and beginner-friendly — no need for extra tools like NGINX, Daphne, or other ASGI/WSGI gateways.
 
 ---
 
-## Prerequisites  
+## Prerequisites
 
-```{note}
-**Required Python version:** `>= 3.10` (recommended: **3.12+**)  
-**Recommended OS:** Linux (many Duck features rely on Linux system features).  
-```
+**Required Python version:** `>= 3.10` (recommended: **3.12+**)
+**Recommended OS:** Linux (many Duck features rely on Linux system features).
 
 ---
 
-## Steps to Deploy Your Duck Application  
+## Deploying on a VPS (Manual)
 
-### 1. Create and Activate a Virtual Environment  
+### 1. Create and Activate a Virtual Environment
 
-A [**virtual environment (venv)**](https://www.w3schools.com/python/python_virtualenv.asp) helps keep your project dependencies isolated and clean.  
+A virtual environment keeps your project dependencies isolated and clean.
 
-Run these commands in your project directory:  
+Run these commands in your project directory:
 
 ```bash
-python3.12 -m venv .venv # Or python3.10 upto latest python version
+python3.12 -m venv .venv  # Or python3.10 up to the latest Python version
 ```
 
-Then activate it:  
+Then activate it:
 
 ```bash
 source .venv/bin/activate
 ```
 
-You should now see something like:  
+You should now see something like:
+
+```
+(venv) $
+```
+
+After activation, install your dependencies using pip.
+
+> ✅ Use Python **3.12 or later** for best performance and compatibility.
+> ✅ On Linux, install a modern Python version via `sudo apt install python3.12` or [`pyenv`](https://github.com/pyenv/pyenv).
+> 🚫 Avoid misusing `sudo` — it grants full admin rights.
+
+---
+
+### 2. Run Duck as Root
+
+When running on a VPS, you may want to bind to port 80 (HTTP) or 443 (HTTPS). These ports require elevated privileges.
+
+Use this command to run Duck with the correct Python executable safely:
 
 ```bash
-$ (venv)
+sudo $(python -c "import sys; print(sys.executable)") web/main.py
 ```
 
-After activation, install your dependencies using `pip`.  
+> 💡 This ensures Duck uses the exact Python executable from your virtual environment, avoiding `ModuleNotFoundError: No module named 'duck'`.
 
-```{note}
-✅ Use Python **3.12 or later** for best performance and compatibility.  
-✅ On Linux, you can install a modern Python version using `sudo apt install python3.12` or [`pyenv`](https://github.com/pyenv/pyenv).  
-🚫 Avoid misusing `sudo` as this grants you admin rights.  
-```
+It is **recommended to run your app via `web/main.py`** rather than `duck runserver`. `main.py` gives you full programmatic control over the `App` instance — workers, domains, HTTPS, and more — making it more flexible for production use.
 
 ---
 
-### 2. Run Duck as Root  
+### 3. Obtain an SSL Certificate
 
-When running your **Duck** app on a VPS or remote server, you may want to use **port 80** (HTTP) or **443** (HTTPS).  
-These ports require **admin privileges**, so a normal command like `duck runserver` won’t work directly.  
+Duck provides built-in, free SSL support via Let's Encrypt.
 
-To solve this, use the following command that gives **Duck** the necessary permissions safely:  
-
-```bash
-sudo $(python -c "import sys; print(sys.executable)") -m duck runserver ... # Or run web/main.py
-```
-
-💡 **Explanation:**  
-This command runs **Duck** using the exact Python executable you installed it with, avoiding common issues like  
-`ModuleNotFoundError: No module named 'duck'`.
+Follow the [Free SSL Certificate Guide](./ssl.md) for step-by-step instructions. Once configured, Duck can auto-renew certificates without manual action.
 
 ---
 
-### 3. Obtain an SSL Certificate  
+### 4. Enable HTTPS & HTTP/2
 
-Duck provides **built-in, free SSL support** via [Let’s Encrypt](https://letsencrypt.org/).  
+After obtaining your SSL certificate, enable HTTPS and HTTP/2 for secure, faster connections.
 
-Follow the [Free SSL Certificate Guide](./free-ssl-certificate.md) for step-by-step instructions.  
-Once configured, Duck can **auto-renew certificates** without manual action.  
-
----
-
-### 4. Enable HTTPS & HTTP/2  
-
-After obtaining your SSL certificate, enable **HTTPS** and **HTTP/2** for secure and faster connections.  
-
-See [HTTPS and HTTP/2 setup guide](./https-and-http2.md) for full configuration details.  
+See the [HTTPS and HTTP/2 setup guide](./https.md) for full configuration details.
 
 ---
 
-### 5. Redirect All HTTP Traffic to HTTPS  
+### 5. Redirect HTTP Traffic to HTTPS
 
-Ensure users visiting your site via `http://` are automatically redirected to `https://`.  
+Ensure users visiting via `http://` are automatically redirected to `https://`.
 
-In your `settings.py`, enable HTTPS redirection:  
+In your `settings.py`:
 
 ```python
 HTTPS_REDIRECT = True
-HTTPS_REDIRECT_BIND_PORT = 80  # Optional: specify the port to redirect from
+HTTPS_REDIRECT_BIND_PORT = 80  # Optional: port to redirect from
 ```
 
-Duck uses a built-in **MicroApp** called `HttpsRedirectMicroApp` to handle redirects efficiently.  
-See [MicroApp documentation](./microapp.md) for customization details.  
+Duck uses a built-in `HttpsRedirectMicroApp` to handle redirects efficiently. See the [MicroApp documentation](./microapp.md) for customization details.
 
-```{info}
-To redirect www traffic to non-www domain, add this middleware `duck.http.middlewares.contrib.WWWRedirectMiddleware` to default middlewares in settings, 
-usuallly at the second position.
+To redirect `www` traffic to your non-www domain, add this middleware at the second position in your default middlewares in `settings.py`:
+
+```
+duck.http.middlewares.contrib.WWWRedirectMiddleware
 ```
 
 ---
 
-### 6. Run the App as a Background Service  
+### 6. Run as a Background Service
 
-```{warning}
-The `duck service` command works only on **Linux**.
-```
+> ⚠️ The `duck service` command works on **Linux only**.
 
-To keep your app running even after closing your terminal, run it as a background service:  
+To keep your app running after closing your terminal, register it as a systemd service:
 
 ```bash
-$ (venv) sudo $(python -c "import sys; print(sys.executable)") -m duck service autorun # or just use duck service autorun for less privileges
+sudo $(python -c "import sys; print(sys.executable)") -m duck service autorun
 ```
 
-This command will:  
-- Automatically create a **systemd service** for your app  
-- Save it under your system’s service directory  
-- Start it instantly  
+This will:
 
-``` {note}
-- Do not forget to customize `SYSTEMD_EXEC_COMMAND` in `settings.py`, this is the command that will be run 
-by `systemd`. By default the command points to `f"{sys.executable} web/main.py"`. Usually, it's only 
-necessary to configure this if you are explicitly using `duck runserver` instead of `web/main.py`. 
-- Do not forget to activate your virtual environment where you installed `Duck`.
-```
+- Automatically create a systemd service for your app
+- Save it to your system's service directory
+- Start it immediately
 
-For advanced options, see [Service Management](./service-management.md).  
+**Important:**
 
-💡 **Tip:** On non-Linux systems, you can use tools like **systemd**, **supervisord**, or **pm2** as alternatives.  
+- Set `SYSTEMD_EXEC_COMMAND` in `settings.py` to the command systemd will run. It defaults to `f"{sys.executable} web/main.py"`. You only need to change this if you're explicitly using `duck runserver` instead of `web/main.py`.
+- Make sure your virtual environment is activated before running this command.
+
+For advanced options, see [Service Management](./service.md).
+
+> 💡 On non-Linux systems, alternatives like `supervisord` or `pm2` can manage background processes.
 
 ---
 
-## Notes & Best Practices  
+## Deploying via an External Hosting Provider
 
-``` {note}
-It is strongly recommended to use the asynchronous implementation ([ASGI](./asgi.md)) 
-rather than the synchronous ([WSGI](./wsgi.md)) interface in production environments. 
-ASGI provides superior scalability and efficiency by leveraging a non-blocking event 
-loop, making it better suited for modern high-concurrency workloads.
+When deploying to an external platform (e.g., Heroku, Render, Railway, or similar), Duck still handles everything internally — no additional ASGI/WSGI server needed.
+
+### Key Difference: Set Your Server URL
+
+External hosting platforms typically place your app behind a **reverse proxy**, which means Duck may not be able to infer the correct public-facing URL automatically. You must set `server_url` explicitly.
+
+In `web/main.py`:
+
+```python
+app = App(
+    domain="mysite.com",
+    server_url="https://mysite.com",  # Required when behind a reverse proxy
+)
 ```
 
-Before going live, make sure your application is optimized and secure:  
+> ⚠️ Skipping `server_url` on hosted platforms can cause incorrect redirect URLs, broken WebSocket connections, and other subtle issues.
 
-- **Make sure you set the app domain:**
-  ```bash
-  python3 -m duck runserver -d mysite.com # Or just use your IP if no domain
-  ```
-  
-  **Or provide it to `App` instance:**
-  ```
-  app = App(domain="mysite.com") # Or your IP if no domain
-  ```
-  
-  But also, don't forget to set it in `SYSTEMD_EXEC_COMMAND` in `settings.py` if you are explicilty using `duck runserver` 
-  instead of `web/main.py`.
-  
-- **Use workers for scalling:**
-  ```python
-  # From command line
-  duck runserver --workers auto # Or just specify number of workers.
-  ```
-  
-  ```python
-  # From web/main.py
-  app = App(..., workers=os.cpu_count() or 4, https_redirect_workers=4)
-  ```
-  
-  The above examples runs the server using worker threads, thus, utilizing. This improves overall, performance. As this brings more benefits, it 
-  also uses more system resources. By default, worker threads are used for synchronization between workers but if you prefer processes instead and your app 
-  does not require worker synchronization, you can use worker processes instead. This can be enabled by providing the `force_worker_processes` argument. The 
-  same can be applied to https redirect app using argument `https_redirect_force_worker_processes`.
+### Platform-Specific Notes
 
-- **Turn off debug mode:**  
-  ```python
-  DEBUG = False
-  ```
-  
-- **Silence unnecessary logs (optional):**  
-  ```python
-  SILENT = True
-  LOG_TO_FILE = True
-  ```
-  
-- **Reduce log verbosity (optional):**  
-  ```python
-  VERBOSE_LOGGING = False
-  ```
-  
-- **Monitor your application:**  
-  ```bash
-  duck monitor # Auto-detect all processes starting with duck
-  ```
-  
-  or explicitly provide target processes:
-  ```bash
-  duck monitor --duck-process "duck*"  # Matches all processes starting with duck
-  ```
-  
-  or explicitly provide target process IDs: 
-  ```bash
-  duck monitor --pid <process_id>
-  ```
-  
-- **Open required ports:**  
-  Make sure ports **80** (HTTP), **443** (HTTPS) and other ports like **465** (SMTPS port for sending and receiving emails) are open in your VPS or hosting firewall settings.  
+- Most platforms assign a dynamic port via the `PORT` environment variable. Make sure your `main.py` reads it:
+
+```python
+import os
+
+app = App(
+    domain="mysite.com",
+    server_url="https://mysite.com",
+    port=int(os.environ.get("PORT", 8000)),
+)
+```
+
+- SSL is usually handled by the platform's proxy — you typically do **not** need to configure Let's Encrypt yourself.
+- The `duck service` command is **not applicable** on managed platforms. Use the platform's process manager (e.g., a `Procfile` on Heroku).
 
 ---
 
-## You’re Done!  
+## Notes & Best Practices
 
-Your **Duck** web app is now fully deployed and production-ready.  
-Keep your environment updated, monitor performance, and enjoy a smooth deployment process — all powered by **Duck**.  
+It is strongly recommended to use the **asynchronous (ASGI)** implementation rather than the synchronous (WSGI) interface in production. 
+ASGI provides superior scalability by leveraging a non-blocking event loop — better suited for high-concurrency workloads.
+
+### Domain
+
+```python
+# web/main.py
+app = App(domain="mysite.com")  # Or your IP if no domain
+```
+
+### Workers
+
+```python
+# web/main.py
+app = App(
+    ...,
+    workers=os.cpu_count() or 4,
+    https_redirect_workers=4,
+)
+```
+
+Or via CLI:
+
+```bash
+duck runserver --workers auto
+```
+
+Workers improve throughput by handling requests concurrently. By default, worker **threads** are used (suitable for most apps requiring worker synchronization). If your app does not require inter-worker synchronization, you can switch to worker **processes** for better CPU isolation:
+
+```python
+app = App(
+    ...,
+    workers=os.cpu_count() or 4,
+    force_worker_processes=False,
+    https_redirect_force_worker_processes=True,
+)
+```
+
+### Production Checklist
+
+```python
+# settings.py
+
+DEBUG = False
+
+SILENT = True        # Suppress unnecessary output
+LOG_TO_FILE = True   # Persist logs to disk
+
+VERBOSE_LOGGING = False  # Reduce log verbosity
+```
+
+### Monitoring
+
+```bash
+duck monitor  # Auto-detects all Duck processes
+```
+
+Or target specific processes:
+
+```bash
+duck monitor --duck-process "duck*"   # Match by name pattern
+duck monitor --pid <process_id>       # Match by PID
+
+
+### Open Required Ports
+
+Ensure the following ports are open in your VPS or hosting firewall:
+
+| Port | Purpose |
+|------|---------|
+| 80   | HTTP |
+| 443  | HTTPS |
+| 465  | SMTPS (email) |
+
+---
+
+## You're Done!
+
+Your Duck web app is now fully deployed and production-ready. Keep your environment updated, monitor performance, and enjoy a smooth deployment process — all powered by Duck. 🦆

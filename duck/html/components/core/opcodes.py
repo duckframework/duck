@@ -153,3 +153,13 @@ class EventOpCode(enum.IntEnum):
         component_uid: The unique ID for the unknown component.
         reload: Whether to reload the page as a result of this component.
     """
+
+    SYNC_BROWSER_STATE = 170
+    """
+    int: Send a response to the client that it needs to perform a fetch to specific endpoint for it to update sensitive staff like HTTPONLY cookies.
+    
+    Format: [170, [fetch_url]]
+    
+    Where:
+        fetch_url: The unique URL to perform fetch on.
+    """

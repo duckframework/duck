@@ -73,6 +73,7 @@ def get_file_upload_handler() -> Any:
         SettingsError: If `FILE_UPLOAD_HANDLER` is not defined or cannot be imported.
     """
     handler_path = SETTINGS.get("FILE_UPLOAD_HANDLER")
+    
     if not handler_path:
         raise SettingsError("Please define FILE_UPLOAD_HANDLER in `settings.py`.")
     try:
@@ -86,6 +87,7 @@ def get_user_templatetags() -> List[TemplateTag | TemplateFilter]:
     Returns a list of template tags and filters defined in the settings.py.
     """
     module_str = SETTINGS["TEMPLATETAGS_MODULE"]
+    
     if not module_str:
         return []
     try:
@@ -344,6 +346,14 @@ def get_session_store():
     return import_module_once(session_engine).SessionStore  # get SessionStore from session engine.
 
 
+def get_jwt_store():
+    """
+    Returns the JWT store class.
+    """
+    jwt_engine = SETTINGS.get("JWT_ENGINE", "duck.http.jwt.engine")
+    return import_module_once(jwt_engine).JWTStore
+
+
 def get_request_handling_task_executor():
     """
     Returns the request handling callable for executing 
@@ -415,6 +425,7 @@ class Loaded:
         self.SESSION_STORAGE = get_session_storage()
         self.SESSION_STORE = Lazy(get_session_store)
         self.SESSION_STORAGE_CONNECTOR = Lazy(lambda: SessionStorageConnector(self.SESSION_STORAGE))
+        self.JWT_STORE = Lazy(get_jwt_store)
         self.REQUEST_HANDLING_TASK_EXECUTOR = Lazy(get_request_handling_task_executor)
         self.PREFERRED_LOG_STYLE = Lazy(get_preferred_log_style)
         

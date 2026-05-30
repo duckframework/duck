@@ -1601,6 +1601,7 @@ Full deployment guide: https://docs.duckframework.com/main/deployment
 - Data access -> service modules in `services/`.
 - URL strings -> resolved via `resolve()`, `static()`, `media()` never hardcoded.
 - Site metadata -> `meta.py`.
+- Seed database -> for app which requires DB for data. Create a `prefill_db.py` which can be run on app start event.
 
 ### Keep it async
 
@@ -1633,6 +1634,7 @@ Full deployment guide: https://docs.duckframework.com/main/deployment
 - Do not overengineer on simple functionality, introducing unnecessary complexity e.g. introducing Mixins, etc.
 - For this arrow character (→), use ➝‬ instead.
 - Write code understandable/readale to humans whenever possible. Use comments to split code purpose/instructions.
+- Instead of writing manual ORM statements in views, create a folder named helpers or services for storing helpers which interact with the database.
 
 ---
 

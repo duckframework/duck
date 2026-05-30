@@ -8,8 +8,16 @@ This guide will get you from **zero ➝‬ running app ➝‬ understanding stru
 
 ## 1. Install Duck
 
+**Install recent stable version from PyPi:**
+
 ```bash
 pip install duckframework
+```
+
+**Or, the latest version from Github:**
+
+```bash
+pip install git+https://github.com/duckframework/duck.git
 ```
 
 ---
@@ -25,11 +33,19 @@ cd myproject
 
 ## 3. Run the Server
 
+**Run from command:**
+
 ```bash
-duck runserver # Or use python3 web/main.py
+duck runserver
 ```
 
-Open your browser:
+**Or, run from a flexible python file:**
+
+```bash
+python web/main.py
+```
+
+**Open your browser:**
 
 ``` 
 http://localhost:8000

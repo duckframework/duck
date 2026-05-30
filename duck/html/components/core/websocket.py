@@ -127,7 +127,7 @@ class LivelyWebSocketView(WebSocketView):
             JavascriptExecutionTimedOut: If the result was not received within the specified timeout.
             ValueError: If user specified a timeout yet wait_for_result is set to False.
         """
-        if SETTINGS['DEBUG'] and self.event_handler.session_save_lock.locked():
+        if SETTINGS['DEBUG'] and self.event_handler.browser_state_sync_lock.locked():
             # Strip all whitespace (spaces, tabs, newlines) for fast token matching.
             normalized_code = "".join((code or "").split()).lower()
             location_calls = (
@@ -311,7 +311,7 @@ class EventHandler:
     """
     Event handler for incoming WebSocket messages.
     """
-    __slots__ = ("ws_view", "event_map", "session_save_lock")
+    __slots__ = ("ws_view", "event_map", "browser_state_sync_lock")
     
     def __init__(self, ws_view: LivelyWebSocketView):
        self.ws_view = ws_view
@@ -320,18 +320,47 @@ class EventHandler:
            EventOpCode.JS_EXECUTION_RESULT: self.handle_js_execution_result,
            EventOpCode.NAVIGATE_TO: self.handle_navigation,
        }
-       self.session_save_lock = asyncio.Lock()
-    
-    async def ensure_session_saved(self, request):
+       self.browser_state_sync_lock = asyncio.Lock()
+       
+    async def ensure_browser_state_synced(self, root_request: HttpRequest):
         """
-        Ensures session is saved on Lively event.
-        """
-        from duck.http.middlewares.contrib.session import SessionMiddleware
-         
-        # If session changed on event, this saves session even on Lively components
-        async with self.session_save_lock:
-            await SessionMiddleware.process_lively_event(self.ws_view, request=request)
+        This ensures that the curent state is synced with the browser. It's responsible for telling the browser that it needs 
+        to do JS fetch() to certain URL so that sensitive data like HTTPONLY cookies are synced to the browser.
         
+        Notes:
+            This also syncs the root request state from the middlewares e.g. updating request cookies (if applicable)
+        """
+        from duck.shortcuts import resolve
+        from duck.settings.loaded import SettingsLoaded
+        from duck.html.components.core.browser_state import needs_browser_state_update, queue_browser_state_response
+        from duck.logging import logger
+        
+        if not needs_browser_state_update(root_request):
+            return
+        
+        # Create a dummy response which we will parse through the middlewares and generate cookies based on root_request current state.
+        # The status code must be 204 so that when the browser sync view is visited, this same "No content" response will be send.
+        dummy_response = HttpResponse(status_code=204)
+        
+        # Pass the request and dummy response through all middlewares.
+        async with self.browser_state_sync_lock:
+            
+            # Also, sessions may be saved here
+            await SettingsLoaded.ASGI.apply_middlewares_to_response(dummy_response, root_request)
+            logger.log("Got dummy cookies" + "%s"%dummy_response.get_all_cookies())
+            logger.log_raw(dummy_response.raw)
+            # Update the root_request cookies based on cookies attached to dummy_response.
+            cookies = dummy_response.get_all_cookies()
+            root_request.COOKIES.update(cookies)
+            
+            # Now add root request and dummy response to queue for browser fetch()
+            # Doing this will add the response that needs to be sent to 
+            queue_browser_state_response(root_request, dummy_response)
+            
+            # Now tell the client to sync browser state using fetch().
+            fetch_url = resolve("lively-browser-sync") + f"?rid={root_request.ID}"
+            await self.ws_view.send_data([EventOpCode.SYNC_BROWSER_STATE, fetch_url])
+            
     async def dispatch(self, opcode: EventOpCode, data: List[Any]):
         """
         Handle incoming WebSocket events.
@@ -430,8 +459,8 @@ class EventHandler:
             event_handler_chain = event_handler
             event_handler_execution_results = await event_handler_chain.async_execute((component, event_name, value, self.ws_view), restart=False)
         
-        # If session changed on event, this saves session even on Lively components
-        await self.ensure_session_saved(request=root_request)
+        # If SESSION or JWT changed, ensure we tell the browser to update state (if necessary)
+        await self.ensure_browser_state_synced(root_request)
         
         async def on_force_update_patch(patch):
             """
@@ -548,6 +577,58 @@ class EventHandler:
             else:
                 future.set_result(result)
                   
+    def build_navigation_request(self, root_request, fullpath: str, headers: Dict[str, str]) -> HttpRequest:
+        """
+        Builds a navigation request object for obtaining the next ASGI response.
+    
+        Args:
+            root_request: The request passed to the component, mostly `Page.request`
+                for page components.
+            fullpath: The full path the user is navigating to.
+            headers: The current client headers - may include cookies set using JS.
+                
+        Returns:
+            HttpRequest: The constructed request for retrieving the next response.
+        """
+        # Never trust headers from the client completely — reuse root request headers instead.
+        topheader = f"GET {fullpath} HTTP/1.1"
+        request = HttpRequest(
+            client_socket=self.ws_view.request.client_socket,
+            client_address=self.ws_view.request.client_address
+        )
+    
+        # Parse request to populate all fields needed for processing and response generation.
+        request.parse_request(topheader, headers, content=b'')
+    
+        # Copy essential HTTP headers from the root request.
+        for header in ("host", "accept", "accept-language", "accept-encoding", "user-agent"):
+            value = root_request.get_header(header, None)
+            if value is not None:
+                request.set_header(header, value)
+    
+        # Assign session and auth fields from the root request.
+        request.COOKIES = {**root_request.COOKIES, **request.COOKIES}
+        request.SESSION = root_request.SESSION
+        request.JWT = root_request.JWT
+        request.AUTH = root_request.AUTH
+        request.user = getattr(root_request, "user", None)
+        
+        # Reuse the CSP nonce from the root request to keep nonces consistent during patching.
+        latest_nonce = root_request.META.get("DUCK_CSP_NONCE", None)
+        
+        if latest_nonce is not None:
+            request.META["DUCK_CSP_NONCE"] = latest_nonce
+    
+        # Mirror the CSRF cookie update flag and value if present.
+        if root_request.META.get("CSRF_COOKIE_NEEDS_UPDATE", False):
+            csrf_cookie = root_request.META.get("CSRF_COOKIE", None)
+            request.META["CSRF_COOKIE_NEEDS_UPDATE"] = True
+    
+            if csrf_cookie is not None:
+                request.META["CSRF_COOKIE"] = csrf_cookie
+    
+        return request
+        
     async def handle_navigation(self, data: List[Any]):
         """
         Handle a navigation request from the client.
@@ -560,11 +641,6 @@ class EventHandler:
         # Send Format: [121, path, fullreload, component_uid, patches_list]
         fullpath = None
         total_patches = 0
-
-        # Navigation must wait for any in-flight session save triggered by a
-        # prior component event.
-        async with self.session_save_lock:
-            pass
         
         async def on_new_patch(patch):
             """
@@ -613,43 +689,27 @@ class EventHandler:
                     root_request = prev_component.get_raw_root().request
 
                     if not next_component:
-                        # This is the last rendered component which was used to fill up the client whole page., usually the Page component.
-                        topheader = f"GET {fullpath} HTTP/1.1"
-                        request = HttpRequest(
-                            client_socket=self.ws_view.request.client_socket,
-                            client_address=self.ws_view.request.client_address
-                        )
-
-                        # Parse request to get the request object with all the necessary data for processing the request and generating response.
-                        request.parse_request(topheader, headers, content=b'')
+                        # next_component is the last rendered component which was used to fill up the client whole page., usually the Page component.
                         
-                        # Ensure that session is saved
-                        await self.ensure_session_saved(root_request)
-
-                        # Assign request fields from root component request.
-                        request.SESSION = root_request.SESSION
-
-                        # Reuse CSP nonce from last session to avoid unmatching nonces on patching
-                        first_request = self.ws_view.request
-                        first_nonce = first_request.META.get("DUCK_CSP_NONCE")
+                        # The following ensures that the curent state is synced with the browser
+                        # It's responsible for telling the browser that it needs to do JS fetch() to certain URL so that 
+                        # sensitive data like HTTPONLY cookies are synced to the browser.
                         
-                        if first_nonce:
-                            # Set the nonce from the first request.
-                            # The below code will make function `csp_nonce` return the first_csp_nonce
-                            request.META["DUCK_CSP_NONCE"] = first_nonce
-                            
+                        # This also syncs the root request state from the middlewares e.g. updating request cookies (if applicable)
+                        await self.ensure_browser_state_synced(root_request)
+                        
+                        # Build navigation request with updated state.
+                        navigation_request = self.build_navigation_request(root_request, fullpath, headers)
+                        
                         # Get the new response
-                        response = await SettingsLoaded.ASGI.get_response(request)
+                        response = await SettingsLoaded.ASGI.get_response(navigation_request)
 
                         if isinstance(response, ComponentResponse):
                             # This is easy to diff
                             next_component = response.component
                             if not next_component.is_loaded():
                                 await convert_to_async_if_needed(next_component.load)()
-                        
-                        # Ensure session saved through JS
-                        await self.ensure_session_saved(request=request)
-                        
+                           
                     # Check if next component has been set somehow e.g. from ComponentResponse
                     if next_component:
                         # Set dummy response and request (for logging)
@@ -673,7 +733,7 @@ class EventHandler:
                             ])
                             return
                         
-                        # Try partial page reload
+                        # Do partial page reload
                         prev_vdom = prev_component.to_vdom()
                         next_vdom = next_component.to_vdom()
                         

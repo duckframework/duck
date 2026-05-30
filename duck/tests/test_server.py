@@ -38,7 +38,7 @@ class TestBaseServer(unittest.TestCase):
         "django_silent": True,
         "log_to_file": False,
         "auto_reload": False,
-        "force_https": False,
+        "https_redirect": False,
         "enable_https": False,
         "use_django": False,
     }

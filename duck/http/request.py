@@ -123,6 +123,7 @@ class Request:
         self.POST: QueryDict = QueryDict()
         self.QUERY: FixedQueryDict[str, QueryDict] = FixedQueryDict({"CONTENT_QUERY": QueryDict(), "URL_QUERY": QueryDict()})
         self.SESSION: SettingsLoaded.SESSION_STORE = SettingsLoaded.SESSION_STORE(None)
+        self.JWT: SettingsLoaded.JWT_STORE = SettingsLoaded.JWT_STORE(None)
         
         # Only accept content or content_obj not both
         if kwargs.get("content_obj", None) and kwargs.get("content", None):

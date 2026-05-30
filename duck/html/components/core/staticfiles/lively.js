@@ -73,6 +73,7 @@ const EventOpCodes = {
   NAVIGATE_TO: 120,
   NAVIGATION_RESULT: 121,
   COMPONENT_UNKNOWN: 150,
+  SYNC_BROWSER_STATE: 170,
 };
 
 EventOpCodes.CLIENT_EVENT_OPCODES = new Set([
@@ -80,6 +81,7 @@ EventOpCodes.CLIENT_EVENT_OPCODES = new Set([
   EventOpCodes.EXECUTE_JS,
   EventOpCodes.NAVIGATION_RESULT,
   EventOpCodes.COMPONENT_UNKNOWN,
+  EventOpCodes.SYNC_BROWSER_STATE,
 ]);
 
 /**
@@ -2007,6 +2009,16 @@ class LivelyWebSocketClient {
             const [_, code, variable, timeout, needsFeedback, uid] = data;
             JSExecutor.execute(code, variable, timeout, needsFeedback, uid);
             break;
+          }
+          
+          case EventOpCodes.SYNC_BROWSER_STATE: {
+             // Sync browser state like updating HTTPONLY cookies on browser from the server using fetch() API.
+             const [_, fetch_url] = data;
+             
+             // Update browser state in background.
+             // No need to include credentials for this tiny update.
+             await fetch(fetch_url, { method: "GET", credentials: "omit"});
+             break;
           }
 
           case EventOpCodes.NAVIGATION_RESULT: {
