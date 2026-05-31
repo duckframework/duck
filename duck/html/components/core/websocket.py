@@ -328,12 +328,11 @@ class EventHandler:
         to do JS fetch() to certain URL so that sensitive data like HTTPONLY cookies are synced to the browser.
         
         Notes:
-            This also syncs the root request state from the middlewares e.g. updating request cookies (if applicable)
+            This also syncs the root request state from the middlewares e.g. updating request cookies, X- headers (if applicable)
         """
         from duck.shortcuts import resolve
         from duck.settings.loaded import SettingsLoaded
         from duck.html.components.core.browser_state import needs_browser_state_update, queue_browser_state_response
-        from duck.logging import logger
         
         if not needs_browser_state_update(root_request):
             return
@@ -347,11 +346,15 @@ class EventHandler:
             
             # Also, sessions may be saved here
             await SettingsLoaded.ASGI.apply_middlewares_to_response(dummy_response, root_request)
-            logger.log("Got dummy cookies" + "%s"%dummy_response.get_all_cookies())
-            logger.log_raw(dummy_response.raw)
+            
             # Update the root_request cookies based on cookies attached to dummy_response.
             cookies = dummy_response.get_all_cookies()
             root_request.COOKIES.update(cookies)
+            
+            # Update X- headers (if they changed) as well.
+            for h, v in dummy_response.headers.items():
+                if h.startswith("x-"):
+                    root_request.set_header(h, v)
             
             # Now add root request and dummy response to queue for browser fetch()
             # Doing this will add the response that needs to be sent to 
@@ -458,10 +461,7 @@ class EventHandler:
         else:
             event_handler_chain = event_handler
             event_handler_execution_results = await event_handler_chain.async_execute((component, event_name, value, self.ws_view), restart=False)
-        
-        # If SESSION or JWT changed, ensure we tell the browser to update state (if necessary)
-        await self.ensure_browser_state_synced(root_request)
-        
+            
         async def on_force_update_patch(patch):
             """
             Action called when new patch found as a result of a force update.
@@ -601,11 +601,12 @@ class EventHandler:
         request.parse_request(topheader, headers, content=b'')
     
         # Copy essential HTTP headers from the root request.
-        for header in ("host", "accept", "accept-language", "accept-encoding", "user-agent"):
-            value = root_request.get_header(header, None)
-            if value is not None:
-                request.set_header(header, value)
-    
+        allowed = ("host", "accept", "accept-language", "accept-encoding", "user-agent")
+        
+        for h, v in root_request.headers.items():
+            if v is not None and (h.startswith("x-") or h in allowed):
+                request.set_header(h, v)
+                
         # Assign session and auth fields from the root request.
         request.COOKIES = {**root_request.COOKIES, **request.COOKIES}
         request.SESSION = root_request.SESSION
@@ -695,6 +696,7 @@ class EventHandler:
                         # It's responsible for telling the browser that it needs to do JS fetch() to certain URL so that 
                         # sensitive data like HTTPONLY cookies are synced to the browser.
                         
+                        # If SESSION or JWT changed, ensure we tell the browser to update state e.g. Headers/Cookies (if necessary)
                         # This also syncs the root request state from the middlewares e.g. updating request cookies (if applicable)
                         await self.ensure_browser_state_synced(root_request)
                         
@@ -703,9 +705,9 @@ class EventHandler:
                         
                         # Get the new response
                         response = await SettingsLoaded.ASGI.get_response(navigation_request)
-
+                        
                         if isinstance(response, ComponentResponse):
-                            # This is easy to diff
+                            # This is easy to diff.
                             next_component = response.component
                             if not next_component.is_loaded():
                                 await convert_to_async_if_needed(next_component.load)()

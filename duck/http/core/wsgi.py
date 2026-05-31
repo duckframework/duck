@@ -187,7 +187,7 @@ class WSGI:
         """
         try:
             assert callable(response_producer_callable), f"Response producer callable must be a callable not {type(response_producer_callable)}."
-            response: Union[HttpResponse, HttpProxyResponse] = response_producer_callable()
+            response: Union[HttpResponse, HttpProxyResponse] = response_producer_callable(processor)
             
             # Apply middlewares in reverse order
             if isinstance(response, HttpProxyResponse):
@@ -254,7 +254,7 @@ class WSGI:
         response: HttpResponse
         processor = RequestProcessor(request)
             
-        def produce_response() -> HttpResponse:
+        def produce_response(processor) -> HttpResponse:
             """
             Produces response for us.
             """

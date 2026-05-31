@@ -216,10 +216,13 @@ class SessionStore(dict):
             )
         
         # Retrieve session data from storage, if session key is invalid or session doesn't exist, get_session should return None, so we can safely fallback to empty dict
-        session_data = self.session_storage_connector.get_session(self.session_key) or {}
+        session_data = {}
         
-        # Update session store with retrieved data, this will also set the modified flag if data is not empty
-        super().update(session_data) # Avoids recursion error
+        if self.session_key:
+            session_data = self.session_storage_connector.get_session(self.session_key) or {}
+            
+            # Update session store with retrieved data, this will also set the modified flag if data is not empty
+            super().update(session_data) # Avoids recursion error
         
         if not self.loaded:
             self._modified = False # If session hasn't been loaded for the first time, set _modified to False
@@ -230,7 +233,7 @@ class SessionStore(dict):
 
     def save(self):
         """
-        Save the session
+        Save the session - will set new session key if not set.
         """
         raise_if_in_async_context("Please use 'async_save' method instead.")
         self._save()
@@ -242,8 +245,9 @@ class SessionStore(dict):
         Saves the session to storage.
         """
         if not self.session_key:
-            raise ValueError("Session key is not set or invalid.")
-        
+            # Assign new session key.
+            self.assign_new_session_key()
+            
         # Normalize session data
         session_data = dict(self)
         

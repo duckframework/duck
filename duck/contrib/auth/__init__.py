@@ -6,28 +6,30 @@ verification that work directly on Duck's request object.
 
 Sync usage::
 
-    from duck.auth import authenticate, login, logout
+```python
+from duck.contrib.auth import login, logout, authenticate
+from duck.contrib.auth.exceptions import AuthenticationError
 
-    user = authenticate(request, "brian", "secret")
-    if user:
-        login(request, user)               # session (default)
-        tokens = login(request, user, backend="jwt")
+# Sync
+try:
+    user = authenticate(request, "brian@example.com", "secret")
+except AuthenticationError:
+    user = None
+    
+if user:
+    login(request, user)
 
-    logout(request)
-    logout(request, backend="jwt")
-
-Async usage::
-
-    from duck.auth import async_authenticate, async_login, async_logout
-
-    user = await async_authenticate(request, "brian", "secret")
-    if user:
-        await async_login(request, user)
-        tokens = await async_login(request, user, backend="jwt")
-
-    await async_logout(request)
+# Async
+try:
+    user = await async_authenticate(request, "brian@example.com", "secret")
+except AuthenticationError:
+    user = None
+    
+if user:
+    await async_login(request, user)
+```
 """
-
+from duck.contrib.auth.exceptions import AuthenticationError
 from duck.contrib.auth.helpers import (
     authenticate,
     login,
@@ -39,14 +41,9 @@ from duck.contrib.auth.helpers import (
     async_logout,
     async_get_user_from_session,
     async_get_user_from_jwt,
+    set_default_auth_backend,
 )
 
-from duck.contrib.jwt import (
-    encode_token,
-    decode_token,
-    issue_token_pair,
-    rotate_refresh_token,
-)
 
 __all__ = [
     # Sync
@@ -61,9 +58,6 @@ __all__ = [
     "async_logout",
     "async_get_user_from_session",
     "async_get_user_from_jwt",
-    # JWT tokens
-    "encode_token",
-    "decode_token",
-    "issue_token_pair",
-    "rotate_refresh_token",
+    # Other
+    "set_default_auth_backend",
 ]

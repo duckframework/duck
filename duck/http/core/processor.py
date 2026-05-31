@@ -646,7 +646,7 @@ class AsyncRequestProcessor(RequestProcessor):
         except TypeError as e:
             # The data received from the view cannot be converted to http response.
             raise TypeError(f"Invalid data received from response view for URL '{url}'") from e
-        
+            
         return response
 
     async def get_django_response(self) -> HttpProxyResponse:
@@ -728,7 +728,6 @@ class AsyncRequestProcessor(RequestProcessor):
         
         # Process request further after confirmation that request has no base errors
         # like RequestSyntaxError, RequestUnsupportedVersionError, etc.
-
         # Check for middleware errors.
         state, middleware = await self.check_middlewares()
         

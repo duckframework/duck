@@ -2016,8 +2016,8 @@ class LivelyWebSocketClient {
              const [_, fetch_url] = data;
              
              // Update browser state in background.
-             // No need to include credentials for this tiny update.
-             await fetch(fetch_url, { method: "GET", credentials: "omit"});
+             // Include credentials we can get from server - for further requests
+             await fetch(fetch_url, { method: "GET", credentials: "include"});
              break;
           }
 

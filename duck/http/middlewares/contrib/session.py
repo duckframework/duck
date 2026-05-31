@@ -44,21 +44,27 @@ class SessionMiddleware(BaseMiddleware):
 
         Sets request.session_exists so process_response knows whether to
         send a Set-Cookie header.
-
+        
         Args:
             request: The incoming HTTP request.
 
         Returns:
             int: cls.request_ok always — session errors are non-fatal.
+        
+        Notes:
+        - If session is already set, either by Lively or other top-level middleware, this will do nothing.
         """
+        if request.SESSION.session_key:
+            return cls.request_ok
+        
         # NOTE: Sessions are now loaded lazily on access/update
         session_key = cls.get_session_key_from_cookie(request)
         
         if session_key is not None:
             request.SESSION.session_key = session_key
         else:
-            # Brand new visitor — generate session key
-            request.SESSION.assign_new_session_key()
+            # Brand new visitor — do nothing, will only set session key once mutated.
+            pass
         return cls.request_ok
 
     @classmethod
@@ -91,10 +97,14 @@ class SessionMiddleware(BaseMiddleware):
             session.set_expiry(None)  # Falls back to SESSION_COOKIE_AGE from settings
 
         # Save the session to the DB, generating a new session key if it expired
+        # If session key is None, it'll be assigned by save()
         session.save()
+        
+        # The current session key - fetch session key after save() coz at this point it'll be stable
+        current_session_key = session.session_key
 
         # Decide whether to send session cookie
-        if session_cookie_present and not session_expired:
+        if (session_cookie_present and session_key_from_cookie == current_session_key) and not session_expired:
             # Client already holds a valid cookie — no need to resend it
             return
 
@@ -114,7 +124,7 @@ class SessionMiddleware(BaseMiddleware):
         
         response.set_cookie(
             session_cookie_name,
-            value=session.session_key,
+            value=current_session_key,
             domain=session_cookie_domain,
             path=path,
             expires=expires,

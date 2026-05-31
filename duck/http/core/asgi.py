@@ -192,7 +192,7 @@ class ASGI:
         """
         try:
             assert iscoroutinefunction(response_producer_callable), "Response producer callable must be a coroutine function."
-            response: Union[HttpResponse, HttpProxyResponse] = await response_producer_callable()
+            response: Union[HttpResponse, HttpProxyResponse] = await response_producer_callable(processor)
             
             # Apply middlewares in reverse order
             if isinstance(response, HttpProxyResponse):
@@ -259,7 +259,7 @@ class ASGI:
         response: HttpResponse
         processor = AsyncRequestProcessor(request)
             
-        async def produce_response() -> HttpResponse:
+        async def produce_response(processor) -> HttpResponse:
             """
             Produces response for us.
             """
