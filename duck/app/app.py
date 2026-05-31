@@ -561,7 +561,7 @@ class App(BaseApp):
             "DUCK_SERVER_PORT": self.port,
             "DUCK_SERVER_DOMAIN": self.domain,
             "DUCK_SERVER_PROTOCOL": ("https" if self.enable_https else "http"),
-            "DUCK_DJANGO_ADDR": self.django_addr,
+            "DUCK_DJANGO_ADDR": (self.django_addr, self.django_bind_port),
             "DUCK_USES_IPV6": self.uses_ipv6,
             "DUCK_SERVER_BUFFER": SETTINGS["SERVER_BUFFER"],
             "DUCK_WORKERS": int(self.workers or 0), # Meta.update doesnt support NoneType

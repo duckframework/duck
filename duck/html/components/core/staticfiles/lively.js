@@ -2464,7 +2464,7 @@ if (!window.LIVELY_APPLICATION) {
   window.addEventListener("pageshow", (event) => {
     if (event.persisted) {
       // Page was restored from bfcache — re-run init logic
-      reinitializePage(true);
+      initLively();
     }
   });
 }

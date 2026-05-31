@@ -22,7 +22,9 @@ and this project adheres to Semantic Versioning.
 - Added clean app structure - All app instances now inherit from `duck.app.base.BaseApp`
 - Added `server_url` argument to `BaseApp` to better support reverse proxies and deployment setups where the application instance is not accessed directly.
 - Added events to `App` instances. Argument `events` can now be parsed to core Apps from  `duck.apps` module  for doing  specific actions on certain events.
-- Added `JWTMiddleware` to default middlewares.
+- Added first-class `JWT` support, modeled after Duck's session system. JWT payloads can now be accessed and modified directly using familiar syntax such as `request.JWT["key"] = value`.
+- Added authentication utilities to `duck.contrib.auth`, including `authenticate`, `login`, `logout`, `get_user_from_session`, and `get_user_from_jwt`, making it easier to build authentication workflows.
+- Added `JWTMiddleware` to Duck's default middleware stack, enabling automatic JWT extraction, validation, and request integration out of the box.
 
 ### Changed
 
@@ -41,11 +43,12 @@ and this project adheres to Semantic Versioning.
 - Improved `App` class to use better arguments, also improved the core App logic.
 - Removed default settings for self-signed certificate generation from settings file - they are now optional.
 - Shortened `DJANGO_SERVER_WAIT_TIME` to 1 second by default.
+- Improved how `Lively` synchronizes SESSION, JWT, and other server-side state after mutations during Lively events. State updates are now propagated securely using a `server-issued` synchronization flow, with the client performing a secure `fetch()` request to apply updated credentials, including `HttpOnly` cookies, ensuring consistency between WebSocket-driven interactions and standard HTTP authentication.
 
 ### Fixed
 
 - Lively Navigation bug when trying to navigate from a URL with a fragment e.g. https://duckframework.com#something -> any internal URL.
-
+- 
 ---
 
 ## [1.0.2] - March 6, 2026

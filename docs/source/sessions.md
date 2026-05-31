@@ -41,7 +41,13 @@ def some_view(request):
 
 **Notes:**
 - Request sessions are lazily saved if changes are detected.
-- For important sessions or sessions that require immediate saving, you can use the method `save` on request session to explicitly save the request session. 
+
+ 
+```{warning}
+It is generally not recommended to explicitly save a session. Doing so can prevent the `SessionMiddleware` from accurately detecting whether the session data has changed, which is how it determines whether updated session cookies need to be sent to the client.  
+
+Instead, allow the middleware to manage session persistence automatically. If you explicitly save the session, you may need to manually mark the session as modified by setting `request.SESSION.modified = True`. This ensures that `request.SESSION.needs_update()` returns `True`, allowing the middleware to issue any required cookie updates.
+```
 
 ---
 

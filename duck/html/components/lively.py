@@ -65,7 +65,7 @@ class LivelyScripts(Container):
         
         # Never make the following script async because it will break the app logic.
         self.lively_script = Script(
-            props={"src": static_url.replace("<staticfile>", "lively.js")}
+            props={"src": static_url.replace("<staticfile>", "lively.min.js")}
         )
         
         # Add all in required order

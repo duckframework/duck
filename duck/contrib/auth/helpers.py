@@ -110,10 +110,10 @@ def authenticate(request: Any, username: str, password: str) -> Any:
             password does not match.
 
     Example:
-        .. code-block:: python
-
-            user = authenticate(request, "brian@example.com", "secret")
-            login(request, user)
+    ```py
+    user = authenticate(request, "brian@example.com", "secret")
+    login(request, user)
+    ```
     """
     User = get_user_model()
     username_field = User.USERNAME_FIELD
@@ -234,12 +234,13 @@ def get_user_from_session(request: Any) -> Any | None:
         The User instance if a valid session entry exists, otherwise ``None``.
 
     Example:
-        .. code-block:: python
+    
+    ````py
+    user = get_user_from_session(request)
 
-            user = get_user_from_session(request)
-
-            if user:
-                print(f"Logged in as {user}")
+    if user:
+        print(f"Logged in as {user}")
+    ```
     """
     user_id = request.SESSION.get(USER_ID_KEY)
 
@@ -269,12 +270,13 @@ def get_user_from_jwt(request: Any) -> Any | None:
         The User instance if a valid JWT entry exists, otherwise ``None``.
 
     Example:
-        .. code-block:: python
+    
+    ```py
+    user = get_user_from_jwt(request)
 
-            user = get_user_from_jwt(request)
-
-            if user:
-                print(f"JWT user: {user}")
+    if user:
+        print(f"JWT user: {user}")
+    ```
     """
     user_id = request.JWT.get(USER_ID_KEY)
 
