@@ -71,7 +71,7 @@ class TestBaseServer(unittest.TestCase):
         warnings.filterwarnings("ignore", category=ResourceWarning)
         warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
         
-        if not self.app.started:
+        if not self.app.running:
             self.app.run()
             
 
