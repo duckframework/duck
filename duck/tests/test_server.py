@@ -73,6 +73,10 @@ class TestBaseServer(unittest.TestCase):
         
         if not self.app.running:
             self.app.run()
+    
+    def tearDown(self):
+        if self.app.running:
+            self.app.stop()
             
 
 # Set dynamic testing settings
