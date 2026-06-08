@@ -3,7 +3,7 @@ Version module for Duck.
 """
 import sys
 
-version_num = (1, 1, 0)
+version_num = (2, 0, 0)
 version = "%d.%d.%d" % version_num
 version_name = "Duck"
 

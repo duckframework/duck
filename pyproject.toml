@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "duckframework"
-version = "1.1.0"
+version = "2.0.0"
 description = "Duck is a powerful, open-source, full-fledged Python-based web server, framework, and reverse proxy designed for building modern, customizable web applications — from small sites to large-scale platforms."
 readme = "README.md"
 license = "BSD-3-Clause"
@@ -76,11 +76,11 @@ keywords = [
 ]
 
 [project.urls]
-Homepage = "https://duckframework.xyz"
+Homepage = "https://duckframework.com"
 Source = "https://github.com/duckframework/duck"
 Issues = "https://github.com/duckframework/duck/issues"
 Funding = "https://duckframework.xyz/contribute"
-Documentation = "https://docs.duckframework.xyz"
+Documentation = "https://docs.duckframework.com"
 
 [project.entry-points.console_scripts]
 duck = "duck.__main__:cli"
