@@ -127,7 +127,7 @@ class LivelyWebSocketView(WebSocketView):
             JavascriptExecutionTimedOut: If the result was not received within the specified timeout.
             ValueError: If user specified a timeout yet wait_for_result is set to False.
         """
-        if SETTINGS['DEBUG'] and self.event_handler.browser_state_sync_lock.locked():
+        if SETTINGS['DEBUG']:
             # Strip all whitespace (spaces, tabs, newlines) for fast token matching.
             normalized_code = "".join((code or "").split()).lower()
             location_calls = (
@@ -208,7 +208,7 @@ class LivelyWebSocketView(WebSocketView):
             JavascriptExecutionError: If the future is cancelled, typically due to WebSocket disconnection or the client raised an exception.
             JavascriptExecutionTimedOut: If the result is not received within the specified timeout.
         """
-        if SETTINGS['DEBUG'] and self.event_handler.session_save_lock.locked():
+        if SETTINGS['DEBUG']:
             # Strip all whitespace (spaces, tabs, newlines) for fast token matching.
             normalized_code = "".join((code or "").split()).lower()
             location_calls = (

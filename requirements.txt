@@ -13,3 +13,4 @@ tzdata
 click
 setproctitle
 pyJWT
+pynacl

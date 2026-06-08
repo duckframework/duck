@@ -18,7 +18,7 @@ from duck.logging import logger
 
 # TODO: Need to make the SESSION API fully async-compatible
 
-session_connector_mod = import_module_once("duck.http.session.session_storage_connector")
+session_connector_mod = import_module_once("duck.http.session.connector")
 
 
 class SessionError(Exception):
@@ -168,8 +168,6 @@ class SessionStore(dict):
             - Attribute is not None
             - Attribute is correct type
         """
-        from duck.http.session.session_storage_connector import SessionStorageConnector
-    
         @wraps(method)
         def wrapper(self, *args, **kwargs):
             connector = getattr(self, "session_storage_connector", None)
@@ -177,7 +175,7 @@ class SessionStore(dict):
             if connector is None:
                 raise ValueError("Session storage connector is not set")
     
-            if not isinstance(connector, SessionStorageConnector):
+            if not isinstance(connector, session_connector_mod.SessionStorageConnector):
                 raise TypeError(
                     "Invalid session storage connector provided. "
                     f"Expected {SessionStorageConnector}, got {type(connector)}"

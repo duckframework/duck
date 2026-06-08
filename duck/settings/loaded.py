@@ -331,11 +331,12 @@ def get_normalizers():
         raise NormalizerLoadError("Error loading normalizers: %s" % str(e)) from e
 
 
-def get_session_storage():
+def get_session_storage() -> type:
     """
-    Returns the session storage class defined in settings.py.
+    Returns the session storage class from settings.py.
     """
-    return x_import(SETTINGS["SESSION_STORAGE"])  # import session storage
+    storage_cls = x_import(SETTINGS["SESSION_STORAGE"])
+    return storage_cls
 
 
 def get_session_store():
@@ -393,7 +394,7 @@ class Loaded:
     """
     def __init__(self):
         from duck.etc.templatetags import BUILTIN_TEMPLATETAGS
-        from duck.http.session.session_storage_connector import SessionStorageConnector
+        from duck.http.session.connector import SessionStorageConnector
         
         self.WSGI = Lazy(get_wsgi)
         self.ASGI = Lazy(get_asgi)

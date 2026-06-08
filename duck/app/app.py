@@ -1078,7 +1078,7 @@ class App(BaseApp):
             level=logger.DEBUG,
         )
         logger.log(
-            f"Starting Django server on port [self.django_port]",
+            f"Starting Django server on port [{self.django_bind_port}]",
             level=logger.DEBUG,
         )
     
