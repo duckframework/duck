@@ -18,7 +18,9 @@
 [![Django Integration](https://img.shields.io/badge/Django-Integration-blue.svg)](#)
 [![Monitoring](https://img.shields.io/badge/Monitoring-CPU%2FRAM%2FDisk%2FI%2FO-brightgreen.svg)](#)
 
-**Duck Framework** is an open-source Python web framework and web server with built-in reactive UI and real-time WebSocket support. Build high-performance, scalable, server-side reactive web applications — without separate frontend frameworks or complex JavaScript stacks.
+**Duck Framework** is an open-source Python web framework and web server with built-in reactive UI and real-time WebSocket support.  
+
+Build high-performance, scalable, server-side reactive web applications — without separate frontend frameworks or complex JavaScript stacks.
 
 ---
 
@@ -75,7 +77,7 @@ And more — see [feature list](https://duckframework.com/features)
 10. **Complete Reverse Proxy Server** – **Duck** only acts as reverse proxy for  Django only. Need to make Duck a full-fledged reverse proxy server with optional sticky sessions.
 11. ~~**Component Mutation Observer** – Need to build an optional component mutation observer for keeping track of child changes for fastest re-render (approx. 75x fast on unchanged children).~~
 12. **MCP (Model Context Protocol) Server** – Need to make it easy for creating MCP servers for easy AI communication. 
-13. **JWT (JSON-based Web Token) Authentication** – Need  to add JWT authentication persistent logins.
+13. ~**JWT (JSON-based Web Token) Authentication** – Need  to add JWT authentication persistent logins.~
 14. **...and more** – [Request a feature](./feature_request.md)
 
 ---
