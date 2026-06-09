@@ -1,17 +1,15 @@
-{# This template extends Sphinx's awesome theme default page.html template #}
+{# Extends Sphinx's default page.html to inject Duck Framework SEO and version picker. #}
 {% extends "!page.html" %}
 
-{# Include the content of the parent template in the relevant blocks #}
 {% block extrahead %}
     {{ super() }}
 
-    {# Add a JSON-encoded version list for use by JavaScript #}
+    {# JSON-encoded version list consumed by the version picker script. #}
     <script id="version-list" type="application/json">
-        {% set v=[] %} {# Set empty versions list #}
-        
+        {% set v = [] %}
+
         {% if versions is defined %}
           {%- for version in versions -%}
-            {# Append versions dictionary, we use append(...) or "" to avoid adding None to the evaluated statement #}
             {%- if version.name == "main" -%}
               {{ v.append({"name": "latest", "url": version.url}) or "" }}
             {%- else -%}
@@ -19,37 +17,85 @@
             {%- endif -%}
           {%- endfor -%}
         {%- endif -%}
-        
-        {# Add versions JSON to template #}
-        {{ v | tojson | safe}}
-        
+
+        {{ v | tojson | safe }}
     </script>
 
-    {# Link to the version-picker JavaScript. Pathto ensures proper handling of static paths. #}
+    {# Version picker — deferred so it doesn't block page render. #}
     <script src="{{ pathto('_static/js/version-picker.js', 1) }}" defer></script>
-    
-    {# Head tags inherited from Duck's HomePage #}
-    <meta name="description" content="Build real-time, reactive web apps with pure Python. Duck Framework replaces JavaScript frontends with a WebSocket-driven UI engine — no JS needed"/>
-    <meta name="robots" content="index, follow" data-uid="0.0.3"/>
-    <meta name="keywords" content="Duck Framework, Python web framework, Python web framework no javascript, reactive Python framework, websocket Python framework, Python fullstack framework, Django alternative Python, Flask alternative, NodeJS alternative, Web development, Python backend, Full-stack development, Secure web apps, Scalable web applications, duck framework docs, duck framework documentation" data-uid="0.0.4"/>
-    <meta http-equiv="Content-Language" content="en" data-uid="0.0.5"/>
-    <meta name="author" content="Brian Musakwa (Duck Framework)" data-uid="0.0.13"/>
-    <meta property="og:title" content="Duck Framework Documentation — Python Web Framework | No JavaScript Required"/>
-    <meta property="og:description" content="Build real-time, reactive web apps with pure Python."/>
-    <meta property="og:url" content="{{DUCK_DOCS_URL}}" data-uid="0.0.21"/>
-    <meta property="og:image" content="{{ pathto('_static/images/og-image.png', 1) }}" data-uid="0.0.22"/>
-    <meta property="og:type" content="website" data-uid="0.0.23"/>
-    <meta property="og:site_name" content="Duck Framework Docs" data-uid="0.0.24"/>
-    <meta name="twitter:card" content="summary_large_image" data-uid="0.0.25"/>
-    <meta name="twitter:title" content="Duck Framework Documentation — Python Web Framework | No JavaScript Required" data-uid="0.0.26"/>
-    <meta name="twitter:description" content="Build real-time, reactive web apps with pure Python."/>
-    
-    <link rel="icon" href="{{ pathto('_static/images/favicon/favicon-96x96.png', 1) }}" type="image/png" sizes="96x96" data-uid="0.0.14"/>
-    <link rel="icon" href="{{ pathto('_static/images/favicon/favicon.svg', 1) }}" type="image/svg+xml" data-uid="0.0.15"/>
-    <link rel="shortcut icon" href="{{ pathto('_static/images/favicon/favicon.ico', 1) }}" type="image/png" data-uid="0.0.16"/>
-    <link rel="apple-touch-icon" href="{{ pathto('_static/images/favicon/apple-touch-icon.png', 1) }}" type="image/png" sizes="180x180" data-uid="0.0.17"/>
-    <link rel="manifest" href="{{ pathto('_static/images/favicon/site.webmanifest', 1) }}" type="image/png" data-uid="0.0.18"/>
-    
-    <script type="application/ld+json" data-uid="0.0.28">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Duck Framework", "description": "Build real-time, reactive web apps with pure Python.", "author": {"@type": "organization", "name": "Duck Framework"}, "applicationCategory": "Web Development Framework", "operatingSystem": "Cross-platform", "url": "https://duckframework.xyz", "sameAs": ["https://github.com/duckframework/duck", "https://docs.duckframework.xyz"], "image": "{{ pathto('_static/images/og-image.png', 1) }}"}</script>
-    
+
+    {# ── Core SEO ── #}
+    {# Title kept to ~60 chars for full display in SERPs. #}
+    <title>{{ title }} — Duck Framework Docs</title>
+
+    {# Description: ~155 chars, keyword-rich, action-oriented. #}
+    <meta name="description" content="Official Duck Framework docs. Build real-time, reactive web apps in pure Python using WebSockets — no JavaScript required. Full-stack, batteries included."/>
+
+    {# Canonical prevents duplicate-content penalties across versioned URLs. #}
+    <link rel="canonical" href="{{ DUCK_DOCS_URL }}"/>
+
+    <meta name="robots" content="index, follow"/>
+
+    {# Keywords ordered by likely search volume / intent. #}
+    <meta name="keywords" content="Duck Framework, Python web framework, full-stack Python, reactive Python, WebSocket Python, no JavaScript web framework, Django alternative, Flask alternative, Python frontend, real-time Python web app"/>
+
+    <meta http-equiv="Content-Language" content="en"/>
+    <meta name="author" content="Brian Musakwa"/>
+
+    {# ── Open Graph ── #}
+    {# OG title ~60 chars; description ~155 chars. #}
+    <meta property="og:title" content="Duck Framework — Python Web Framework, No JavaScript"/>
+    <meta property="og:description" content="Build real-time, reactive web apps in pure Python. Duck Framework's WebSocket-driven UI engine replaces JavaScript frontends entirely."/>
+    <meta property="og:url" content="{{ DUCK_DOCS_URL }}"/>
+    <meta property="og:image" content="{{ pathto('_static/images/og-image.png', 1) }}"/>
+    <meta property="og:image:width" content="1200"/>
+    <meta property="og:image:height" content="630"/>
+    <meta property="og:image:alt" content="Duck Framework — Python Web Framework Documentation"/>
+    <meta property="og:type" content="website"/>
+    <meta property="og:site_name" content="Duck Framework Docs"/>
+    <meta property="og:locale" content="en_US"/>
+
+    {# ── Twitter Card ── #}
+    <meta name="twitter:card" content="summary_large_image"/>
+    <meta name="twitter:title" content="Duck Framework — Python Web Framework, No JavaScript"/>
+    <meta name="twitter:description" content="Build real-time, reactive web apps in pure Python. WebSocket-driven UI — no JavaScript needed."/>
+    <meta name="twitter:image" content="{{ pathto('_static/images/og-image.png', 1) }}"/>
+    <meta name="twitter:image:alt" content="Duck Framework Documentation"/>
+    <meta name="twitter:site" content="@duckframework"/>
+
+    {# ── Favicons ── #}
+    <link rel="icon" href="{{ pathto('_static/images/favicon/favicon-96x96.png', 1) }}" type="image/png" sizes="96x96"/>
+    <link rel="icon" href="{{ pathto('_static/images/favicon/favicon.svg', 1) }}" type="image/svg+xml"/>
+    <link rel="shortcut icon" href="{{ pathto('_static/images/favicon/favicon.ico', 1) }}"/>
+    <link rel="apple-touch-icon" href="{{ pathto('_static/images/favicon/apple-touch-icon.png', 1) }}" sizes="180x180"/>
+    <link rel="manifest" href="{{ pathto('_static/images/favicon/site.webmanifest', 1) }}"/>
+
+    {# ── Structured Data (JSON-LD) ── #}
+    {# SoftwareApplication schema helps Google surface the framework in rich results. #}
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Duck Framework",
+      "description": "Build real-time, reactive web apps in pure Python using a WebSocket-driven UI engine — no JavaScript required.",
+      "author": {
+        "@type": "Person",
+        "name": "Brian Musakwa",
+        "url": "https://github.com/digreatbrian"
+      },
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Windows, macOS, Linux",
+      "programmingLanguage": "Python",
+      "url": "https://duckframework.com",
+      "documentation": "{{ DUCK_DOCS_URL }}",
+      "codeRepository": "https://github.com/duckframework/duck",
+      "license": "https://opensource.org/license/bsd-3-clause",
+      "sameAs": [
+        "https://github.com/duckframework/duck",
+        "https://docs.duckframework.com"
+      ],
+      "image": "{{ pathto('_static/images/og-image.png', 1) }}"
+    }
+    </script>
+
 {% endblock %}
