@@ -1,37 +1,503 @@
+
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <!-- Basic SEO + compatibility -->
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Prevent indexing of this redirect page -->
-    <meta name="robots" content="noindex, follow" />
+<html :class="{ 'dark' : darkMode === true }" data-content_root="./" lang="en" x-data="{ darkMode: $persist(window.matchMedia('(prefers-color-scheme: dark)').matches), activeSection: ''}">
+<head>
+<script>
+    (function () {
+      // Set initial color scheme
+      if ((localStorage.getItem("_x_darkMode") === "true") || (window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+        document.documentElement.classList.add("dark");
+      }
 
-    <title>Redirecting...</title>
-
-    <!-- Canonical target (helps search engines understand destination) -->
-    <link rel="canonical" href="/main/index.html" />
-
-    <script>
-      // Immediate, SEO-safe redirect (does not pollute history)
-      window.location.replace("/main/index.html");
+      // Watch for media preference changes
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
+        localStorage.setItem("_x_darkMode", event.matches);
+        document.documentElement.classList.toggle("dark", event.matches);
+      });
+    })();
+  </script>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta charset="utf-8"/>
+<meta content="#ffffff" media="(prefers-color-scheme: light)" name="theme-color"/>
+<meta content="#030711" media="(prefers-color-scheme: dark)" name="theme-color"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>Duck Framework Documentation | Duck Framework — Build Reactive Web Apps Without JavaScript</title>
+<meta content="Duck Framework Documentation | Duck Framework — Build Reactive Web Apps Without JavaScript" property="og:title"/>
+<meta content="Duck Framework Documentation | Duck Framework — Build Reactive Web Apps Without JavaScript" name="twitter:title"/>
+<link href="_static/pygments.css?v=649a27d8" rel="stylesheet" type="text/css"/>
+<link href="_static/theme.css?v=979577e3" rel="stylesheet" type="text/css"/>
+<link href="_static/sphinx-design.min.css?v=95c83b7e" rel="stylesheet" type="text/css"/>
+<link href="_static/css/rtd_sphinx_search.min.css?v=e72958e9" rel="stylesheet" type="text/css"/>
+<link href="_static/css/custom.css?v=9b93c494" rel="stylesheet" type="text/css"/>
+<link href="_static/awesome-sphinx-design.css?v=b1d4564d" rel="stylesheet" type="text/css"/>
+<link href="https://docs.duckframework.com/main/index.html" rel="canonical"/>
+<link href="search.html" rel="search" title="Search"/>
+<link href="genindex.html" rel="index" title="Index"/>
+<link href="getting-started.html" rel="next" title="🚀 Getting Started with Duck"/>
+<script id="version-list" type="application/json">
+         
+        
+        
+        []
+        
     </script>
-  </head>
-
-  <body>
-    <!-- Fallback for users / bots without JS -->
-    <noscript>
-      <p>
-        This page has moved.
-        <a href="/main/index.html">Click here to continue</a>.
-      </p>
-    </noscript>
-
-    <!-- Visible fallback -->
-    <p>
-      Redirecting... If you are not redirected,
-      <a href="/main/index.html">click here</a>.
-    </p>
-  </body>
+<script defer="" src="_static/js/version-picker.js"></script>
+<meta content="Build real-time, reactive web apps with pure Python. Duck Framework replaces JavaScript frontends with a WebSocket-driven UI engine — no JS needed" name="description"/>
+<meta content="index, follow" data-uid="0.0.3" name="robots"/>
+<meta content="Duck Framework, Python web framework, Python web framework no javascript, reactive Python framework, websocket Python framework, Python fullstack framework, Django alternative Python, Flask alternative, NodeJS alternative, Web development, Python backend, Full-stack development, Secure web apps, Scalable web applications, duck framework docs, duck framework documentation" data-uid="0.0.4" name="keywords"/>
+<meta content="en" data-uid="0.0.5" http-equiv="Content-Language"/>
+<meta content="Brian Musakwa (Duck Framework)" data-uid="0.0.13" name="author"/>
+<meta content="Duck Framework Documentation — Python Web Framework | No JavaScript Required" property="og:title"/>
+<meta content="Build real-time, reactive web apps with pure Python." property="og:description"/>
+<meta content="https://docs.duckframework.com" data-uid="0.0.21" property="og:url"/>
+<meta content="_static/images/og-image.png" data-uid="0.0.22" property="og:image"/>
+<meta content="website" data-uid="0.0.23" property="og:type"/>
+<meta content="Duck Framework Docs" data-uid="0.0.24" property="og:site_name"/>
+<meta content="summary_large_image" data-uid="0.0.25" name="twitter:card"/>
+<meta content="Duck Framework Documentation — Python Web Framework | No JavaScript Required" data-uid="0.0.26" name="twitter:title"/>
+<meta content="Build real-time, reactive web apps with pure Python." name="twitter:description"/>
+<link data-uid="0.0.14" href="_static/images/favicon/favicon-96x96.png" rel="icon" sizes="96x96" type="image/png"/>
+<link data-uid="0.0.15" href="_static/images/favicon/favicon.svg" rel="icon" type="image/svg+xml"/>
+<link data-uid="0.0.16" href="_static/images/favicon/favicon.ico" rel="shortcut icon" type="image/png"/>
+<link data-uid="0.0.17" href="_static/images/favicon/apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180" type="image/png"/>
+<link data-uid="0.0.18" href="_static/images/favicon/site.webmanifest" rel="manifest" type="image/png"/>
+<script data-uid="0.0.28" type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Duck Framework", "description": "Build real-time, reactive web apps with pure Python.", "author": {"@type": "organization", "name": "Duck Framework"}, "applicationCategory": "Web Development Framework", "operatingSystem": "Cross-platform", "url": "https://duckframework.xyz", "sameAs": ["https://github.com/duckframework/duck", "https://docs.duckframework.xyz"], "image": "_static/images/og-image.png"}</script>
+</head>
+<body :class="{ 'overflow-hidden': showSidebar }" @scroll.window="showScrollTop = pageYOffset &gt; 100" class="min-h-screen font-sans antialiased bg-background text-foreground" x-data="{ showSidebar: false, showScrollTop: false }">
+<div @click.self="showSidebar = false" class="fixed inset-0 z-50 overflow-hidden bg-background/80 backdrop-blur-sm md:hidden" x-cloak="" x-show="showSidebar"></div><div class="relative flex flex-col min-h-screen" id="page"><a class="absolute top-0 left-0 z-[100] block bg-background p-4 text-xl transition -translate-x-full opacity-0 focus:translate-x-0 focus:opacity-100" href="#content">
+      Skip to content
+    </a><header class="sticky top-0 z-40 w-full border-b shadow-xs border-border bg-background/90 backdrop-blur"><div class="container flex items-center h-14">
+<div class="hidden mr-4 md:flex">
+<a class="flex items-center mr-6" href="#">
+<img alt="Logo" class="mr-2 hidden dark:block" height="24" src="_static/duck-logo.png" width="24"/>
+<img alt="Logo" class="mr-2 dark:hidden" height="24" src="_static/duck-logo.png" width="24"/><span class="hidden font-bold sm:inline-block text-clip whitespace-nowrap">Duck Framework — Build Reactive Web Apps Without JavaScript</span>
+</a><nav class="flex items-center gap-6 text-sm font-medium">
+<a class="transition-colors hover:text-foreground/80 text-foreground/60" href="https://duckframework.com" rel="noopener nofollow">Explore the Main Site</a>
+</nav></div><button @click="showSidebar = true" class="inline-flex items-center justify-center h-10 px-0 py-2 mr-2 text-base font-medium transition-colors rounded-md hover:text-accent-foreground hover:bg-transparent md:hidden" type="button">
+<svg aria-hidden="true" fill="currentColor" height="24" viewbox="0 96 960 960" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M152.587 825.087q-19.152 0-32.326-13.174t-13.174-32.326q0-19.152 13.174-32.326t32.326-13.174h440q19.152 0 32.326 13.174t13.174 32.326q0 19.152-13.174 32.326t-32.326 13.174h-440Zm0-203.587q-19.152 0-32.326-13.174T107.087 576q0-19.152 13.174-32.326t32.326-13.174h320q19.152 0 32.326 13.174T518.087 576q0 19.152-13.174 32.326T472.587 621.5h-320Zm0-203.587q-19.152 0-32.326-13.174t-13.174-32.326q0-19.152 13.174-32.326t32.326-13.174h440q19.152 0 32.326 13.174t13.174 32.326q0 19.152-13.174 32.326t-32.326 13.174h-440ZM708.913 576l112.174 112.174q12.674 12.674 12.674 31.826t-12.674 31.826Q808.413 764.5 789.261 764.5t-31.826-12.674l-144-144Q600 594.391 600 576t13.435-31.826l144-144q12.674-12.674 31.826-12.674t31.826 12.674q12.674 12.674 12.674 31.826t-12.674 31.826L708.913 576Z"></path>
+</svg>
+<span class="sr-only">Toggle navigation menu</span>
+</button>
+<div class="flex items-center justify-between flex-1 gap-2 sm:gap-4 md:justify-end">
+<div class="flex-1 w-full md:w-auto md:flex-none"><form @keydown.k.window.meta="$refs.search.focus()" action="search.html" class="relative flex items-center group" id="searchbox" method="get">
+<input aria-label="Search the docs" class="inline-flex items-center font-medium transition-colors bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background border border-input hover:bg-accent focus:bg-accent hover:text-accent-foreground focus:text-accent-foreground hover:placeholder-accent-foreground py-2 px-4 relative h-9 w-full justify-start rounded-[0.5rem] text-sm text-muted-foreground sm:pr-12 md:w-40 lg:w-64" id="search-input" name="q" placeholder="Search ..." type="search" x-ref="search"/>
+<kbd class="pointer-events-none absolute right-1.5 top-2 hidden h-5 select-none text-muted-foreground items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex group-hover:bg-accent group-hover:text-accent-foreground">
+<span class="text-xs">⌘</span>
+    K
+  </kbd>
+</form>
+</div>
+<nav class="flex items-center gap-1">
+<button @click="darkMode = !darkMode" class="relative inline-flex items-center justify-center px-0 text-sm font-medium transition-colors rounded-md hover:bg-accent hover:text-accent-foreground h-9 w-9" title="Toggle color scheme" type="button">
+<svg class="absolute transition-all scale-100 rotate-0 dark:-rotate-90 dark:scale-0" fill="currentColor" height="16" viewbox="0 96 960 960" width="16" xmlns="http://www.w3.org/2000/svg">
+<path d="M480 685q45.456 0 77.228-31.772Q589 621.456 589 576q0-45.456-31.772-77.228Q525.456 467 480 467q-45.456 0-77.228 31.772Q371 530.544 371 576q0 45.456 31.772 77.228Q434.544 685 480 685Zm0 91q-83 0-141.5-58.5T280 576q0-83 58.5-141.5T480 376q83 0 141.5 58.5T680 576q0 83-58.5 141.5T480 776ZM80 621.5q-19.152 0-32.326-13.174T34.5 576q0-19.152 13.174-32.326T80 530.5h80q19.152 0 32.326 13.174T205.5 576q0 19.152-13.174 32.326T160 621.5H80Zm720 0q-19.152 0-32.326-13.174T754.5 576q0-19.152 13.174-32.326T800 530.5h80q19.152 0 32.326 13.174T925.5 576q0 19.152-13.174 32.326T880 621.5h-80Zm-320-320q-19.152 0-32.326-13.174T434.5 256v-80q0-19.152 13.174-32.326T480 130.5q19.152 0 32.326 13.174T525.5 176v80q0 19.152-13.174 32.326T480 301.5Zm0 720q-19.152 0-32.326-13.17Q434.5 995.152 434.5 976v-80q0-19.152 13.174-32.326T480 850.5q19.152 0 32.326 13.174T525.5 896v80q0 19.152-13.174 32.33-13.174 13.17-32.326 13.17ZM222.174 382.065l-43-42Q165.5 327.391 166 308.239t13.174-33.065q13.435-13.674 32.587-13.674t32.065 13.674l42.239 43q12.674 13.435 12.555 31.706-.12 18.272-12.555 31.946-12.674 13.674-31.445 13.413-18.772-.261-32.446-13.174Zm494 494.761-42.239-43q-12.674-13.435-12.674-32.087t12.674-31.565Q686.609 756.5 705.38 757q18.772.5 32.446 13.174l43 41.761Q794.5 824.609 794 843.761t-13.174 33.065Q767.391 890.5 748.239 890.5t-32.065-13.674Zm-42-494.761Q660.5 369.391 661 350.62q.5-18.772 13.174-32.446l41.761-43Q728.609 261.5 747.761 262t33.065 13.174q13.674 13.435 13.674 32.587t-13.674 32.065l-43 42.239q-13.435 12.674-31.706 12.555-18.272-.12-31.946-12.555Zm-495 494.761Q165.5 863.391 165.5 844.239t13.674-32.065l43-42.239q13.435-12.674 32.087-12.674t31.565 12.674Q299.5 782.609 299 801.38q-.5 18.772-13.174 32.446l-41.761 43Q231.391 890.5 212.239 890t-33.065-13.174ZM480 576Z"></path>
+</svg>
+<svg class="absolute transition-all scale-0 rotate-90 dark:rotate-0 dark:scale-100" fill="currentColor" height="16" viewbox="0 96 960 960" width="16" xmlns="http://www.w3.org/2000/svg">
+<path d="M480 936q-151 0-255.5-104.5T120 576q0-138 90-239.5T440 218q25-3 39 18t-1 44q-17 26-25.5 55t-8.5 61q0 90 63 153t153 63q31 0 61.5-9t54.5-25q21-14 43-1.5t19 39.5q-14 138-117.5 229T480 936Zm0-80q88 0 158-48.5T740 681q-20 5-40 8t-40 3q-123 0-209.5-86.5T364 396q0-20 3-40t8-40q-78 32-126.5 102T200 576q0 116 82 198t198 82Zm-10-270Z"></path>
+</svg>
+</button>
+</nav>
+</div>
+</div>
+</header>
+<div class="flex-1"><div class="container md:grid md:grid-cols-[220px_minmax(0,1fr)] md:gap-6 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10"><aside :aria-hidden="!showSidebar" :class="{ 'translate-x-0': showSidebar }" class="fixed inset-y-0 left-0 md:top-14 z-50 md:z-30 bg-background md:bg-transparent transition-all duration-100 -translate-x-full md:translate-x-0 ml-0 p-6 md:p-0 md:-ml-2 md:h-[calc(100vh-3.5rem)] w-5/6 md:w-full overflow-y-auto border-r border-border md:sticky" id="left-sidebar">
+<a class="justify-start text-sm md:!hidden bg-background" href="#">
+<img alt="Logo" class="mr-2 hidden dark:block" height="16" src="_static/duck-logo.png" width="16"/>
+<img alt="Logo" class="mr-2 dark:hidden" height="16" src="_static/duck-logo.png" width="16"/><span class="font-bold text-clip whitespace-nowrap">Duck Framework — Build Reactive Web Apps Without JavaScript</span>
+</a>
+<div class="relative overflow-hidden md:overflow-auto my-4 md:my-0">
+<div class="overflow-y-auto h-full w-full relative pr-6"><nav class="flex md:hidden flex-col font-medium mt-4">
+<a href="https://duckframework.com" rel="nofollow noopener">Explore the Main Site</a>
+</nav><nav class="table w-full min-w-full my-6 lg:my-8">
+<p class="caption" role="heading"><span class="caption-text">Table of Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">🚀 Getting Started with Duck</a></li>
+<li class="toctree-l1"><a class="reference internal" href="build-reactive-chat-app.html">🗨️ Build a Reactive Chat App in 5 Minutes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="project-structure.html">🌀 Project structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cached-views.html">🗃 Cached Views</a></li>
+<li class="toctree-l1"><a class="reference internal" href="settings.html">🛠 Settings Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="lively-components.html">🖥️ Lively Component System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="counterapp.html">📟 Simple Counter App in Python</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cached-components.html">🌀 Component Caching Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="templates.html">📑 Templates</a></li>
+<li class="toctree-l1"><a class="reference internal" href="templatetags.html">🏷️ Template Tags &amp; Filters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="blueprint.html">📘 Blueprints</a></li>
+<li class="toctree-l1"><a class="reference internal" href="microapp.html">⛴️ Micro Applications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="automations.html">⏳ Task Automation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="https-and-http2.html">🚧 HTTP/2 and HTTPS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="wsgi.html">🖥️ Web Server Gateway (WSGI)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="asgi.html">⚡ Asynchronous Server Gateway (ASGI)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="websocket.html">🌐 WebSockets in Python – Real-Time Apps with Duck</a></li>
+<li class="toctree-l1"><a class="reference internal" href="background-managers.html">🔋Background Thread &amp; Asyncio Loop Managers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="request-and-response.html">🔀 Request &amp; Response</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sessions.html">🔐 Sessions in Duck</a></li>
+<li class="toctree-l1"><a class="reference internal" href="middlewares.html">🛡️ Duck Middlewares</a></li>
+<li class="toctree-l1"><a class="reference internal" href="logging.html">📝 Duck Logging System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="database.html">🗄️️ Database</a></li>
+<li class="toctree-l1"><a class="reference internal" href="django-integration.html">🐤 Django Integration with Duck</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sitemap.html">📄 Sitemap</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment.html">🚀 Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring.html">📊 Duck System Monitor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="service-management.html">🌐 Duck Service Management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="free-ssl-certificate.html">🔐 Free SSL Certificate</a></li>
+<li class="toctree-l1"><a class="reference internal" href="xsocket.html">🔌 Socket I/O (xsocket)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="shortcuts.html">💡Duck Shortcuts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="utils.html">⌛ Duck Utilities</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation:</span></p>
+<ul>
+<li class="toctree-l1" x-data="{ expanded: $el.classList.contains('current') ? true : false }"><a :class="{ 'expanded' : expanded }" @click="expanded = !expanded" class="reference internal expandable" href="api/index.html">API Reference<button @click.prevent.stop="expanded = !expanded" type="button" x-cloak=""><span class="sr-only"></span><svg fill="currentColor" height="18px" stroke="none" viewbox="0 0 24 24" width="18px" xmlns="http://www.w3.org/2000/svg"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path></svg></button></a><ul x-cloak="" x-show="expanded">
+<li class="toctree-l2"><a class="reference internal" href="api/duck/duck.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">duck</span></code></a></li>
+</ul>
+</li>
+</ul>
+</nav>
+</div>
+</div>
+<button @click="showSidebar = false" class="absolute md:hidden right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100" type="button">
+<svg class="h-4 w-4" fill="currentColor" height="24" stroke="none" viewbox="0 96 960 960" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M480 632 284 828q-11 11-28 11t-28-11q-11-11-11-28t11-28l196-196-196-196q-11-11-11-28t11-28q11-11 28-11t28 11l196 196 196-196q11-11 28-11t28 11q11 11 11 28t-11 28L536 576l196 196q11 11 11 28t-11 28q-11 11-28 11t-28-11L480 632Z"></path>
+</svg>
+</button>
+</aside>
+<main class="relative py-6 lg:gap-10 lg:py-8 xl:grid xl:grid-cols-[1fr_300px]">
+<div class="w-full min-w-0 mx-auto">
+<div id="content" role="main">
+<section id="duck-framework-documentation">
+<h1>Duck Framework Documentation<a class="headerlink" href="#duck-framework-documentation" title="Link to this heading">¶</a></h1>
+<p><em>Python Web Framework | No JavaScript Required</em></p>
+<p><strong>Duck Framework</strong> is an open-source Python web framework and web server that replaces JavaScript frontends entirely.</p>
+<p>Build real-time, reactive web applications with pure Python — no React, no Vue, no JavaScript framework needed.
+A modern, full-stack alternative to Django and Flask with a built-in WebSocket-driven UI engine.</p>
+<p><strong>Duck is not a small or mini web framework — it is a full-fledged Python framework that lets you build and deploy complete web applications without writing a single line of JavaScript.</strong></p>
+<section id="github">
+<h2>Github<a class="headerlink" href="#github" title="Link to this heading" x-intersect.margin.0%.0%.-70%.0%="activeSection = '#github'">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Homepage</strong>: <a class="reference external" href="https://github.com/duckframework/duck">https://github.com/duckframework/duck</a></p></li>
+</ul>
+<p>Stay tuned for more updates as we continue to enhance Duck’s capabilities.</p>
+</section>
+<section id="author">
+<h2>Author<a class="headerlink" href="#author" title="Link to this heading" x-intersect.margin.0%.0%.-70%.0%="activeSection = '#author'">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Author</strong>: Brian Musakwa</p></li>
+<li><p><strong>Email</strong>: <a class="reference external" href="mailto:digreatbrian%40gmail.com">digreatbrian<span>@</span>gmail<span>.</span>com</a></p></li>
+</ul>
+</section>
+<section id="contents">
+<h2>Contents<a class="headerlink" href="#contents" title="Link to this heading" x-intersect.margin.0%.0%.-70%.0%="activeSection = '#contents'">¶</a></h2>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Table of Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">🚀 Getting Started with Duck</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="getting-started.html#install-duck">1. Install Duck</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting-started.html#create-your-first-project">2. Create Your First Project</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting-started.html#run-the-server">3. Run the Server</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting-started.html#understand-the-project-structure">4. Understand the Project Structure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting-started.html#web-main-py-entry-point-starts-your-app">web/main.py ➝‬ Entry Point (starts your app)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting-started.html#web-urls-py-url-routing-maps-urls-to-logic">web/urls.py ➝‬ URL Routing (maps URLs to logic)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting-started.html#web-views-py-logic-what-your-app-does">web/views.py ➝‬ Logic (what your app does)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting-started.html#how-everything-connects">How Everything Connects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting-started.html#run-built-in-tests">Run Built-in Tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting-started.html#requirements">Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting-started.html#what-makes-duck-different">What Makes Duck Different?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting-started.html#final-thought">Final Thought</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="build-reactive-chat-app.html">🗨️ Build a Reactive Chat App in 5 Minutes</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="build-reactive-chat-app.html#what-youll-get">What you’ll get</a></li>
+<li class="toctree-l2"><a class="reference internal" href="build-reactive-chat-app.html#project-structure">Project structure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="build-reactive-chat-app.html#step-1-message-bubble-component">Step 1 — Message Bubble Component</a></li>
+<li class="toctree-l2"><a class="reference internal" href="build-reactive-chat-app.html#step-2-base-page-shared-layout">Step 2 — Base Page (shared layout)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="build-reactive-chat-app.html#step-3-chat-page-the-main-logic">Step 3 — Chat Page (the main logic)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="build-reactive-chat-app.html#step-4-wire-up-the-route">Step 4 — Wire up the route</a></li>
+<li class="toctree-l2"><a class="reference internal" href="build-reactive-chat-app.html#run-it">Run it</a></li>
+<li class="toctree-l2"><a class="reference internal" href="build-reactive-chat-app.html#how-it-works-under-the-hood">How it works (under the hood)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="build-reactive-chat-app.html#improvements-next-level">Improvements (next level)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="build-reactive-chat-app.html#common-issues">Common issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="build-reactive-chat-app.html#next-deploy-it">Next: Deploy it</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="project-structure.html">🌀 Project structure</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="project-structure.html#full-project-structure">Full project structure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="project-structure.html#application-files">Application Files</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="cached-views.html">🗃 Cached Views</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="cached-views.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-views.html#cached-view-decorator"><code class="docutils literal notranslate"><span class="pre">cached_view</span></code> Decorator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-views.html#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-views.html#how-targets-work">How Targets Work</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-views.html#namespace-support">Namespace Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-views.html#debugging-with-skip">Debugging with Skip</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-views.html#on-cache-result-hook">on_cache_result Hook</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-views.html#internal-behavior">Internal Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-views.html#examples">Examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-views.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-views.html#comparison-to-other-frameworks">Comparison to Other Frameworks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-views.html#summary">Summary</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="settings.html">🛠 Settings Configuration</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="settings.html#understanding-settings-py">Understanding <code class="docutils literal notranslate"><span class="pre">settings.py</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lively-components.html">🖥️ Lively Component System</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#what-is-the-lively-component-system">What Is the Lively Component System?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#what-problem-does-it-solve">What Problem Does It Solve?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#how-it-works-simple-explanation">How It Works (Simple Explanation)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#why-its-powerful">Why It’s Powerful</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#beginner-mental-model">Beginner Mental Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#page-component-example">Page Component Example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#guidelines">Guidelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#component-events">Component Events</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#fast-navigation">Fast Navigation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#pre-rendering-components">Pre-rendering Components</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#counter-app">Counter App</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#notes">Notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#components-in-templates">Components in Templates</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#custom-components">Custom Components</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#component-extensions">Component Extensions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#predefined-components">Predefined Components</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#force-updates-on-lively-components">Force Updates on Lively Components</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#handling-forms">Handling Forms</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#component-lifecycle">Component Lifecycle</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lively-components.html#other-points-to-note">Other points to Note</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="counterapp.html">📟 Simple Counter App in Python</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="counterapp.html#views-py">views.py</a></li>
+<li class="toctree-l2"><a class="reference internal" href="counterapp.html#how-to-use">How to use</a></li>
+<li class="toctree-l2"><a class="reference internal" href="counterapp.html#notes">Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="cached-components.html">🌀 Component Caching Utilities</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="cached-components.html#key-concepts">Key Concepts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-components.html#default-cache-backend">Default Cache Backend</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-components.html#exceptions">Exceptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-components.html#cache-key-generation">Cache Key Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-components.html#cached-component-decorator"><code class="docutils literal notranslate"><span class="pre">cached_component</span></code> Decorator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-components.html#runtime-behavior">Runtime Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-components.html#background-optimization">Background Optimization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-components.html#functional-api">Functional API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-components.html#static-component-utilities">Static Component Utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-components.html#static-component-decorator"><code class="docutils literal notranslate"><span class="pre">static_component</span></code> Decorator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-components.html#id7">Functional API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-components.html#when-to-use-what">When to Use What</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cached-components.html#summary">Summary</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="templates.html">📑 Templates</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="templates.html#rendering-functions">Rendering Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="templates.html#template-syntax">Template Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="templates.html#template-locations">Template Locations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="templates.html#rendering-templates-in-views">Rendering Templates in Views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="templates.html#blueprint-templates">Blueprint Templates</a></li>
+<li class="toctree-l2"><a class="reference internal" href="templates.html#summary">Summary</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="templatetags.html">🏷️ Template Tags &amp; Filters</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="templatetags.html#syntax-overview">Syntax Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="templatetags.html#quick-cheatsheet">Quick Cheatsheet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="templatetags.html#example-usage">Example Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="templatetags.html#notes">Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="blueprint.html">📘 Blueprints</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="blueprint.html#blueprint-structure-example">Blueprint Structure Example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="blueprint.html#example">Example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="blueprint.html#blueprint-arguments">Blueprint arguments</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="microapp.html">⛴️ Micro Applications</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="microapp.html#what-is-a-micro-app">What is a Micro App?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="microapp.html#key-features">Key Features</a></li>
+<li class="toctree-l2"><a class="reference internal" href="microapp.html#how-to-use-micro-apps">How to Use Micro Apps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="automations.html">⏳ Task Automation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="automations.html#usage-and-explanation">Usage and Explanation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="automations.html#automation-trigger">Automation Trigger</a></li>
+<li class="toctree-l2"><a class="reference internal" href="automations.html#automation-dispatcher">Automation Dispatcher</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="https-and-http2.html">🚧 HTTP/2 and HTTPS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="https-and-http2.html#leveraging-http-2">Leveraging HTTP/2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="https-and-http2.html#enabling-https">Enabling HTTPS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="https-and-http2.html#local-ssl-certificate-generation">Local SSL Certificate Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="https-and-http2.html#production-recommendations">Production Recommendations</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="wsgi.html">🖥️ Web Server Gateway (WSGI)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="wsgi.html#enabling-wsgi-mode">Enabling WSGI Mode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wsgi.html#working-with-the-event-loop">Working with the Event Loop</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wsgi.html#notes">Notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wsgi.html#defining-sync-views">Defining Sync Views</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="asgi.html">⚡ Asynchronous Server Gateway (ASGI)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="asgi.html#enabling-async-handling">Enabling Async Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="asgi.html#notes">Notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="asgi.html#defining-async-views">Defining Async Views</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="websocket.html">🌐 WebSockets in Python – Real-Time Apps with Duck</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="websocket.html#quick-example">Quick Example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="websocket.html#customizing-behavior">Customizing Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="websocket.html#practical-examples">Practical Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="background-managers.html">🔋Background Thread &amp; Asyncio Loop Managers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="background-managers.html#threadpool-manager">Threadpool Manager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="background-managers.html#asyncio-loop-manager">Asyncio Loop Manager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="background-managers.html#summary-of-best-practices">Summary of Best Practices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="request-and-response.html">🔀 Request &amp; Response</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="request-and-response.html#requests">Requests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="request-and-response.html#responses">Responses</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="sessions.html">🔐 Sessions in Duck</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="sessions.html#session-storage-options">Session Storage Options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sessions.html#accessing-sessions">Accessing Sessions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sessions.html#session-settings">Session Settings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sessions.html#notes-tips">Notes &amp; Tips</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="middlewares.html">🛡️ Duck Middlewares</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="middlewares.html#base-middleware-class">Base Middleware Class</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="logging.html">📝 Duck Logging System</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="logging.html#other-logging-options">Other Logging Options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="logging.html#logs-cli">Logs CLI</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="database.html">🗄️️ Database</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="database.html#setup">Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="database.html#example">Example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="database.html#running-database-migrations">Running Database Migrations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="database.html#asynchronous-support">Asynchronous Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="database.html#admin-page">Admin Page</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="django-integration.html">🐤 Django Integration with Duck</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="django-integration.html#what-is-django">What is Django ?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="django-integration.html#how-it-works">How It Works</a></li>
+<li class="toctree-l2"><a class="reference internal" href="django-integration.html#why-use-duck-with-django">Why Use Duck with Django</a></li>
+<li class="toctree-l2"><a class="reference internal" href="django-integration.html#integration-steps">Integration Steps</a></li>
+<li class="toctree-l2"><a class="reference internal" href="django-integration.html#notes">Notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="django-integration.html#deep-dive">Deep Dive</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="sitemap.html">📄 Sitemap</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="sitemap.html#configuration">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sitemap.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sitemap.html#using-sitemapbuilder">Using <code class="docutils literal notranslate"><span class="pre">SitemapBuilder</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="deployment.html">🚀 Deployment Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="deployment.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deployment.html#deploying-on-a-vps-manual">Deploying on a VPS (Manual)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deployment.html#deploying-via-an-external-hosting-provider">Deploying via an External Hosting Provider</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deployment.html#notes-best-practices">Notes &amp; Best Practices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring.html">📊 Duck System Monitor</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="monitoring.html#key-features">Key Features</a></li>
+<li class="toctree-l2"><a class="reference internal" href="monitoring.html#usage">Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="monitoring.html#notes">Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="service-management.html">🌐 Duck Service Management</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="service-management.html#requirements">Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="service-management.html#commands-overview">Commands Overview</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="free-ssl-certificate.html">🔐 Free SSL Certificate</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="free-ssl-certificate.html#obtaining-ssl-certificate">Obtaining SSL Certificate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="free-ssl-certificate.html#domain-verification-setup">Domain Verification Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="free-ssl-certificate.html#generating-ssl-certificate">Generating SSL Certificate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="free-ssl-certificate.html#final-configuration-overview">Final Configuration Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="free-ssl-certificate.html#debugging">Debugging</a></li>
+<li class="toctree-l2"><a class="reference internal" href="free-ssl-certificate.html#tips-notes">Tips &amp; Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="xsocket.html">🔌 Socket I/O (xsocket)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="xsocket.html#getting-started">Getting Started</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xsocket.html#synchronous-example">Synchronous Example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xsocket.html#asynchronous-example">Asynchronous Example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xsocket.html#notes">Notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xsocket.html#performance-tips">Performance Tips</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="shortcuts.html">💡Duck Shortcuts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="shortcuts.html#features">Features</a></li>
+<li class="toctree-l2"><a class="reference internal" href="shortcuts.html#available-functions">Available Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="utils.html">⌛ Duck Utilities</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="utils.html#features">Features</a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html#submodules">Submodules</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">API Documentation:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api/index.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/duck/duck.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">duck</span></code></a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+</section>
+</div><div class="flex justify-between items-center pt-6 mt-12 border-t border-border gap-4">
+<div class="ml-auto">
+<a class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors border border-input hover:bg-accent hover:text-accent-foreground py-2 px-4" href="getting-started.html">
+        🚀 Getting Started with Duck
+        <svg class="ml-2 h-4 w-4" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</a>
+</div>
+</div></div><aside class="hidden text-sm xl:block" id="right-sidebar">
+<div class="sticky top-16 -mt-10 max-h-[calc(100vh-5rem)] h-full overflow-y-auto pt-6 space-y-2"><p class="font-medium">On this page</p>
+<ul>
+<li><a :data-current="activeSection === '#github'" class="reference internal" href="#github">Github</a></li>
+<li><a :data-current="activeSection === '#author'" class="reference internal" href="#author">Author</a></li>
+<li><a :data-current="activeSection === '#contents'" class="reference internal" href="#contents">Contents</a><ul>
+</ul>
+</li>
+</ul>
+</div>
+</aside>
+</main>
+</div>
+</div><footer class="py-6 border-t border-border md:py-0">
+<div class="container flex flex-col items-center justify-between gap-4 md:h-24 md:flex-row">
+<div class="flex flex-col items-center gap-4 px-8 md:flex-row md:gap-2 md:px-0">
+<p class="text-sm leading-loose text-center text-muted-foreground md:text-left">© 2026, Duck Framework Built with <a class="font-medium underline underline-offset-4" href="https://www.sphinx-doc.org" rel="noreferrer">Sphinx 8.2.3</a></p>
+</div>
+</div>
+</footer>
+</div><button :class="{'opacity-0 invisible' : !showScrollTop}" @click="window.scrollTo({top: 0, behavior: 'smooth'})" class="fixed bottom-8 right-8 p-2 z-10 rounded-sm bg-gray-700 text-xs text-white transition-all duration-1000 hover:bg-gray-950 focus:bg-gray-950" id="scrolltop" x-cloak="">
+<svg aria-hidden="true" class="inline fill-current mb-[2px]" height="14" viewbox="0 96 960 960" width="14" xmlns="http://www.w3.org/2000/svg">
+<path d="M450 896V370L202 618l-42-42 320-320 320 320-42 42-248-248v526h-60Z"></path>
+</svg>
+  Back to top
+</button>
+<script src="_static/documentation_options.js?v=5929fcd5"></script>
+<script src="_static/doctools.js?v=9bcbadda"></script>
+<script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+<script defer="defer" src="_static/theme.js?v=d6a9845b"></script>
+<script src="_static/design-tabs.js?v=f930bc37"></script>
+<script src="_static/js/rtd_search_config.js?v=b0596c34"></script>
+<script src="_static/js/rtd_sphinx_search.min.js?v=5e065386"></script>
+</body>
 </html>
