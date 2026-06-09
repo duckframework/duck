@@ -116,7 +116,6 @@ from duck.http.response import HttpResponse
 def login_like_view(request):
     request.JWT["user_id"] = "42"
     request.JWT["role"] = "member"
-    request.JWT.set_expiry()  # use JWT_ACCESS_LIFETIME
     return HttpResponse("ok")
 ```
 
