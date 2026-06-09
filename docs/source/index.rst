@@ -13,11 +13,10 @@ Duck Framework Documentation
 Build real-time, reactive web applications with pure Python — no React, no Vue, no JavaScript framework needed.
 A modern, full-stack alternative to Django and Flask with a built-in WebSocket-driven UI engine.
 
-**Duck is not a small or mini web framework — it is a full-fledged Python framework that lets you build and deploy complete web applications without writing a single line of JavaScript.**
-
 Github
 ----------
 
+- **Organization**: https://github.com/duckframework
 - **Homepage**: https://github.com/duckframework/duck
 
 Stay tuned for more updates as we continue to enhance Duck's capabilities.
