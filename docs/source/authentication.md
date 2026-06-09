@@ -56,7 +56,7 @@ Errors:
 Storage target depends on backend:
 
 - `session` backend → `request.SESSION`
-- `jwt` backend → `request.JWT`
+- `jwt` backend -> `request.JWT`
 
 ### 3) User resolution
 
@@ -130,7 +130,6 @@ def sign_in_jwt(request):
         return HttpResponse("invalid credentials", status_code=401)
 
     login(request, user, backend="jwt")
-    request.JWT.set_expiry()
     return HttpResponse("signed in")
 ```
 
