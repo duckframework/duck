@@ -55,6 +55,8 @@ Contents
    websocket
    background-managers
    request-and-response
+   authentication
+   jwt
    sessions
    middlewares
    logging
