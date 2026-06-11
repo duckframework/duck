@@ -65,8 +65,8 @@ URLPATTERNS_MODULE: str = "web.urls"
 # For route `/home` and blueprint with name `products`, the final route will be `/products/home`. This behavior can be disabled by setting argument `prepend_name_to_url` to False.
 # The best way to maximize usage of blueprints, create subfolders within base directory and create blueprints and their related views in those subfolders for good project organization.
 BLUEPRINTS: list[str] = [
-    "duck.etc.apps.essentials.blueprint.MediaFiles",
-    "duck.etc.apps.essentials.blueprint.StaticFiles",
+    "duck.etc.blueprints.essentials.blueprint.MediaFiles",
+    "duck.etc.blueprints.essentials.blueprint.StaticFiles",
 ]
 
 

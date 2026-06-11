@@ -40,6 +40,7 @@ class JWTMiddleware(BaseMiddleware):
         process_request  — extract the raw token from the configured transport
                            (cookie or header), build a ``JWTStore``, and attach
                            it to ``request.JWT``.
+                           
         process_response — if the payload was modified, re-encode the token and
                            write it back via ``Set-Cookie`` or a response header.
                            

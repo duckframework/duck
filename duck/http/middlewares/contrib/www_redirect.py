@@ -1,4 +1,8 @@
+"""
+Middleware for redirecting all requests that start with `www` to non-www URL.
+"""
 from duck.http.middlewares import BaseMiddleware
+from duck.http.response import HttpRedirectResponse
 from duck.shortcuts import redirect
 from duck.utils.urlcrack import URL
 from duck.meta import Meta
@@ -8,12 +12,10 @@ class WWWRedirectMiddleware(BaseMiddleware):
     """
     Redirects all requests that start with `www` to non-www URL.
     """
-
-    debug_message: str = (
-        "WWWRedirectMiddleware: Redirecting to non-www domain")
+    debug_message = "WWW Redirect Middleware: Redirecting to non-www domain"
 
     @classmethod
-    def get_error_response(cls, request):
+    def get_error_response(cls, request) -> HttpRedirectResponse:
         """
         This is not actually an error response but a redirect to `non-www` URL
         """
@@ -23,6 +25,9 @@ class WWWRedirectMiddleware(BaseMiddleware):
 
     @classmethod
     def process_request(cls, request):
+        """
+        Process incoming request.
+        """
         if request.host.startswith("www."):
             # Request is not actually bad but that's the only way to serve response immediately
             # without further processing.

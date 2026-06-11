@@ -240,16 +240,13 @@ class WebSocketView(View):
         Returns:
             bool: True if handshake and upgrade succeeded, False otherwise.
         """
-        from duck.shortcuts import simple_response, template_response
-        from duck.http.middlewares.security.csrf import (
-            CSRFMiddleware,
-            OriginError,
-        )
+        from duck.contrib.responses import async_make_response
+        from duck.http.middlewares.security.csrf import CSRFMiddleware, OriginError
         
         error_msg = None
         sec_key = self.request.get_header('sec-websocket-key', '').strip()
         version = self.request.get_header("sec-websocket-version", "").strip()
-
+        
         if self.request.get_header("upgrade", "").lower() != "websocket":
             error_msg = "Missing Upgrade: websocket"
         
@@ -270,18 +267,41 @@ class WebSocketView(View):
             except ValueError:
                 error_msg = "Invalid Sec-WebSocket-Version"
 
+        # Validate if no error_msg set
+        if error_msg:
+            response = await async_make_response(
+                HttpBadRequestResponse,
+                extra_context={"error_label": "WebSocket Upgrade Failed"},
+                body=error_msg,
+            )
+            
+            # Set debug message.
+            self.request.META["DEBUG_MESSAGE"] = f"WebSocket Error: {error_msg}."
+            
+            # Send the error reeponse immediately.
+            await self._response_handler.async_send_response(response, self.sock, request=self.request)
+            return
+            
+        # Continue, no error_msg present.
         headers = {"Sec-WebSocket-Accept": self.get_sec_accept_key(sec_key)}
         exts = self.request.get_header("sec-websocket-extensions", "").lower()
         negotiated_exts = []
         
         # Check origin validity
         try:
-            CSRFMiddleware._check_origin_ok(self.request)
+            CSRFMiddleware.check_origin_ok(self.request)
         except OriginError as e:
-            err = str(e)
-            body = None if not SETTINGS['DEBUG'] else f"Error: {err}"
-            response = (template_response if SETTINGS['DEBUG'] else simple_response)(HttpBadRequestResponse, body=body)
-            self.request.META["DEBUG_MESSAGE"] = err
+            # Create error response.
+            response = await async_make_response(
+                HttpBadRequestResponse,
+                extra_context={"error_label": "WebSocket Upgrade Failed"},
+                body="Failed to verify origin of the request."
+            )
+            
+            # Set debug message.
+            self.request.META["DEBUG_MESSAGE"] = f"Websocket Error: {e}"
+            
+            # Send the error reeponse immediately.
             await self._response_handler.async_send_response(response, self.sock, request=self.request)
             return
             
@@ -308,13 +328,8 @@ class WebSocketView(View):
         if negotiated_exts:
             headers["Sec-WebSocket-Extensions"] = "; ".join(negotiated_exts)
             
-        response = (
-            HttpSwitchProtocolResponse(upgrade_to="websocket", headers=headers)
-            if not error_msg
-            else (template_response if SETTINGS.get("DEBUG") else simple_response)(
-                HttpBadRequestResponse, body=error_msg
-            )
-        )
+        # Create switch proto response.
+        response = HttpSwitchProtocolResponse(upgrade_to="websocket", headers=headers)
         
         # Update state and send response
         self.state = State.INITIATING

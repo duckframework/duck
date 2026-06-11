@@ -1,13 +1,12 @@
 """
-Helpers for fast response generation.
+Pre-built error response factories for common HTTP error status codes.
+
+Thin wrappers around make_response that map each HTTP error class to a
+named function, providing a convenient one-call API for returning themed
+error pages from views and middleware.
 """
 
-from typing import (
-    Optional,
-    Union,
-    Dict,
-    Any,
-)
+from typing import Optional, Union, Dict, Any
 
 from duck.settings import SETTINGS
 from duck.http.request import HttpRequest
@@ -22,270 +21,425 @@ from duck.http.response import (
     HttpUnsupportedVersionResponse,
     HttpRequestTimeoutResponse,
 )
-from duck.shortcuts import (
-    simple_response,
-    template_response,
-)
+from duck.contrib.responses.base import make_response
 from duck.exceptions.all import (
     RequestSyntaxError,
     RequestUnsupportedVersionError,
 )
-from duck.html import escape
 from duck.meta import Meta
-from duck.routes import RouteRegistry
 from duck.logging import logger
 
 
-# CSS style for debug error
-debug_error_style = """
-<style>
-  h1 {
-    color: #d32f2f; /* Deep red for error text */
-  }
-  .request-info .inner {
-     background-color: #fdf2f2; /* Soft red background for better readability */
-     border-radius: 12px;
-     padding: 4px 4px;
-     list-style: none;
-  }
-  .request-info .inner li {
-    margin-left: 5px;
-    color: #d32f2f; /* Deep red for error text */
-  }
-</style>	
-"""
- 
-def get_debug_error_as_html(exception: Exception, request: Optional = None):
+def timeout_error(timeout: Optional[Union[int, float]] = None) -> HttpRequestTimeoutResponse:
     """
-    Returns the exception as html (only if DEBUG=True, else None).
-    """
-    if not SETTINGS["DEBUG"]:
-        # return None immediately
-        return
-    
-    # Expand exception  
-    exception = logger.expand_exception(exception)
-    
-    # Make html from exception
-    host = None # intialize host
-    exception = escape(exception).replace("^\n", "^\n\n").replace("\n", "\n<br>")
-    
-    if not request:
-       body = f"""
-       <div class="request-info">
-         <h4 class="subheading">Request</h4>
-         <ul class="inner">Failed to retreive request metadata.</ul>
-       </div><br><div class="exception">{exception}</div>
-       """
-       body = body + debug_error_style
-       return body # return the body and style
-    
-    else:
-      # Retrieve the original host
-      if SETTINGS["USE_DJANGO"]:
-          # If not real https host set, fallback to http host because this request might have been included inDUCK_EXPLICIT_URLS
-          host = request.META.get("REAL_HTTP_HOST") or request.META.get("HTTP_HOST")
-      
-      else:
-          host = request.META.get("HTTP_HOST")
-      
-      body = f"""
-      <div class="request-info">
-        <h4 class="subheading" >Request</h4>
-        <ul class="inner">
-          <li><p>Path: {request.path}</p>
-          <li><p>Method: {request.method}</p>
-          <li><p>Host: {host}</p>
-          <li><p>HTTP-Version: {request.http_version if request.request_store.get("h2_handling") != True else "HTTP/2"}</p>
-          <li><p>Content-Length: {request.content_obj.size}</p>
-        </ul>
-      </div><br><div class="exception">{exception}</div>
-      """
-      return body + debug_error_style
+    Builds a 408 Request Timeout response.
 
+    In debug mode the response body includes the configured timeout value
+    so developers can identify slow or stalled client connections quickly.
 
-def get_timeout_error_response(timeout: Optional[Union[int, float]]) -> HttpRequestTimeoutResponse:
-    """
-    Returns the request timeout error response.
-    
     Args:
-        timeout (Union[int, float]): The timeout in seconds.
-        
+        timeout: The timeout threshold in seconds that was exceeded. When
+            provided, the value is surfaced in the debug body.
+
+    Returns:
+        A themed HttpRequestTimeoutResponse.
     """
+    body = None
+
     if SETTINGS["DEBUG"]:
-        body = "<p>Client sent nothing in expected time it was suppose to!</p>"    
+        body = "<p>Client sent nothing within the expected time.</p>"
+
         if timeout:
-            body = "<p>Client sent nothing in expected time it was suppose to!</p><div>Timeout: ({timeout} seconds)</div>"
-        response = template_response(HttpRequestTimeoutResponse, body=body)
-    else:
-        response = simple_response(HttpRequestTimeoutResponse)
-    
-    # Finally return response.
-    return response
+            body = (
+                "<p>Client sent nothing within the expected time.</p>"
+                f"<div>Timeout: ({timeout} seconds)</div>"
+            )
+            
+    return make_response(HttpRequestTimeoutResponse, body=body)
 
 
-def get_server_error_response(exception: Exception, request: Optional = None):
+def server_error(exception: Exception, request: Optional[HttpRequest] = None) -> HttpResponse:
     """
-    Returns HttpServerError Response for the provided exception.
+    Builds a 500 Internal Server Error response for an unhandled exception.
+
+    In debug mode the full exception traceback and request metadata are
+    rendered into the response body. In production the body is suppressed
+    to avoid leaking internal details.
+
+    Args:
+        exception: The unhandled exception that triggered this error.
+        request: The active HTTP request. Used to annotate DEBUG_MESSAGE
+            in request metadata and to enrich the debug body.
+
+    Returns:
+        A themed HttpServerErrorResponse.
     """
     if request:
         request.META["DEBUG_MESSAGE"] = f"Internal Server Error: {request.path}"
-    
-    if SETTINGS["DEBUG"]:
-        body = get_debug_error_as_html(exception, request)
-        response = template_response(HttpServerErrorResponse, body=body)
-    else:
-        response = simple_response(HttpServerErrorResponse)
-    return response
+
+    # Finally, construct and build response.
+    return make_response(HttpServerErrorResponse, extra_context={"request": request, "exception": exception})
 
 
-def get_bad_gateway_error_response(exception: Optional[Exception], request: Optional = None):
+def bad_gateway(exception: Optional[Exception] = None, request: Optional[HttpRequest] = None) -> HttpResponse:
     """
-    Returns the appropriate Bad Gateway response.
+    Builds a 502 Bad Gateway response.
+
+    Typically raised when an upstream server or proxied service returns
+    an invalid or no response. In debug mode the exception detail is
+    included in the response body.
 
     Args:
-            exception (Optional[Exception]): The exception which might have caused this.
-            The exception may be included in response.
-            request (Optional): The current http request.
+        exception: The exception that triggered the bad gateway condition, if available.
+        
+        request: The active HTTP request. Used to annotate DEBUG_MESSAGE
+            in request metadata and to enrich the debug body.
+
+    Returns:
+        A themed HttpBadGatewayResponse.
     """
     if request:
         request.META["DEBUG_MESSAGE"] = f"Bad Gateway: {request.path}"
+
+    # Build and return response
+    context = {}
     
-    if SETTINGS["DEBUG"]:
-        body = get_debug_error_as_html(exception, request)
-        response = template_response(HttpBadGatewayResponse, body=body)
-    else:
-        response = simple_response(HttpBadGatewayResponse)
-    return response
-
-
-def get_404_error_response(request: HttpRequest):
-    """
-    Returns HttpNotFoundError Response for the request.
-    """
-    if request:
-        request.META["DEBUG_MESSAGE"] = f"Not Found: {request.path}"
+    if SETTINGS['DEBUG']:
+        context["exception"] = exception
     
-    if SETTINGS["DEBUG"]:
-        if request:
-            body = f'<p>Specified URI not found: {request.path}</p>'
-        else:
-            body = f'<p>Specified URI not found</p>'
-        
-        if SETTINGS["USE_DJANGO"]:
-            body += "<p>It seems like <code>USE_DJANGO=True</code> in settings, maybe this URL is registered and only known to Django.</p>"
-            body += "<p>You may add this URL to <code>DJANGO_SIDE_URLS</code> if that is the case.</p>"
-        
-        # Add a list of registered routes
-        body += "<h3>Duck tried the following routes</h3>"
-        body += "<div class='registered-routes'>"
-        
-        for route, info in RouteRegistry.url_map.items():
-            name = list(info.items())[0][0]
-            
-            # Replace < and > in route with allowed html signs (if present)
-            route = route.replace('>', "&gt;").replace('<', "&lt;")
-            body += f"""\n
-            <div class='route' >
-                <strong>{route}</strong> [name='{name}']
-            </div>
-            """
-        
-        # Close the div tag and add style
-        body += "</div>"
-        style = """
-        <style>
-           /* Other styles are derived from base_template_response.html */
-            :root {
-                --primary-color: #FF8C00;
-            }
-           div.registered-routes {
-               border-radius: var(--border-radius);
-               background-color: #fdf2f2; /* Soft red background for better readability */
-               padding: 5px;
-           }
-           
-            div.registered-routes .route {
-                margin-top: 2px;
-                color: var(--text-color);
-            }
-        </style>
-        """
-        body += style
-        
-        # Create an http template response
-        response = template_response(HttpNotFoundResponse, body=body)
-    else:
-        body = None
-        response = simple_response(HttpNotFoundResponse, body=body)
-    return response
+    # Return the final response.
+    return make_response(HttpBadGatewayResponse, extra_context=context)
 
 
-def get_method_not_allowed_error_response(request: HttpRequest, route_info: Optional[Dict[str, Any]] = None):
+def method_not_allowed(
+    request: Optional[HttpRequest] = None,
+    route_info: Optional[Dict[str, Any]] = None,
+) -> HttpResponse:
     """
-    Returns HttpMethodNotAllowed Response for the request.
-    
+    Builds a 405 Method Not Allowed response.
+
+    In debug mode the allowed methods for the matched route are surfaced
+    in the response body so developers can identify the correct verb quickly.
+
     Args:
-        request (HttpRequest): The http request.
-        route_info (Optional[Dict[str, Any]]): The route info for the request obtained by RouteRegistry.
+        request: The active HTTP request. Used to annotate DEBUG_MESSAGE
+            with the disallowed method.
+        route_info: The matched route's metadata as returned by RouteRegistry.
+            When provided, the allowed methods list is extracted and shown.
+
+    Returns:
+        A themed HttpMethodNotAllowedResponse.
     """
     if request:
         request.META["DEBUG_MESSAGE"] = f"Method Not Allowed: {request.method}"
-    
-    if SETTINGS["DEBUG"]:
-        if route_info:
-            body = f'<p>Specified Method not allowed</p><div class="allowed-methods"> Allowed Methods: {[m.upper() for m in route_info["methods"]]}'
-        else:
-            body = "<p>Specified Method not allowed</p>"
-        response = template_response(HttpMethodNotAllowedResponse, body=body)
+
+    if not SETTINGS["DEBUG"]:
+        return make_response(HttpMethodNotAllowedResponse)
+
+    if route_info:
+        allowed = [m.upper() for m in route_info["methods"]]
+        body = f"<p>Method not allowed.</p><div class='allowed-methods'>Allowed: {allowed}</div>"
     else:
-        body = None
-        response = simple_response(HttpMethodNotAllowedResponse, body=body)
-    return response
-
-
-def get_bad_request_error_response(exception: Exception, request: Optional[HttpRequest] = None):
-    """
-    Returns HttpBadRequest Response for the request.
+        body = "<p>Method not allowed.</p>"
     
+    # Return the final response.
+    return make_response(HttpMethodNotAllowedResponse, body=body)
+
+
+def bad_request(
+    exception: Exception,
+    request: Optional[HttpRequest] = None,
+) -> HttpResponse:
+    """
+    Builds the appropriate 4xx Bad Request response for a malformed request.
+
+    Inspects the exception type to select the most specific response class
+    and body message. Handles three distinct cases:
+
+    - RequestSyntaxError ➝ 400 Bad Request Syntax
+    - RequestUnsupportedVersionError ➝ 505 HTTP Version Not Supported
+    - HTTPS-over-HTTP detection ➝ 400 with a protocol mismatch hint
+    - All other cases ➝ generic 400 Bad Request
+
+    In debug mode the exception reference is appended to the body. In
+    production the body is suppressed entirely.
+
     Args:
-        exception (Exception): The appropriate exception.
-        request (Optional[HttpRequest]): The http request.
+        exception: The exception describing the malformed request.
+        request: The active HTTP request. Used to annotate DEBUG_MESSAGE
+            with a context-specific message for each error type.
+
+    Returns:
+        A themed HttpResponse with the appropriate 4xx status code.
     """
-    if request:
-        request.META["DEBUG_MESSAGE"] = f"Bad Request: {request.path}"
-    
     response_cls = HttpBadRequestResponse
-    ref = f"<p><b>Reference:</b> {exception}</p>"
     body = (
-        "<p>Bad request, there is an error in request.</p><p>"
-        "You might need to reconstruct request in right format</p>"
+        "<p>Bad request — there is an error in the request.</p>"
+        "<p>You may need to reconstruct the request in the correct format.</p>"
     )
-    
+
     if isinstance(exception, RequestSyntaxError):
         response_cls = HttpBadRequestSyntaxResponse
-        body = "<p>Bad request syntax.</p><p>You might need to reconstruct request in right format</p>"
-        
+        body = (
+            "<p>Bad request syntax.</p>"
+            "<p>You may need to reconstruct the request in the correct format.</p>"
+        )
         if request:
             request.META["DEBUG_MESSAGE"] = f"Bad Request Syntax: {request.path}"
 
     elif isinstance(exception, RequestUnsupportedVersionError):
         response_cls = HttpUnsupportedVersionResponse
-        body = "<p>Unsupported HTTP version.</p><p>You might need to switch to supported protocol.</p>"
+        body = (
+            "<p>Unsupported HTTP version.</p>"
+            "<p>You may need to switch to a supported protocol.</p>"
+        )
         if request:
             request.META["DEBUG_MESSAGE"] = f"Unsupported HTTP Version: {request.http_version}"
+
+    elif "'utf-8' codec can't decode byte" in str(exception) and not SETTINGS["ENABLE_HTTPS"]:
+        # Client is likely sending HTTPS-encrypted traffic to an HTTP server.
+        body = (
+            "<p>Bad request — there is an error in the request.</p>"
+            "<p>The client may be sending HTTPS-encrypted traffic to an HTTP server.</p>"
+        )
+        if request:
+            request.META["DEBUG_MESSAGE"] = (
+                "Bad Request: Client may be sending HTTPS traffic to an HTTP server."
+            )
+
     else:
-        # General request error
-        if "'utf-8' codec can't decode byte" in str(exception) and not SETTINGS['ENABLE_HTTPS']:
-            # This might be a client sending https traffic to our http server
-            response_cls = HttpBadRequestResponse
-            body = "<p>Bad request, there is an error in request.</p><p>This might be a client sending https encrypted data to our http server.</p>"
-            if request:
-                request.META["DEBUG_MESSAGE"] = "Bad Request: Client might be trying to send HTTPs traffic to our HTTP server"
-    
+        if request:
+            request.META["DEBUG_MESSAGE"] = f"Bad Request: {request.path}"
+
     if SETTINGS["DEBUG"]:
-        response = template_response(response_cls, body=body + ref)
-    else:
-        body = None
-        response = simple_response(response_cls, body=body)
-    return response
+        ref = f"<p><b>Reference:</b> {exception}</p>"
+        return make_response(response_cls, body=body + ref)
+    
+    # Return final response.
+    return make_response(response_cls)
+
+
+def not_found(request: Optional[HttpRequest] = None) -> HttpNotFoundResponse:
+    """
+    Builds a 404 Not Found response.
+
+    In debug mode the response renders the full route registry so
+    developers can quickly spot mismatched or missing URL patterns.
+    A Django-specific hint is included when USE_DJANGO=True to surface
+    the DJANGO_SIDE_URLS option.
+
+    Args:
+        request: The active HTTP request. Used to annotate DEBUG_MESSAGE
+            and to supply the requested path to the template.
+
+    Returns:
+        A themed HttpNotFoundResponse rendered from 404.html.
+    """
+    debug = bool(SETTINGS["DEBUG"])
+    
+    if request:
+        request.META["DEBUG_MESSAGE"] = f"Not Found: {request.path}"
+    
+    # Non-debug path — render the minimal template with no extra context.
+    if not debug:
+        return make_response(
+            HttpNotFoundResponse,
+            template="404.html",
+            extra_context={
+                "title": "404 · Not Found",
+                "status_code": 404,
+                "status_label": "Not Found",
+                "heading": "Page Not Found",
+                "body": (
+                    "The page you're looking for doesn't exist "
+                    "or has been moved."
+                ),
+                "request": request,
+                "debug": False,
+            },
+        )
+
+    # Build the structured route list for the debug panel.
+    routes = build_route_list()
+    context = {
+        "title": "404 · Not Found",
+        "status_code": 404,
+        "status_label": "Not Found",
+        "heading": "Page Not Found",
+        "body": (
+            "The URL you requested doesn't match any registered route. "
+            "Check the route registry below."
+        ),
+        "request": request,
+        "debug": True,
+        "use_django": bool(SETTINGS.get("USE_DJANGO")),
+        "routes": routes,
+    }
+    
+    # Finally, return the response.
+    return make_response(HttpNotFoundResponse, template="404.html", extra_context=context)
+
+
+def build_route_list() -> list[dict]:
+    """
+    Converts the RouteRegistry url_map into a list of template-friendly dicts.
+
+    Each entry exposes the URL pattern, its registered name, and any HTTP
+    methods declared on the route handler. The pattern is HTML-escaped so
+    the template can render angle-bracket parameters safely.
+
+    Returns:
+        A list of dicts with keys: pattern (str), name (str), methods (list[str]).
+    """
+    from duck.routes import RouteRegistry
+    
+    routes = []
+
+    for pattern, info in RouteRegistry.url_map.items():
+        # url_map stores {pattern: {name: handler}} — grab the first entry.
+        name, other = next(iter(info.items()))
+
+        # Escape < > so Jinja2 outputs them as visible characters.
+        safe_pattern = pattern.replace("<", "&lt;").replace(">", "&gt;")
+
+        # Pull declared HTTP methods off the handler if present.
+        methods = other[1]
+        
+        # Add route info.
+        routes.append({
+            "pattern": safe_pattern,
+            "name": name,
+            "methods": methods,
+        })
+
+    # Return the final routes.
+    return routes
+
+
+# ASYNC API
+
+async def async_timeout_error(timeout: Optional[Union[int, float]] = None) -> HttpRequestTimeoutResponse:
+    """
+    Asynchronously builds a 408 Request Timeout response.
+
+    In debug mode the response body includes the configured timeout value
+    so developers can identify slow or stalled client connections quickly.
+
+    Args:
+        timeout: The timeout threshold in seconds that was exceeded. When
+            provided, the value is surfaced in the debug body.
+
+    Returns:
+        A themed HttpRequestTimeoutResponse.
+    """
+    return await ensure_async(timeout_error)(timeout)
+
+
+async def async_server_error(exception: Exception, request: Optional[HttpRequest] = None) -> HttpResponse:
+    """
+    Asynchronously builds a 500 Internal Server Error response for an unhandled exception.
+
+    In debug mode the full exception traceback and request metadata are
+    rendered into the response body. In production the body is suppressed
+    to avoid leaking internal details.
+
+    Args:
+        exception: The unhandled exception that triggered this error.
+        request: The active HTTP request. Used to annotate DEBUG_MESSAGE
+            in request metadata and to enrich the debug body.
+
+    Returns:
+        A themed HttpServerErrorResponse.
+    """
+    return await ensure_async(server_error)(exception, request)
+
+
+async def async_bad_gateway(exception: Optional[Exception] = None, request: Optional[HttpRequest] = None) -> HttpResponse:
+    """
+    Asynchronously builds a 502 Bad Gateway response.
+
+    Typically raised when an upstream server or proxied service returns
+    an invalid or no response. In debug mode the exception detail is
+    included in the response body.
+
+    Args:
+        exception: The exception that triggered the bad gateway condition, if available.
+        
+        request: The active HTTP request. Used to annotate DEBUG_MESSAGE
+            in request metadata and to enrich the debug body.
+
+    Returns:
+        A themed HttpBadGatewayResponse.
+    """
+    await ensure_async(bad_gateway)(exception)
+
+
+async def async_not_found(request: Optional[HttpRequest] = None) -> HttpResponse:
+    """
+    Asynchronously builds a 404 Not Found response.
+
+    In debug mode the response lists all routes currently registered in
+    the RouteRegistry so developers can diagnose mismatched or missing
+    URL patterns. A Django-specific hint is appended when USE_DJANGO=True
+    to surface the DJANGO_SIDE_URLS option.
+
+    Args:
+        request: The active HTTP request. Used to annotate DEBUG_MESSAGE
+            and to include the requested path in the debug body.
+
+    Returns:
+        A themed HttpNotFoundResponse.
+    """
+    return await ensure_async(not_found)(request)
+
+
+async def async_method_not_allowed(
+    request: Optional[HttpRequest] = None,
+    route_info: Optional[Dict[str, Any]] = None,
+) -> HttpResponse:
+    """
+    Asynchronously builds a 405 Method Not Allowed response.
+
+    In debug mode the allowed methods for the matched route are surfaced
+    in the response body so developers can identify the correct verb quickly.
+
+    Args:
+        request: The active HTTP request. Used to annotate DEBUG_MESSAGE
+            with the disallowed method.
+        
+        route_info: The matched route's metadata as returned by RouteRegistry.
+            When provided, the allowed methods list is extracted and shown.
+
+    Returns:
+        A themed HttpMethodNotAllowedResponse.
+    """
+    return await ensure_async(method_not_allowed)(request, route_info)
+
+
+async def async_bad_request(
+    exception: Exception,
+    request: Optional[HttpRequest] = None,
+) -> HttpResponse:
+    """
+    Asynchronously builds the appropriate 4xx Bad Request response for a malformed request.
+
+    Inspects the exception type to select the most specific response class
+    and body message. Handles three distinct cases:
+
+    - RequestSyntaxError ➝ 400 Bad Request Syntax
+    - RequestUnsupportedVersionError ➝ 505 HTTP Version Not Supported
+    - HTTPS-over-HTTP detection ➝ 400 with a protocol mismatch hint
+    - All other cases ➝ generic 400 Bad Request
+
+    In debug mode the exception reference is appended to the body. In
+    production the body is suppressed entirely.
+
+    Args:
+        exception: The exception describing the malformed request.
+        request: The active HTTP request. Used to annotate DEBUG_MESSAGE
+            with a context-specific message for each error type.
+
+    Returns:
+        A themed HttpResponse with the appropriate 4xx status code.
+    """
+    return await ensure_async(bad_request)(exception, request)

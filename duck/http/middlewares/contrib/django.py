@@ -60,9 +60,11 @@ class DjangoRequestFixerMiddleware(BaseMiddleware):
             referer.scheme = "http" # modify to correct scheme
             referer.host = secret_domain
             referer.port = None
+            
             if referer.path and not referer.path.endswith('/'):
                 # Add django forward slash again if not found
                 referer.path = referer.path + "/"
+            
             modify_headers['referer'] = referer.to_str()
         
         if request.origin:

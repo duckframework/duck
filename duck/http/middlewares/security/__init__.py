@@ -1,3 +1,7 @@
+"""
+Security specific middlewares.
+"""
+
 from duck.http.middlewares.security.csrf import CSRFMiddleware  # noqa
 from duck.http.middlewares.security.header import (
     HostMiddleware,

@@ -1,0 +1,881 @@
+{# Jinja2 base template for Duck Framework built-in error and default pages. #}
+{#
+  Context variables:
+    title         (str)           — browser tab title
+    icon_link     (str)           — favicon URL
+    icon_type     (str)           — favicon MIME type
+    heading       (str)           — primary heading text
+    body          (str, optional) — explanatory body text
+    status_code   (int, optional) — HTTP status code, e.g. 404
+    status_label  (str, optional) — short label, e.g. "Not Found"
+    error_label   (str, optional) — red highlighted error string, e.g. exception class name
+    debug         (bool)          — show debug mode notice when True
+    request       (obj, optional) — exposes .method, .path, .http_version
+    exception     (obj, optional) — exposes .message and .traceback
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="icon" href="{{ icon_link }}" type="{{ icon_type }}"/>
+  <title>{{ title }}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700&display=swap');
+
+    /* Design tokens */
+    :root {
+      --bg:              #080808;
+      --surface:         #101010;
+      --surface-2:       #141414;
+      --surface-3:       #0c0c0c;
+      --orange:          #F5A623;
+      --orange-dim:      rgba(245, 166, 35, 0.08);
+      --orange-glow:     rgba(245, 166, 35, 0.15);
+      --red:             #E05252;
+      --red-dim:         rgba(224, 82, 82, 0.07);
+      --red-glow:        rgba(224, 82, 82, 0.18);
+      --green:           #4ADE80;
+      --blue:            #60A5FA;
+      --text:            #E8E8E8;
+      --text-dim:        #A0A0A0;
+      --muted:           #555555;
+      --border:          rgba(255, 255, 255, 0.06);
+      --border-subtle:   rgba(255, 255, 255, 0.03);
+      --mono:            'JetBrains Mono', monospace;
+      --radius-sm:       6px;
+      --radius:          10px;
+      --radius-lg:       14px;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      overflow-x: hidden;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 1.5rem;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Subtle dot-grid texture layer */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Radial vignette to frame the card */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse 70% 60% at 50% 50%,
+        transparent 30%,
+        rgba(0, 0, 0, 0.6) 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Ambient watermark — big status code behind the card */
+    .watermark {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .watermark span {
+      font-family: var(--mono);
+      font-size: clamp(140px, 32vw, 380px);
+      font-weight: 700;
+      color: transparent;
+      -webkit-text-stroke: 1px rgba(245, 166, 35, 0.055);
+      letter-spacing: -0.04em;
+      user-select: none;
+      line-height: 1;
+      animation: watermark-drift 12s ease-in-out infinite alternate;
+    }
+
+    @keyframes watermark-drift {
+      from { transform: translateY(0px) scale(1); opacity: 0.7; }
+      to   { transform: translateY(-18px) scale(1.015); opacity: 1; }
+    }
+
+    /* Animated scan line — sweeps down on load */
+    .scanline {
+      position: fixed;
+      top: -4px;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        var(--orange) 20%,
+        rgba(245,166,35,0.6) 50%,
+        var(--orange) 80%,
+        transparent 100%);
+      pointer-events: none;
+      z-index: 100;
+      animation: scanline-sweep 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      opacity: 0;
+    }
+
+    @keyframes scanline-sweep {
+      0%   { top: -4px; opacity: 0; }
+      5%   { opacity: 1; }
+      95%  { opacity: 0.4; }
+      100% { top: 100vh; opacity: 0; }
+    }
+
+    /* Floating ambient particles */
+    .particles {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .particle {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      border-radius: 50%;
+      background: var(--orange);
+      opacity: 0;
+      animation: particle-float var(--dur, 8s) var(--delay, 0s) ease-in-out infinite;
+    }
+
+    @keyframes particle-float {
+      0%   { transform: translateY(100vh) scale(0); opacity: 0; }
+      10%  { opacity: 0.35; }
+      90%  { opacity: 0.15; }
+      100% { transform: translateY(-80px) scale(1.5); opacity: 0; }
+    }
+
+    /* Main card — floats above all background layers */
+    .page {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 640px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      background: rgba(14, 14, 14, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius-lg);
+      padding: 2.25rem;
+      -webkit-backdrop-filter: blur(20px) saturate(140%);
+      backdrop-filter: blur(20px) saturate(140%);
+      word-break: break-word;
+      overflow-wrap: break-word;
+      box-shadow:
+        0 0 0 1px var(--border-subtle),
+        0 24px 80px rgba(0, 0, 0, 0.7),
+        0 0 60px rgba(245, 166, 35, 0.03);
+      animation: card-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+      animation-delay: 0.15s;
+    }
+
+    @keyframes card-rise {
+      from { opacity: 0; transform: translateY(20px) scale(0.985); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* Animated corner bracket decorations */
+    .page::before,
+    .page::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      opacity: 0;
+      animation: bracket-appear 0.4s ease forwards;
+      animation-delay: 0.6s;
+    }
+
+    .page::before {
+      top: -1px;
+      left: -1px;
+      border-top: 2px solid var(--orange);
+      border-left: 2px solid var(--orange);
+      border-radius: 4px 0 0 0;
+    }
+
+    .page::after {
+      bottom: -1px;
+      right: -1px;
+      border-bottom: 2px solid var(--orange);
+      border-right: 2px solid var(--orange);
+      border-radius: 0 0 4px 0;
+    }
+
+    @keyframes bracket-appear {
+      from { opacity: 0; transform: scale(0.7); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    /* Orange pill eyebrow — status code + label */
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--orange);
+      background: var(--orange-dim);
+      border: 1px solid rgba(245, 166, 35, 0.18);
+      border-radius: 999px;
+      padding: 0.3rem 0.8rem;
+      width: fit-content;
+      animation: fade-in 0.4s ease both;
+      animation-delay: 0.3s;
+    }
+
+    .eyebrow-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--orange);
+      flex-shrink: 0;
+      animation: dot-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes dot-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(0.75); }
+    }
+
+    /* Primary heading */
+    h1 {
+      font-size: clamp(1.5rem, 5vw, 2rem);
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.2;
+      letter-spacing: -0.025em;
+      animation: fade-in 0.4s ease both;
+      animation-delay: 0.35s;
+    }
+
+    .body-text {
+      font-size: 0.9375rem;
+      line-height: 1.75;
+      color: var(--text-dim);
+      animation: fade-in 0.4s ease both;
+      animation-delay: 0.4s;
+    }
+
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Red error label — exception class or short error string */
+    .error-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--mono);
+      font-size: 0.775rem;
+      font-weight: 600;
+      color: var(--red);
+      background: var(--red-dim);
+      border: 1px solid rgba(224, 82, 82, 0.22);
+      border-radius: var(--radius-sm);
+      padding: 0.375rem 0.75rem;
+      width: fit-content;
+    }
+
+    .error-label::before {
+      content: '';
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--red);
+      flex-shrink: 0;
+      animation: dot-pulse 1.5s ease-in-out infinite;
+    }
+
+    /* Thin divider */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      border: none;
+      margin: 0;
+    }
+
+    /* Request metadata row */
+    .request-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      padding: 0.625rem 0.875rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0;
+    }
+
+    .method-badge {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--orange);
+      background: var(--orange-dim);
+      border: 1px solid rgba(245, 166, 35, 0.15);
+      border-radius: 4px;
+      padding: 0.2rem 0.5rem;
+      flex-shrink: 0;
+    }
+
+    .request-meta-item {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--muted);
+      min-width: 0;
+    }
+
+    .request-meta-sep {
+      color: var(--border);
+      font-size: 1rem;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    /* Expandable exception block */
+    .exception-block {
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(224, 82, 82, 0.18);
+      border-radius: var(--radius);
+      overflow: hidden;
+      /* Allow the card to grow when traceback is open */
+      transition: box-shadow 0.2s ease;
+    }
+
+    .exception-block[open] {
+      box-shadow: 0 0 30px rgba(224, 82, 82, 0.07);
+    }
+
+    /* Summary row — acts as the expand toggle */
+    .exception-summary {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      padding: 0.8rem 1rem;
+      background: var(--red-dim);
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
+      min-width: 0;
+      transition: background 0.15s ease;
+    }
+
+    .exception-summary::-webkit-details-marker { display: none; }
+    .exception-summary::marker               { display: none; }
+
+    .exception-summary:hover {
+      background: var(--red-glow);
+    }
+
+    /* "Exception" static label in the summary */
+    .exception-label {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--red);
+      background: rgba(224, 82, 82, 0.12);
+      border: 1px solid rgba(224, 82, 82, 0.2);
+      border-radius: 4px;
+      padding: 0.15rem 0.45rem;
+      flex-shrink: 0;
+    }
+
+    /* Exception message — truncated until expanded */
+    .exception-message {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+
+    /* Chevron rotates when expanded */
+    .exception-chevron {
+      margin-left: auto;
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+      color: var(--muted);
+      transition: transform 0.2s ease;
+    }
+
+    details[open] .exception-chevron {
+      transform: rotate(180deg);
+    }
+
+    /* Traceback scroll area */
+    .exception-traceback {
+      padding: 0;
+      background: var(--surface-3);
+      border-top: 1px solid rgba(224, 82, 82, 0.1);
+      overflow-x: auto;
+      /* Tall tracebacks scroll vertically */
+      max-height: 480px;
+      overflow-y: auto;
+    }
+
+    /* Custom scrollbar for traceback */
+    .exception-traceback::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    .exception-traceback::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .exception-traceback::-webkit-scrollbar-thumb {
+      background: rgba(224, 82, 82, 0.25);
+      border-radius: 3px;
+    }
+
+    .exception-traceback::-webkit-scrollbar-thumb:hover {
+      background: rgba(224, 82, 82, 0.4);
+    }
+
+    /* Traceback toolbar — line count + copy button */
+    .traceback-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.45rem 1rem;
+      background: rgba(0, 0, 0, 0.3);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .traceback-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .copy-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      font-weight: 600;
+      color: var(--muted);
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.2rem 0.5rem;
+      cursor: pointer;
+      transition: color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .copy-btn:hover {
+      color: var(--text);
+      border-color: rgba(255,255,255,0.15);
+    }
+
+    .copy-btn.copied {
+      color: var(--green);
+      border-color: rgba(74, 222, 128, 0.3);
+    }
+
+    /* Pre block inside traceback */
+    .exception-traceback pre {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      line-height: 1.7;
+      color: #B8B8B8;
+      white-space: pre;
+      margin: 0;
+      padding: 1rem;
+    }
+
+    /* Syntax colouring helpers applied via JS */
+    .tb-file    { color: #7DD3FC; }   /* File path — soft blue   */
+    .tb-lineno  { color: var(--orange); } /* Line number — orange    */
+    .tb-code    { color: #E2E8F0; }   /* Code line — near white  */
+    .tb-error   { color: var(--red); font-weight: 600; } /* Error line — red bold */
+
+    /* Navigation actions */
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      animation: fade-in 0.4s ease both;
+      animation-delay: 0.55s;
+    }
+
+    /* Ghost back button */
+    .btn-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text);
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: var(--radius-sm);
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .btn-back:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.2);
+      box-shadow: 0 0 16px rgba(245, 166, 35, 0.08);
+    }
+
+    .btn-back svg {
+      flex-shrink: 0;
+      color: var(--muted);
+    }
+
+    /* Text link — Go Home */
+    .btn-home {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.875rem;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+
+    .btn-home:hover {
+      color: var(--text);
+    }
+
+    /* Debug notice */
+    .debug-notice {
+      display: block;
+      flex-direction: column;
+      gap: 0.25rem;
+      padding: 0.875rem 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.8125rem;
+      line-height: 1.65;
+      color: var(--text-dim);
+    }
+
+    .debug-notice code {
+      font-family: var(--mono);
+      font-size: 0.8em;
+      color: var(--orange);
+      background: rgba(245, 166, 35, 0.08);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      word-break: break-all;
+    }
+
+    /* Duck Framework footer badge */
+    .footer-badge {
+      position: relative;
+      z-index: 10;
+      margin-top: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      opacity: 0.5;
+      animation: fade-in 0.4s ease both;
+      animation-delay: 0.7s;
+      user-select: none;
+    }
+
+    .footer-badge svg {
+      opacity: 0.7;
+    }
+
+    /* Compact layout for very small phones */
+    @media (max-width: 380px) {
+      body { padding: 1.25rem 0.875rem; }
+      .page { padding: 1.5rem 1.25rem; gap: 1rem; }
+      h1 { font-size: 1.3rem; }
+    }
+
+    /* Standard mobile sizing */
+    @media (max-width: 480px) {
+      body { padding: 1.75rem 1rem; }
+      .page { padding: 1.75rem 1.25rem; max-width: 100%; }
+      .request-meta-item { white-space: normal; word-break: break-all; }
+      .request-meta-sep  { display: none; }
+      .exception-traceback { max-height: 320px; }
+    }
+
+    /* Wider card when a traceback is present for better readability */
+    @media (min-width: 768px) {
+      .page.has-traceback {
+        max-width: 780px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  {# One-shot scan line sweep on page load #}
+  <div class="scanline" aria-hidden="true"></div>
+
+  {# Floating ambient particles — JS positions and assigns timing variables #}
+  <div class="particles" aria-hidden="true" id="particles"></div>
+
+  {# Ambient watermark — status code or duck emoji behind the card #}
+  <div class="watermark" aria-hidden="true">
+    <span>{{ status_code if status_code is defined else "🦆" }}</span>
+  </div>
+
+  <main class="page{% if exception is defined and exception %} has-traceback{% endif %}">
+    {% block main %}
+
+      {# Eyebrow pill — e.g. "404 · Not Found" #}
+      {% if status_code is defined %}
+        <span class="eyebrow">
+          <span class="eyebrow-dot"></span>
+          {{ status_code }}&nbsp;·&nbsp;{{ status_label | default("Error") }}
+        </span>
+      {% endif %}
+
+      {# Primary heading #}
+      <h1>{{ heading }}</h1>
+      
+      {# Request metadata — method, path, and HTTP version #}
+      {% if request is defined and request %}
+        <div class="request-meta">
+          <span class="method-badge">{{ request.method }}</span>
+          <span class="request-meta-item">{{ request.path }}</span>
+          {% if request.http_version is defined and request.http_version %}
+            <span class="request-meta-sep">·</span>
+            <span class="request-meta-item">{{ request.http_version }}</span>
+          {% endif %}
+        </div>
+      {% endif %}
+      
+      {# Red error label — exception class name or short error string #}
+      {% if error_label is defined and error_label %}
+        <span class="error-label">{{ error_label }}</span>
+      {% endif %}
+      
+      {# Body message #}
+      {% if body %}
+        <p class="body-text">{{ body }}</p>
+      {% endif %}
+
+      {# Expandable exception block with sticky toolbar + copy button #}
+      {% if exception is defined and exception %}
+        <details class="exception-block" open>
+          <summary class="exception-summary">
+            <span class="exception-label">
+              {{ exception.__class__.__name__ | to_spaced_camel_case | default("Exception") }}
+            </span>
+            <span class="exception-message">
+              {{ exception | default("An unhandled exception occurred.") }}
+            </span>
+            <svg class="exception-chevron" viewBox="0 0 16 16" fill="none"
+                 xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </summary>
+
+          {% if exception.__traceback__ %}
+            <div class="traceback-toolbar">
+                <span class="traceback-label">Traceback</span>
+                <button class="copy-btn" id="copy-tb-btn" type="button"
+                        onclick="copyTraceback()">
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
+                       xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <rect x="3" y="3" width="6" height="6" rx="1"
+                          stroke="currentColor" stroke-width="1.2"/>
+                    <path d="M1 7V1h6" stroke="currentColor" stroke-width="1.2"
+                          stroke-linecap="round"/>
+                  </svg>
+                  Copy
+                </button>
+              </div>
+            <div class="exception-traceback">
+              <pre id="traceback-pre">{{ expand_exception(exception) | default("Traceback not retrievable") }}</pre>
+            </div>
+          {% endif %}
+        </details>
+      {% endif %}
+
+      {# Debug mode notice — only when DEBUG=True #}
+      {% if debug %}
+        <div class="debug-notice">
+          You are seeing this page because <code>DEBUG=True</code> is set.
+          Switch to <code>DEBUG=False</code> to show the standard response.
+        </div>
+      {% endif %}
+
+      {# Navigation actions — Go Back (primary) and Go Home (secondary) #}
+      <div class="nav-actions">
+        <button class="btn-back"
+                onclick="history.length > 1 ? history.back() : window.location.href='/'">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
+               xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M8.5 2.5L4 7l4.5 4.5" stroke="currentColor" stroke-width="1.5"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Go Back
+        </button>
+        <a class="btn-home" href="javascript:void(0)"
+           onclick="window.location.href = window.location.origin">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
+               xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M1 5.5L6 1l5 4.5M2 5v5.5h3V8h2v2.5h3V5"
+                  stroke="currentColor" stroke-width="1.3"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Go Home
+        </a>
+      </div>
+
+    {% endblock main %}
+  </main>
+  
+  <script>
+    // Spawn floating particles with randomised positions and timing
+    (function spawnParticles() {
+      const container = document.getElementById('particles');
+      if (!container) return;
+
+      const count = 18;
+      for (let i = 0; i < count; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'particle';
+        dot.style.cssText = [
+          `left: ${Math.random() * 100}%`,
+          `--dur: ${6 + Math.random() * 10}s`,
+          `--delay: ${Math.random() * 8}s`,
+          `width: ${1 + Math.random() * 2}px`,
+          `height: ${1 + Math.random() * 2}px`,
+          `opacity: ${0.15 + Math.random() * 0.25}`,
+        ].join(';');
+        container.appendChild(dot);
+      }
+    })();
+
+    // Copy traceback text to clipboard and briefly show confirmation
+    function copyTraceback() {
+      const pre = document.getElementById('traceback-pre');
+      const btn = document.getElementById('copy-tb-btn');
+      if (!pre || !btn) return;
+
+      navigator.clipboard.writeText(pre.textContent || '').then(function () {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(function () {
+          btn.innerHTML = `
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
+                 xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="3" y="3" width="6" height="6" rx="1"
+                    stroke="currentColor" stroke-width="1.2"/>
+              <path d="M1 7V1h6" stroke="currentColor" stroke-width="1.2"
+                    stroke-linecap="round"/>
+            </svg>Copy`;
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    // Highlight key parts of the traceback for faster scanning
+    (function colourTraceback() {
+      const pre = document.getElementById('traceback-pre');
+      if (!pre) return;
+
+      const raw = pre.textContent || '';
+      const lines = raw.split('\n');
+
+      const html = lines.map(function (line) {
+        // File reference lines — "  File "path/to/file.py", line N, in fn"
+        if (/^\s*File ".+", line \d+/.test(line)) {
+          return line
+            .replace(/(File ")([^"]+)(", line )(\d+)/,
+              '<span class="tb-file">$1$2$3</span><span class="tb-lineno">$4</span>');
+        }
+        // Final error line — "ExceptionType: message"
+        if (/^[A-Z][a-zA-Z0-9_]*(\.[A-Z][a-zA-Z0-9_]*)*:\s/.test(line.trim())) {
+          return `<span class="tb-error">${line}</span>`;
+        }
+        // Code lines inside a frame — indented non-File lines
+        if (/^\s{4}[^\s]/.test(line)) {
+          return `<span class="tb-code">${line}</span>`;
+        }
+        return line;
+      });
+
+      pre.innerHTML = html.join('\n');
+    })();
+  </script>
+
+  {# Slot for child templates to inject page-specific styles and scripts #}
+  {% block extra %}{% endblock %}
+
+</body>
+</html>
+

@@ -31,8 +31,7 @@ from duck.settings import SETTINGS
 from duck.utils.dateutils import gmt_date
 from duck.shortcuts import (
     replace_response,
-    template_response,
-    simple_response,
+    make_response,
     to_response,
 )
 from duck.csp import csp_nonce, csp_nonce_flag
@@ -421,20 +420,15 @@ class ResponseFinalizer:
             response.parse_range(start, end) # set content range headers (if applicable)
             
         except ValueError as e:
-            # replace response data
-            new_response = None
-            
-            if SETTINGS["DEBUG"]:
-                new_response = template_response(
-                    HttpRangeNotSatisfiableResponse,
-                    body=(
-                        f"<p>Range is not satisfiable, could not resolve: {range_header}</p>"
-                        f"<p>Exception: {e}</p>"
-                    )
+            # Replace response data
+            new_response = make_response(
+                HttpRangeNotSatisfiableResponse,
+                body=(
+                    f"<p>Range is not satisfiable, could not resolve: {range_header}</p>"
+                    + (f"<p>Exception: {e}</p>" if SETTINGS['DEBUG'] else "")
                 )
-            else:
-                new_response = simple_response(HttpRangeNotSatisfiableResponse)
-            
+            )
+                
             # Replace response with new data
             replace_response(response, new_response)
             
@@ -706,19 +700,14 @@ class AsyncResponseFinalizer(ResponseFinalizer):
             response.parse_range(start, end) # set content range headers (if applicable)
             
         except ValueError as e:
-            # replace response data
-            new_response = None
-            
-            if SETTINGS["DEBUG"]:
-                new_response = template_response(
-                    HttpRangeNotSatisfiableResponse,
-                    body=(
-                        f"<p>Range is not satisfiable, could not resolve: {range_header}</p>"
-                        f"<p>Exception: {e}</p>"
-                    )
+            # Replace response data
+            new_response = make_response(
+                HttpRangeNotSatisfiableResponse,
+                body=(
+                    f"<p>Range is not satisfiable, could not resolve: {range_header}</p>"
+                    + (f"<p>Exception: {e}</p>" if SETTINGS['DEBUG'] else "")
                 )
-            else:
-                new_response = simple_response(HttpRangeNotSatisfiableResponse)
+            )
             
             # Replace response with new data
             replace_response(response, new_response)

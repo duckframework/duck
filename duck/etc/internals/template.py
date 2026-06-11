@@ -10,6 +10,7 @@ from typing import (
 
 from duck.http.request import HttpRequest
 from duck.http.response import TemplateResponse
+from duck.contrib.sync import ensure_async
 from duck.storage import duck_storage
 from duck.utils.path import joinpaths, sanitize_path_segment
 from duck.template.environment import Jinja2Engine
@@ -19,11 +20,11 @@ from duck.template.loaders import Jinja2FileSystemLoader
 def internal_render(
     request: HttpRequest,
     template: str,
-    context: Dict[Any, Any] = {},
+    context: Dict[Any, Any] = None,
     **kwargs,
 ) -> TemplateResponse:
     """
-    Function to render internal templates.
+    Render internal templates.
     
     Args:
         request (HttpRequest): The request object.
@@ -46,6 +47,27 @@ def internal_render(
     )
 
 
+async def async_internal_render(
+    request: HttpRequest,
+    template: str,
+    context: Dict[Any, Any] = None,
+    **kwargs,
+) -> TemplateResponse:
+    """
+    Asynchronously render internal templates.
+    
+    Args:
+        request (HttpRequest): The request object.
+        template (str): The Jinja2 template.
+        context (dict, optional): The context dictionary to pass to the template. Defaults to an empty dictionary.
+        **kwargs: Additional keyword arguments to parse to TemplateResponse.
+
+    Returns:
+        TemplateResponse: The response object with the rendered content.
+    """
+    await ensure_async(internal_render)(request, template, context, **kwargs)
+
+
 class InternalJinja2FileSystemLoader(Jinja2FileSystemLoader):
     def global_template_dirs(self) -> List[str]:
         # Expose the base template dir.
@@ -59,9 +81,8 @@ class InternalJinja2FileSystemLoader(Jinja2FileSystemLoader):
 
 class InternalJinja2Engine(Jinja2Engine):
     """
-    InternalJinja2TemplateEngine class representing duck's internal template engine,
-    meaning this engine is focused only on retreiving templates that are within the internal
-    `Duck` storage.
+    InternalJinja2TemplateEngine class representing duck's internal template engine, meaning this engine is 
+    focused only on retreiving templates that are within the internal `Duck` storage.
     """
     @classmethod
     @lru_cache(maxsize=1)

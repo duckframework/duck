@@ -32,7 +32,7 @@ If Certbot is not available yet you installed it, you can point directly to Cert
 # settings.py
 
 BLUEPRINTS = [
-    "duck.etc.apps.certbot.blueprint.Certbot",
+    "duck.etc.blueprints.certbot.blueprint.Certbot",
     # other blueprints...
 ]
 ```
@@ -109,7 +109,7 @@ CERTBOT_EMAIL = "your_email@domain.com"
 ENABLE_AUTOMATIONS = True
 
 BLUEPRINTS = [
-    "duck.etc.apps.certbot.blueprint.Certbot",
+    "duck.etc.blueprints.certbot.blueprint.Certbot",
     # other blueprints...
 ]
 

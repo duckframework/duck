@@ -21,7 +21,7 @@ To start serving the sitemap, add the blueprint in your settings:
 
 BLUEPRINTS = [
     # Other blueprints
-    "duck.etc.apps.essentials.blueprint.Sitemap",
+    "duck.etc.blueprints.essentials.blueprint.Sitemap",
 ]
 ```
 

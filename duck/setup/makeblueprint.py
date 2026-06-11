@@ -30,8 +30,8 @@ from . import views
         # URL patterns here
     ],
     prepend_name_to_urls=True,
-    static_dir="static",
-    template_dir="templates",
+    static_dir="ui/static",
+    template_dir="ui/templates",
     enable_static_dir=True,
     enable_template_dir=True,
 )

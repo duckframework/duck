@@ -160,6 +160,7 @@ class MetaShareMiddleware(BaseMiddleware):
             if key.startswith("X-{secret}-"):
                 # Skip if the meta key already matches the prefix
                 continue
+            
             value = str(value) # convert value to string
             value = compress_and_encode(value) + f"@{value_type}"
             headers[header] = value
@@ -169,3 +170,4 @@ class MetaShareMiddleware(BaseMiddleware):
     def process_request(cls, request):
         meta_headers = cls.compile_meta_to_headers(request.META)
         request.headers.update(headers)
+        return cls.request_ok

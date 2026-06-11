@@ -43,11 +43,7 @@ from duck.utils.path import (
     joinpaths,
 )
 from duck.utils.urlcrack import URL
-from duck.contrib.responses import (
-    simple_response,
-    template_response,
-)
-from duck.contrib.responses.errors import get_404_error_response
+from duck.contrib.responses import make_response
 from duck.contrib.sync import (
   sync_to_async,
   convert_to_sync_if_needed,
@@ -65,8 +61,7 @@ from duck.routes import RouteRegistry, Blueprint
 
 
 __all__ = [
-    "simple_response",
-    "template_response",
+    "make_response",
     "URLResolveError",
     "jinja2_render",
     "django_render",
@@ -458,19 +453,14 @@ def not_found404(request: Optional[HttpRequest] = None, body: str = None) -> Htt
     Returns:
         HttpResponse: The http not found response object.
     """
+    from duck.contrib.responses.errors import not_found as _not_found
+    
     if body:
-        if SETTINGS['DEBUG']:
-            response = template_response(
-                HttpNotFoundResponse,
-                body=body,
-            )
-        else:
-            response = simple_response(
-                HttpNotFoundResponse,
-                body=body,
-            )
+        response = make_response(HttpNotFoundResponse, body=body)
         return response
-    return get_404_error_response(request)
+    
+    # No body provided, return the base not found response.
+    return _not_found(request)
 
 
 def merge(

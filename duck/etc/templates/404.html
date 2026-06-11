@@ -1,0 +1,279 @@
+{# 404 Not Found page for Duck Framework. #}
+{#
+  Extends base.html. Adds a debug-only route registry panel when DEBUG=True.
+
+  Extra context variables (on top of base.html):
+    routes      (list[dict])  — [{pattern, name, methods}] from RouteRegistry
+    use_django  (bool)        — True when USE_DJANGO=1 is active
+#}
+{% extends "base.html" %}
+
+{% block main %}
+
+  {# Status eyebrow pill #}
+  <span class="eyebrow">
+    <span class="eyebrow-dot"></span>
+    404 &nbsp;·&nbsp; Not Found
+  </span>
+
+  {# Primary heading #}
+  <h1>Page Not Found</h1>
+
+  {# Explanation — adjusted copy when debug routes are visible #}
+  <p class="body-text">
+    {% if debug and routes %}
+      No route matched the requested path. Browse the registry below to
+      find the right one.
+    {% else %}
+      The page you're looking for doesn't exist or has been moved.
+    {% endif %}
+  </p>
+
+  {# Request metadata row #}
+  {% if request is defined and request %}
+    <div class="request-meta">
+      <span class="method-badge">{{ request.method }}</span>
+      <span class="request-meta-item">{{ request.path }}</span>
+      {% if request.http_version is defined and request.http_version %}
+        <span class="request-meta-sep">·</span>
+        <span class="request-meta-item">{{ request.http_version }}</span>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {# Debug-only section #}
+  {% if debug %}
+
+    {# Django side-URL hint #}
+    {% if use_django %}
+      <div class="debug-notice">
+        <code>USE_DJANGO=True</code> is active — this URL may be registered in
+        Django only. Add it to <code>DJANGO_SIDE_URLS</code> if that is the case.
+      </div>
+    {% endif %}
+
+    {# Route registry panel #}
+    {% if routes %}
+      <div class="routes-panel">
+
+        {# Panel header — label and total count #}
+        <div class="routes-header">
+          <span class="routes-label">Registered Routes</span>
+          <span class="routes-count">{{ routes | length }}</span>
+        </div>
+
+        {# Two-column card grid #}
+        <div class="routes-grid">
+          {% for route in routes %}
+            <div class="route-card">
+
+              {# Method badges — only rendered when methods are declared #}
+              {% if route.get('methods') %}
+                <div class="route-methods">
+                  {% for method in route.get('methods', []) %}
+                    <span class="route-method route-method--{{ method | lower }}">
+                      {{ method }}
+                    </span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+
+              {# URL pattern — <param> segments highlighted via JS #}
+              <span class="route-pattern">{{ route.pattern }}</span>
+
+              {# Route name — muted label at bottom of card #}
+              <span class="route-name">{{ route.name }}</span>
+
+            </div>
+          {% endfor %}
+        </div>
+
+      </div>
+
+    {% else %}
+      <div class="debug-notice">
+        No routes are currently registered in <code>RouteRegistry</code>.
+      </div>
+    {% endif %}
+
+  {% endif %}
+  
+  {# Debug mode notice — only when DEBUG=True #}
+  {% if debug %}
+    <div class="debug-notice">
+      You are seeing this page because <code>DEBUG=True</code> is set.
+      Switch to <code>DEBUG=False</code> to show the standard response.
+    </div>
+  {% endif %}
+
+  {# Navigation actions #}
+  <div class="nav-actions">
+    <button class="btn-back"
+            onclick="history.length > 1 ? history.back() : window.location.href='/'">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
+           xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M8.5 2.5L4 7l4.5 4.5" stroke="currentColor" stroke-width="1.5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Go Back
+    </button>
+    <a class="btn-home" href="javascript:void(0)"
+       onclick="window.location.href = window.location.origin">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
+           xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M1 5.5L6 1l5 4.5M2 5v5.5h3V8h2v2.5h3V5"
+              stroke="currentColor" stroke-width="1.3"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Go Home
+    </a>
+  </div>
+
+{% endblock main %}
+
+{% block extra %}
+<style>
+  /* Widen the card on desktop to accommodate the route grid */
+  @media (min-width: 768px) {
+    .page { max-width: 740px; }
+  }
+
+  /* Outer panel — border + rounded corners wrapping header and grid */
+  .routes-panel {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: var(--radius);
+    overflow: hidden;
+    animation: fade-in 0.4s ease both;
+    animation-delay: 0.45s;
+  }
+
+  /* Header bar — label on the left, count pill on the right */
+  .routes-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 1rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .routes-label {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* Orange pill showing total route count */
+  .routes-count {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--orange);
+    background: var(--orange-dim);
+    border: 1px solid rgba(245, 166, 35, 0.2);
+    border-radius: 999px;
+    padding: 0.1rem 0.55rem;
+    line-height: 1.7;
+  }
+
+  /* Grid — 1px gaps act as borders between cards */
+  .routes-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1px;
+    background: rgba(255, 255, 255, 0.04);
+    max-height: 420px;
+    overflow-y: auto;
+  }
+
+  .routes-grid::-webkit-scrollbar       { width: 5px; }
+  .routes-grid::-webkit-scrollbar-track { background: transparent; }
+  .routes-grid::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.07);
+    border-radius: 3px;
+  }
+
+  /* Single column on narrow screens */
+  @media (max-width: 520px) {
+    .routes-grid { grid-template-columns: 1fr; }
+  }
+
+  /* Route card — stacks methods, pattern, name vertically */
+  .route-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.875rem 1rem;
+    background: var(--surface-3);
+    transition: background 0.12s ease;
+    min-width: 0;
+  }
+
+  .route-card:hover { background: #111111; }
+
+  /* Row of HTTP method badges */
+  .route-methods {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+
+  /* Base method pill */
+  .route-method {
+    font-family: var(--mono);
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 3px;
+    padding: 0.15rem 0.42rem;
+    flex-shrink: 0;
+  }
+
+  /* Per-method colour variants */
+  .route-method--get    { color: #4ADE80; background: rgba(74,222,128,0.09);  border: 1px solid rgba(74,222,128,0.2);  }
+  .route-method--post   { color: #60A5FA; background: rgba(96,165,250,0.09);  border: 1px solid rgba(96,165,250,0.2);  }
+  .route-method--put    { color: #F5A623; background: rgba(245,166,35,0.09);  border: 1px solid rgba(245,166,35,0.2);  }
+  .route-method--patch  { color: #C084FC; background: rgba(192,132,252,0.09); border: 1px solid rgba(192,132,252,0.2); }
+  .route-method--delete { color: #E05252; background: rgba(224,82,82,0.09);   border: 1px solid rgba(224,82,82,0.2);   }
+  .route-method--ws     { color: #34D399; background: rgba(52,211,153,0.09);  border: 1px solid rgba(52,211,153,0.2);  }
+
+  /* URL pattern — monospace, wraps on long paths */
+  .route-pattern {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.5;
+    word-break: break-all;
+  }
+
+  /* <param> segments inside patterns — coloured orange via JS */
+  .route-pattern .param { color: var(--orange); }
+
+  /* Route name — small muted label beneath the pattern */
+  .route-name {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+</style>
+
+<script>
+  // Wrap <param> and &lt;param&gt; segments in each pattern with a coloured span
+  (function highlightParams() {
+    document.querySelectorAll('.route-pattern').forEach(function (el) {
+      el.innerHTML = el.textContent.replace(
+        /(&lt;[^&]+&gt;|<[^>]+>)/g,
+        '<span class="param">$1</span>'
+      );
+    });
+  })();
+</script>
+{% endblock extra %}
+

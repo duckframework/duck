@@ -24,10 +24,6 @@ from typing import (
     Dict,
     List,
 )
-from duck.contrib.responses import (
-    simple_response,
-    template_response,
-)
 from duck.http.core.handler import (
     response_handler,
     log_response,
@@ -50,7 +46,6 @@ from duck.http.response import (
     HttpRequestTimeoutResponse,
     HttpResponse,
 )
-from duck.contrib.responses.errors import get_timeout_error_response
 from duck.utils.ssl import is_ssl_data
 from duck.utils.xsocket import (xsocket, ssl_xsocket, create_xsocket)
 from duck.utils.xsocket.io import SocketIO 
@@ -704,8 +699,10 @@ class BaseServer:
             sock (xsocket): Client socket object
             addr (Tuple[str, int]): Client ip address and port.
         """
+        from duck.contrib.responses.errors import timeout_error
+        
         # Send timeout error message to client.
-        timeout_response = get_timeout_error_response(timeout=SETTINGS["REQUEST_TIMEOUT"])
+        timeout_response = timeout_error(timeout=SETTINGS["REQUEST_TIMEOUT"])
         
         SettingsLoaded.WSGI.finalize_response(timeout_response, request=None)
         
@@ -883,9 +880,10 @@ class BaseServer:
             addr (Tuple[str, int]): Client ip address and port.
         """
         from duck.settings.loaded import SettingsLoaded
+        from duck.contrib.responses.errors import timeout_error
         
         # Send timeout error message to client.
-        timeout_response = get_timeout_error_response(timeout=SETTINGS["REQUEST_TIMEOUT"])
+        timeout_response = timeout_error(timeout=SETTINGS["REQUEST_TIMEOUT"])
         
         await SettingsLoaded.ASGI.finalize_response(timeout_response, request=None)
         

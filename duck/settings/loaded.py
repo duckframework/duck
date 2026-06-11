@@ -263,7 +263,7 @@ def get_blueprints() -> List[Blueprint]:
        or all of the defined blueprints are builtins,
        **Duck's** default site blueprint will be added blueprints list.
     """
-    ducksite_blueprint = x_import("duck.etc.apps.defaultsite.blueprint.DuckSite")
+    welcome_blueprint = x_import("duck.etc.blueprints.welcome.blueprint.Welcome")
     blueprints = SETTINGS["BLUEPRINTS"]
     final_blueprints = []
     builtins_count = 0  # number of builtin blueprints
@@ -282,7 +282,7 @@ def get_blueprints() -> List[Blueprint]:
         if SETTINGS['DEBUG'] and not SettingsLoaded.URLPATTERNS and len(blueprints) == builtins_count:
             # No urlpatterns defined
             # No blueprints defined or all of the defined blueprints are builtins
-            final_blueprints.append(ducksite_blueprint)
+            final_blueprints.append(welcome_blueprint)
         return final_blueprints
     except Exception as e:
         raise SettingsError(f"Error loading blueprints: {e}") from e
@@ -310,9 +310,7 @@ def get_user_middlewares() -> List[Type]:
         List[Type]: List of middleware classes, optionally patched for compatibility.
     """
     try:
-        middlewares = [
-            x_import(path) for path in SETTINGS["MIDDLEWARES"]
-        ]
+        middlewares = [x_import(path) for path in SETTINGS["MIDDLEWARES"]]
         return middlewares
     except Exception as e:
         raise MiddlewareLoadError(f"Failed to load middlewares: {e}") from e

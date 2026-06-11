@@ -18,6 +18,7 @@ from typing import (
     Callable,
 )
 
+from duck.settings import SETTINGS
 from duck.exceptions.all import (
     SettingsError,
     RouteNotFoundError,
@@ -38,18 +39,17 @@ from duck.http.response import HttpResponse
 from duck.http.request import HttpRequest
 from duck.http.request_data import RequestData
 from duck.logging import logger
+from duck.contrib.sync import ensure_async, iscoroutinefunction
 from duck.contrib.responses.errors import (
-    get_server_error_response,
-    get_bad_gateway_error_response,
-    get_404_error_response,
-    get_method_not_allowed_error_response,
-    get_bad_request_error_response,
+    async_server_error,
+    async_bad_gateway,
+    async_not_found,
+    async_method_not_allowed,
+    async_bad_request,
 )
-from duck.contrib.sync import convert_to_async_if_needed, iscoroutinefunction
 from duck.utils.xsocket import xsocket
 from duck.utils.xsocket.io import SocketIO
 from duck.utils.asyncio import create_task
-from duck.settings import SETTINGS
 
 
 class ASGI:
@@ -105,7 +105,7 @@ class ASGI:
         )
         
         # Parse request data and return request.
-        await convert_to_async_if_needed(request.parse)(request_data)
+        await ensure_async(request.parse)(request_data)
         return request
 
     async def finalize_response(
@@ -155,7 +155,7 @@ class ASGI:
             middlewares = middlewares[:index]
 
         for middleware in reversed(middlewares):
-            await convert_to_async_if_needed(middleware.process_response)(response, request)
+            await ensure_async(middleware.process_response)(response, request)
     
     async def django_apply_middlewares_to_response(self, response: HttpProxyResponse, request):
         """
@@ -202,7 +202,7 @@ class ASGI:
                  
         except (RouteNotFoundError, FileNotFoundResponseError):
             # The request url cannot match any registered routes.
-            response = get_404_error_response(request)
+            response = await async_not_found(request)
             
         except MethodNotAllowedError:
             # The requested method not allowed for the current route.
@@ -215,17 +215,17 @@ class ASGI:
                 pass
             
             # Retrieve the method not allowed error response.
-            response = get_method_not_allowed_error_response(request, route_info=route_info)
+            response = await async_method_not_allowed(request, route_info=route_info)
             
         except RequestError as e:
             # The request has some errors
             # Retrieve the bad request error response.
-            response = get_bad_request_error_response(e, request)
+            response = await async_bad_request(e, request)
             
         except Exception as e:
             if isinstance(e, BadGatewayError):
                 # Retrieve the bad gateway error response
-                response = get_bad_gateway_error_response(e, request)
+                response = await async_bad_gateway(e, request)
             
             elif isinstance(e, ExpectingNoResponse):
                 # This is not an error as such but its a way to tell the server that it should not expect a 
@@ -234,7 +234,7 @@ class ASGI:
                         
             else:
                 # Retrieve ther server error response
-                response = get_server_error_response(e, request)
+                response = await async_server_error(e, request)
                 logger.log_exception(e)
             
         # Finalize and return response
@@ -431,7 +431,7 @@ class ASGI:
             )
         except Exception as e:
             # Internal server error
-            response = get_server_error_response(e, None)
+            response = await async_server_error(e, None)
             
             await self.send_response(
                 response,

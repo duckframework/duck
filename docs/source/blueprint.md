@@ -12,7 +12,8 @@ your `urlpatterns` in an organized manner.
 ```sh
 myproject/  
 ├── web/
-│    ├── myblueprint        # Any name for your blueprint.
+│    ├── myblueprint/       # Any name for your blueprint.
+│    │    ├── ui/           # Includes blueprint UI components
 │    │    ├── blueprint.py  # Entry python file for your blueprint defination
 │    └─  └── views.py  # Views for your blueprint
 └── ... # Root project files

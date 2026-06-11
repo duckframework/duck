@@ -16,6 +16,7 @@ from typing import (
     Callable,
 )
 
+from duck.settings import SETTINGS
 from duck.exceptions.all import (
     SettingsError,
     RouteNotFoundError,
@@ -36,17 +37,16 @@ from duck.http.response import HttpResponse
 from duck.http.request import HttpRequest
 from duck.http.request_data import RequestData
 from duck.logging import logger
-from duck.contrib.responses.errors import (
-    get_server_error_response,
-    get_bad_gateway_error_response,
-    get_404_error_response,
-    get_method_not_allowed_error_response,
-    get_bad_request_error_response,
-)
-from duck.contrib.sync import convert_to_sync_if_needed
+from duck.contrib.sync import ensure_sync
 from duck.contrib.asyncio import get_available_event_loop
+from duck.contrib.responses.errors import (
+    server_error,
+    bad_gateway,
+    not_found,
+    method_not_allowed,
+    bad_request,
+)
 from duck.utils.xsocket import xsocket
-from duck.settings import SETTINGS
 
 
 class WSGI:
@@ -150,7 +150,7 @@ class WSGI:
             middlewares = middlewares[:index]
 
         for middleware in reversed(middlewares):
-            convert_to_sync_if_needed(middleware.process_response)(response, request)
+            ensure_sync(middleware.process_response)(response, request)
     
     def django_apply_middlewares_to_response(self, response: HttpProxyResponse, request):
         """
@@ -197,7 +197,7 @@ class WSGI:
                  
         except (RouteNotFoundError, FileNotFoundResponseError):
             # The request url cannot match any registered routes.
-            response = get_404_error_response(request)
+            response = not_found(request)
             
         except MethodNotAllowedError:
             # The requested method not allowed for the current route.
@@ -210,17 +210,17 @@ class WSGI:
                 pass
             
             # Retrieve the method not allowed error response.
-            response = get_method_not_allowed_error_response(request, route_info=route_info)
+            response = method_not_allowed(request, route_info=route_info)
             
         except RequestError as e:
             # The request has some errors
             # Retrieve the bad request error response.
-            response = get_bad_request_error_response(e, request)
+            response = bad_request(e, request)
             
         except Exception as e:
             if isinstance(e, BadGatewayError):
                 # Retrieve the bad gateway error response
-                response = get_bad_gateway_error_response(e, request)
+                response = bad_gateway(e, request)
             
             elif isinstance(e, ExpectingNoResponse):
                 # This is not an error as such but its a way to tell the server that it should not expect a 
@@ -229,7 +229,7 @@ class WSGI:
                         
             else:
                 # Retrieve ther server error response
-                response = get_server_error_response(e, request)
+                response = server_error(e, request)
                 logger.log_exception(e)
             
         # Finalize and return response
@@ -354,7 +354,7 @@ class WSGI:
             )
         except Exception as e:
             # Internal server error
-            response = get_server_error_response(e, None)
+            response = server_error(e, None)
             
             self.send_response(
                 response,

@@ -96,7 +96,7 @@ def makeproject(name, dest, overwrite, project_type):
 
 @cli.command(help="Create a Duck blueprint directory structure")
 @click.argument("name")
-@click.option("-d", "--dest", default=".", help="Destination for blueprint creation.")
+@click.option("-d", "--dest", default="web", help="Destination for blueprint creation.")
 @click.option("-O", "--overwrite", is_flag=True, help="Overwrite an existing blueprint.")
 def makeblueprint(name, dest, overwrite):
    """

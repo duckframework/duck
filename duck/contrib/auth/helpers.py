@@ -155,10 +155,10 @@ def login(request: Any, user: Any, backend: str | None = None) -> None:
         ValueError: If an unsupported backend name is given.
 
     Example:
-        .. code-block:: python
-
-            user = authenticate(request, "brian@example.com", "secret")
-            login(request, user)
+    ```py
+    user = authenticate(request, "brian@example.com", "secret")
+    login(request, user)
+    ```
     """
     if not user or not user.pk:
         raise AuthenticationError("Cannot log in an anonymous or unsaved user.")
@@ -202,9 +202,9 @@ def logout(request: Any, backend: str | None = None) -> None:
         ValueError: If an unsupported backend name is given.
 
     Example:
-        .. code-block:: python
-
-            logout(request)
+    ```python
+    logout(request)
+    ```
     """
     resolved = backend or DEFAULT_AUTH_BACKEND
 

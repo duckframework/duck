@@ -20,7 +20,7 @@ class MakeBlueprintCommand:
     def main(
         cls,
         name,
-        destination: str = '.',
+        destination: str = 'web',
         overwrite_existing: bool = False,
      ):
         cls.setup()
@@ -42,6 +42,9 @@ class MakeBlueprintCommand:
         
         # Log something
         console.log(f'Creating "{original_name}" Blueprint', level=console.DEBUG)
+        
+        if "web" not in destination:
+            console.log("Destination outside 'web' directory not recommended", level=console.WARNING)
         
         try:
             makeblueprint(

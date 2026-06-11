@@ -68,8 +68,8 @@ myproject/
     └── duckapp/
 ```
 
-> **Never touch** `main.py` or `settings.py` — they are auto-generated and will be
-> overwritten. App-level config belongs in your own modules.
+> The `main.py` and `settings.py` files are auto-generated. Only edit them when necessary.
+> App-level config belongs in your own modules.
 
 ### Points to Note
 

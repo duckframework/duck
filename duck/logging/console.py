@@ -44,6 +44,8 @@ import traceback
 from typing import Callable
 from colorama import Fore, Style
 
+from duck.logging.handler import emit
+
 
 # Whether to silence all logs
 SILENT = False
@@ -117,9 +119,12 @@ def log_raw(
     if use_colors:
         with print_lock:
             print(f"{color}{msg}{Style.RESET_ALL}", file=std, end=end)
+            emit(level, msg)
+            
     else:
         with print_lock:
             print(msg, file=std, end=end)
+            emit(level, msg)
 
 
 def log(
@@ -171,9 +176,12 @@ def log(
     if use_colors:
         with print_lock:
             print(f"{color}{formatted_msg}{Style.RESET_ALL}", file=std, end=end)
+            emit(level, msg)
+            
     else:
         with print_lock:
             print(formatted_msg, file=std, end=end)
+            emit(level, msg)
 
 
 def should_filter_warning(category, message, module = None, lineno = 0):

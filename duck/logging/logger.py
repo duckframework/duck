@@ -17,6 +17,7 @@ from typing import (
 from colorama import Fore, Style
 
 from duck import processes
+from duck.logging.handler import emit
 from duck.settings import SETTINGS
 from duck.utils.path import paths_are_same, joinpaths
 from duck.ansi import remove_ansi_escape_codes
@@ -89,9 +90,12 @@ def log_raw(
         colored_msg = f"{color}{msg}{Style.RESET_ALL}"
         with Logger.print_lock:
             print(colored_msg, file=std, end=end)
+            emit(level, msg)
+    
     else:
         with Logger.print_lock:
             print(msg, file=std, end=end)
+            emit(level, msg)
 
 
 def log(
@@ -146,9 +150,12 @@ def log(
         colored_msg = f"{color}{formatted_msg}{Style.RESET_ALL}"
         with Logger.print_lock:
             print(colored_msg, file=std, end=end)
+            emit(level, msg)
+            
     else:
         with Logger.print_lock:
             print(msg, file=std, end=end)
+            emit(level, msg)
 
 
 def should_filter_warning(category, message, module = None, lineno = 0):

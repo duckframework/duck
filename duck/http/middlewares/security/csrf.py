@@ -10,24 +10,23 @@ import hashlib
 import datetime
 import urllib.parse
 
+from duck.meta import Meta
+from duck.settings import SETTINGS
 from duck.http.middlewares import BaseMiddleware
 from duck.http.request import HttpRequest
 from duck.http.response import HttpForbiddenRequestResponse
-from duck.meta import Meta
-from duck.settings import SETTINGS
 from duck.utils.urlcrack import URL
 from duck.utils.safe_compare import constant_time_compare
-from duck.shortcuts import simple_response
-from duck.etc.internals.template import internal_render
 
 
+# Allowed characters: Letters and Digits
+ALLOWED_CHARACTERS = string.ascii_letters + string.digits
+
+# Csrf configurations
 CSRF_USE_SESSIONS = SETTINGS["CSRF_USE_SESSIONS"]
 CSRF_SECRET_LENGTH = SETTINGS["CSRF_SECRET_LENGTH"]
 CSRF_TOKEN_LENGTH = SETTINGS["CSRF_TOKEN_LENGTH"]
 CSRF_SESSION_KEY = SETTINGS["CSRF_SESSION_KEY"]
-
-# Allowed characters: Letters and Digits
-ALLOWED_CHARACTERS = string.ascii_letters + string.digits
 
 
 def generate_dynamic_secret_key() -> bytes:
@@ -47,8 +46,7 @@ def generate_csrf_secret() -> str:
     """
     Returns a secure random CSRF secret containing only letters and digits.
     """
-    return "".join(
-        secrets.choice(ALLOWED_CHARACTERS) for _ in range(CSRF_SECRET_LENGTH))
+    return "".join(secrets.choice(ALLOWED_CHARACTERS) for _ in range(CSRF_SECRET_LENGTH))
 
 
 def mask_cipher_secret(secret: str) -> str:
@@ -70,15 +68,13 @@ def mask_cipher_secret(secret: str) -> str:
         )
 
     # Generate a random mask of the same length as the secret
-    mask = "".join(
-        secrets.choice(ALLOWED_CHARACTERS) for _ in range(CSRF_SECRET_LENGTH))
+    mask = "".join(secrets.choice(ALLOWED_CHARACTERS) for _ in range(CSRF_SECRET_LENGTH))
 
     # XOR-like masking using modular arithmetic
     masked_secret = "".join(
-        ALLOWED_CHARACTERS[(ALLOWED_CHARACTERS.index(secret[i])
-                            + ALLOWED_CHARACTERS.index(mask[i]))
-                           % len(ALLOWED_CHARACTERS)]
-        for i in range(CSRF_SECRET_LENGTH))
+        ALLOWED_CHARACTERS[(ALLOWED_CHARACTERS.index(secret[i]) + ALLOWED_CHARACTERS.index(mask[i])) % len(ALLOWED_CHARACTERS)]
+        for i in range(CSRF_SECRET_LENGTH)
+    )
 
     # Return the full token (mask + masked secret)
     return mask + masked_secret
@@ -107,10 +103,9 @@ def unmask_cipher_token(token: str) -> str:
 
     # Reverse the masking process to retrieve the original secret
     secret = "".join(
-        ALLOWED_CHARACTERS[(ALLOWED_CHARACTERS.index(masked_secret[i])
-                            - ALLOWED_CHARACTERS.index(mask[i]))
-                           % len(ALLOWED_CHARACTERS)]
-        for i in range(CSRF_SECRET_LENGTH))
+        ALLOWED_CHARACTERS[(ALLOWED_CHARACTERS.index(masked_secret[i]) - ALLOWED_CHARACTERS.index(mask[i])) % len(ALLOWED_CHARACTERS)]
+        for i in range(CSRF_SECRET_LENGTH)
+    )
     return secret
 
 
@@ -136,6 +131,7 @@ def get_csrf_token(request):
         request: The http request.
 
     This function performs the following actions:
+    
     1. Generates a new CSRF token (Csrf_Token), a scrambled/random token to be sent to the user.
     2. Saves the CSRF secret (Csrf_Secret) in:
        - request.META under the key 'CSRF_COOKIE'
@@ -156,32 +152,33 @@ def get_csrf_token(request):
     try:
         csrf_token = mask_cipher_secret(csrf_secret)
     except Exception:
-        # no substring found or csrf_secret is None
-        # the csrf secret in request.META is invalid, add new one
+        # No substring found or csrf_secret is None
+        # The csrf secret in request.META is invalid, add new one
         csrf_secret = add_new_csrf_cookie(request)
         csrf_token = mask_cipher_secret(csrf_secret)
     
     if CSRF_USE_SESSIONS:
-        request.session[CSRF_SESSION_KEY] = csrf_secret
+        request.SESSION[CSRF_SESSION_KEY] = csrf_secret
     
+    # Finally, return the CSRF token
     return csrf_token
 
 
 class OriginError(Exception):
     """
-    Exception class for invalid HTTP Origin
+    Exception raised on invalid HTTP origin.
     """
 
 
 class RefererError(Exception):
     """
-    Exception class for invalid HTTP Referer
+    Exception raised on invalid HTTP referer.
     """
 
 
-class CSRFCookieError(Exception):
+class CsrfCookieError(Exception):
     """
-    Exception class for CSRF cookie errors.
+    Exception raised on CSRF cookie errors.
     """
 
 
@@ -215,8 +212,8 @@ class CSRFMiddleware(BaseMiddleware):
       with the `Csrf Cookie/Secret` to ensure authenticity.
 
     """
-
-    debug_message: str = "CSRFMiddleware: CSRF token missing or invalid"
+    
+    debug_message: str = "CSRF Middleware: CSRF token missing or invalid"
 
     @classmethod
     @staticmethod
@@ -224,11 +221,11 @@ class CSRFMiddleware(BaseMiddleware):
         """
         Resets the request csrf secret and returns the rotated csrf secret.
         """
-        # rotate token after login, user may need to reload page to get new csrf_token
+        # Rotate token after login, user may need to reload page to get new csrf_token
         csrf_secret = add_new_csrf_cookie(request)
 
     @classmethod
-    def _check_origin_ok(cls, request):
+    def check_origin_ok(cls, request):
         """
         Checks if request Origin is good origin
 
@@ -236,29 +233,32 @@ class CSRFMiddleware(BaseMiddleware):
             True if request origin is ok
 
         Raises:
-            OriginError: If origin provided is invalid in any way
+            OriginError: If origin provided is invalid in any way.
         """
         request_origin = request.origin
 
         if not request_origin:
-            raise OriginError("No Origin header found in request")
+            raise OriginError("No Origin header found in request.")
             
-        parsed_good_origin = URL(request.host)
-        parsed_good_origin.scheme = request.scheme
-        parsed_request_origin = URL(request_origin)
+        # Construct URL object for good origin
+        good_origin = URL(request.host)
+        good_origin.scheme = request.scheme
         
-        if parsed_request_origin.port:
+        # Construct the URL object for provided origin
+        request_origin = URL(request_origin)
+        
+        if request_origin.port:
             # There is port in origin header
-            if parsed_request_origin.port != parsed_good_origin.port:
-                raise OriginError("Port specified in Origin header is not allowed")
+            if request_origin.port != good_origin.port:
+                raise OriginError("Port specified in Origin header is not allowed.")
 
-        if (parsed_good_origin.host != parsed_request_origin.host
-                and parsed_good_origin.scheme != parsed_request_origin.scheme):
-            raise OriginError(f"Bad Origin header. Good origin '{parsed_good_origin.to_str()}' but got '{parsed_request_origin.to_str()}'.")
+        if (good_origin.host != request_origin.host
+                and good_origin.scheme != request_origin.scheme):
+            raise OriginError(f"Bad Origin header. Good origin '{good_origin.to_str()}' but got '{request_origin.to_str()}'.")
         return True
 
     @classmethod
-    def _check_referer_ok(cls, request):
+    def check_referer_ok(cls, request):
         """
         Checks if request Referer is good referer
 
@@ -271,73 +271,77 @@ class CSRFMiddleware(BaseMiddleware):
         request_referer = request.referer
 
         if not request_referer:
-            raise OriginError("No Referer header found in request")
+            raise OriginError("No Referer header found in request.")
             
-        parsed_good_referer = URL(request.host)
-        parsed_good_referer.scheme = request.scheme
-        parsed_request_referer = URL(request_referer)
+        # Construct URL object for good referer
+        good_referer = URL(request.host)
+        good_referer.scheme = request.scheme
+        
+        # Construct URL object for provided referer
+        request_referer = URL(request_referer)
 
-        if parsed_request_referer.port:
+        if request_referer.port:
             # There is port in referer header
-            if parsed_request_referer.port != parsed_good_referer.port:
-                raise RefererError("Port specified in Referer header is not allowed")
+            if request_referer.port != good_referer.port:
+                raise RefererError("Port specified in Referer header is not allowed.")
 
-        if (parsed_good_referer.host != parsed_request_referer.host
-                or parsed_good_referer.scheme != parsed_request_referer.scheme):
-            raise RefererError(f"Bad Referer header. Good referer '{parsed_good_referer.to_str()}' but got '{parsed_request_referer.to_str()}'.")
+        if (good_referer.host != request_referer.host
+                or good_referer.scheme != request_referer.scheme):
+            raise RefererError(f"Bad Referer header. Good referer '{good_referer.to_str()}' but got '{request_referer.to_str()}'.")
         return True
 
     @classmethod
     def check_csrf_cookie(cls, request):
         """
-        Checks for the csrf cookie sent in request.
+        Checks for the CSRF cookie sent in request - mostly length checks.
 
         Raises:
-                CSRFCookieError: This is raised if there is any issue with the CSRF cookie sent by the client.
+            CsrfCookieError: This is raised if there is any issue with the CSRF cookie sent by the client.
         """
-        csrf_secret_from_cookie = request.META.get("CSRF_COOKIE")
+        csrf_secret = request.META.get("CSRF_COOKIE")
+        
+        if not csrf_secret:
+            cls.debug_message: str = "CSRF Middleware: CSRF cookie not provided"
+            raise CsrfCookieError("CSRF cookie not set. This is required to ensure that your browser is not being hijacked by third parties.")
 
-        if not csrf_secret_from_cookie:
-            cls.debug_message: str = "CSRFMiddleware: CSRF cookie not set"
-            
-            raise CSRFCookieError(
-                "CSRF Cookie not set. This is required to ensure that your browser is not being hijacked by third parties"
-            )
+        if not len(csrf_secret) == CSRF_SECRET_LENGTH:
+            cls.debug_message: str = "CSRF Middleware: CSRF cookie length invalid"
+            raise CsrfCookieError("CSRF cookie length invalid.")
 
-        if not len(csrf_secret_from_cookie) == CSRF_SECRET_LENGTH:
-            cls.debug_message: str = "CSRFMiddleware: CSRF cookie length invalid"
-            raise CSRFCookieError("CSRF Cookie length invalid")
-
-        if SETTINGS["CSRF_USE_SESSIONS"]:
+        if CSRF_USE_SESSIONS:
             csrf_secret_from_session = request.SESSION.get(CSRF_SESSION_KEY)
-            if (csrf_secret_from_session and not csrf_secret_from_cookie == csrf_secret_from_session):
-                cls.debug_message: str = "CSRFMiddleware: CSRF cookie mismatch"
-                raise CSRFCookieError(
-                    "CSRF Cookie mismatch. CSRF Cookie not matching csrf cookie from session"
-                )
+            
+            if (csrf_secret_from_session and not csrf_secret == csrf_secret_from_session):
+                cls.debug_message: str = "CSRF Middleware: CSRF cookie mismatch"
+                raise CsrfCookieError("CSRF Cookie mismatch. CSRF cookie not matching the one from the request's session.")
 
     @classmethod
     def get_error_response(cls, request):
         """
-        Return error response on csrf check failure.
+        Generate error response upon invalid CSRF checks.
         """
+        from duck.contrib.responses import make_response
+        
+        # Initialize the context
+        context = {}
+        
         if SETTINGS["DEBUG"]:
-            csrf_error_context = {"reason": "CSRFMiddleware error"}
-
+            # Add some updates to the context
+            context["error_label"] = "CSRF Middleware Error"
+            context["request"] = request
+            
+            # Attach a non-generic reason - if available.
             if hasattr(request, "csrf_error_reason"):
-                csrf_error_context["reason"] = request.csrf_error_reason
-                cls.debug_message = f"CSRFMiddleware: {request.csrf_error_reason}"
+                context["body"] = request.csrf_error_reason
+                cls.debug_message = f"CSRF Middleware: {request.csrf_error_reason}"
 
-            response = internal_render(
-                request,
-                "csrf_error.html",
-                context=csrf_error_context,
-                content_type="text/html",
-                status_code=403,
-            )
-        else:
-            body = None
-            response = simple_response(HttpForbiddenRequestResponse, body=body)
+        # Generate error response
+        response = make_response(
+            HttpForbiddenRequestResponse,
+            extra_context=context,
+        )
+        
+        # Return the final response.
         return response
 
     @classmethod
@@ -403,50 +407,58 @@ class CSRFMiddleware(BaseMiddleware):
         csrf_cookie_name = SETTINGS["CSRF_COOKIE_NAME"]
         csrf_header_name = SETTINGS["CSRF_HEADER_NAME"]
         csrf_secret_from_cookie = request.get_header(csrf_header_name) or request.COOKIES.get(csrf_cookie_name)
-
-        if csrf_secret_from_cookie:
-            request.META["CSRF_COOKIE"] = csrf_secret_from_cookie
-            
+        
         if SETTINGS["CSRF_USE_SESSIONS"]:
             correct_csrf_secret = request.SESSION.get(csrf_session_key)
         else:
             correct_csrf_secret = csrf_secret_from_cookie
         
+        # Set CSRF cookie in meta.
+        request.META["CSRF_COOKIE"] = correct_csrf_secret
+        
+        # Perform some security checks.
         try:
             cls.check_csrf_cookie(request)
-        except CSRFCookieError as e:
+        except CsrfCookieError as e:
             request.csrf_error_reason = str(e)
             return cls.request_bad
 
         # Perform origin and referer checks
         try:
-            cls._check_origin_ok(request)
-            cls._check_referer_ok(request)
+            cls.check_origin_ok(request)
+            cls.check_referer_ok(request)
         except Exception as e:
             if not isinstance(e, (OriginError, RefererError)):
                 e = "Error in performing Origin and Referer header checks"
+            
+            # Set csrf exception on request object.
             request.csrf_error_reason = str(e)
             return cls.request_bad
 
         if not correct_csrf_secret:
-            request.csrf_error_reason = (
-                "Request might have expired, try reloading page")
+            request.csrf_error_reason = "Request might have expired, try reloading the page."
             return cls.request_bad
 
-        sent_token = (
+        csrfmiddlewaretoken = (
             request.QUERY["CONTENT_QUERY"].get(csrf_token_name, "")
             or request.get_header(csrf_header_name, "")
         )
         
+        if not csrfmiddlewaretoken:
+            request.csrf_error_reason = "CSRF token missing - maybe you forgot to include csrf_token in form."
+            return cls.request_bad
+        
         try:
-            sent_csrf_token_secret = (unmask_cipher_token(sent_token) or "<no-token>")
-        except:
-            sent_csrf_token_secret = "<invalid-token>"
+            unmasked_csrf_secret = unmask_cipher_token(csrfmiddlewaretoken) or "<no-token>"
+        except Exception:
+            unmasked_csrf_secret = "<invalid-token>"
 
-        if not (constant_time_compare(sent_csrf_token_secret, correct_csrf_secret)
+        if not (
+            constant_time_compare(sent_csrf_token_secret, correct_csrf_secret)
             and len(correct_csrf_secret) == CSRF_SECRET_LENGTH
-            and len(sent_csrf_token_secret) == CSRF_SECRET_LENGTH):
-            request.csrf_error_reason = ("CSRF token missing or invalid, try reloading page")
+            and len(sent_csrf_token_secret) == CSRF_SECRET_LENGTH
+        ):
+            request.csrf_error_reason = "CSRF token missing or invalid, try reloading page"
             return cls.request_bad
 
         # Warning: don't rotate csrf_token yet as this might mean user needs to reload web form every time.

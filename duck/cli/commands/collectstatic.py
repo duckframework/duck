@@ -116,26 +116,11 @@ class CollectStaticCommand:
         Returns:
             Generator: The generator of static directory and blueprint pair.
         """
-        from duck.settings import SETTINGS
         from duck.settings.loaded import SettingsLoaded
-        from duck.etc.apps.defaultsite.blueprint import DuckSite
-        from duck.backend.django.setup import prepare_django, DjangoSetupWarning
         
-        # Setup Django if not set
-        # Try preparing Django backend
-        try:
-            prepare_django(True)
-        except Exception as e:
-            console.warn(f"Django setup failed: {e}", DjangoSetupWarning)
+        blueprints = SettingsLoaded.BLUEPRINTS
         
-        _blueprints = SettingsLoaded.BLUEPRINTS
-        
-        # The DuckSite blueprint might not be available in BLUEPRINTS
-        # yet it might have some static files it would like to share with the whole app.
-        if DuckSite not in _blueprints:
-            _blueprints.append(DuckSite)
-        
-        for blueprint in _blueprints:
+        for blueprint in blueprints:
             if blueprint.enable_static_dir:
                 # Access to blueprint static files is allowed.
                 static_dir = joinpaths(

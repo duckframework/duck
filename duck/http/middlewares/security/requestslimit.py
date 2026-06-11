@@ -18,7 +18,6 @@ This design provides:
 """
 from duck.http.middlewares import BaseMiddleware
 from duck.settings import SETTINGS
-from duck.shortcuts import simple_response, template_response
 from duck.http.response import HttpTooManyRequestsResponse
 from duck.utils.caching import InMemoryCache
 
@@ -48,7 +47,7 @@ class RequestsLimitMiddleware(BaseMiddleware):
     Duration in seconds defining the time window for request counting.
     """
     
-    max_requests: int = 500
+    max_requests: int = 600
     """
     Maximum number of allowed requests within the `requests_delay` window.
     """
@@ -74,6 +73,7 @@ class RequestsLimitMiddleware(BaseMiddleware):
 
         # Extract client IP; if missing, fail open
         addr = request.client_address
+        
         if not addr:
             return cls.request_ok
 
@@ -114,23 +114,22 @@ class RequestsLimitMiddleware(BaseMiddleware):
         return f"{cls.max_requests} requests per {cls.requests_delay} seconds"
 
     @classmethod
-    def get_error_response(cls, request):
+    def get_error_response(cls, request) -> HttpTooManyRequestsResponse:
         """
         Creates a 429 Too Many Requests HTTP response.
 
-        Includes additional debugging information when DEBUG is enabled.
+        Includes additional debugging information.
         """
+        from duck.contrib.response import make_response
+        
         body = (
             "<h4>Too Many Requests!</h4>"
             f"<p>Rate limit: {cls.get_readable_limit()}.</p>"
             f"<p>You sent more than {cls.max_requests} requests within "
             f"{cls.requests_delay} seconds.</p>"
         )
-
-        if SETTINGS["DEBUG"]:
-            return template_response(HttpTooManyRequestsResponse, body=body)
-        return simple_response(HttpTooManyRequestsResponse, body=body)
-
+        return make_response(HttpTooManyRequestsResponse, body=body)
+        
     @classmethod
     def process_request(cls, request):
         """
@@ -142,6 +141,5 @@ class RequestsLimitMiddleware(BaseMiddleware):
         try:
             return cls._process_request(request)
         except Exception:
-            raise
             # Never rate-limit due to internal middleware errors
             return cls.request_ok
