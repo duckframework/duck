@@ -939,8 +939,9 @@ whenever a feature area has multiple routes (API, blog, shop, auth, etc).
 ```
 web/
 └── api/
-    ├── blueprint.py
-    └── views.py
+    ├── ui/ # Static files and other UI components
+    ├── blueprint.py # Entry blueprint script
+    └── views.py # Views for the blueprint.
 ```
 
 ```python
@@ -955,7 +956,7 @@ from duck.urls import path
 from . import views
 
 
-ApiBlueprint = Blueprint(
+Api = Blueprint(
     location=__file__,
     name="api",
     urlpatterns=[
@@ -963,8 +964,8 @@ ApiBlueprint = Blueprint(
         path("/products/<slug>", views.product_detail, name="product-detail"),
     ],
     prepend_name_to_urls=True,
-    enable_static_dir=False,
-    enable_template_dir=False,
+    enable_static_dir=True,
+    enable_template_dir=True,
 )
 ```
 
@@ -972,7 +973,7 @@ Register the blueprint in `settings.py`:
 
 ```python
 BLUEPRINTS = [
-    "web.api.blueprint.ApiBlueprint",
+    "web.api.blueprint.Api",
 ]
 ```
 
@@ -986,7 +987,7 @@ url = resolve("api.products")
 Render blueprint templates with their namespaced name:
 
 ```python
-# Render a template at web/api/templates/product.html
+# Render a template at web/api/ui/templates/product.html
 response = render("api/product.html")
 ```
 
@@ -997,11 +998,28 @@ Resolve blueprint static/media URLs with their namespaced name:
 url = static("api/images/logo.png")
 ```
 
+### Blueprint generation
+
+Duck provides a builtin command `duck makeblueprint` for generating blueprints.  
+
+Example:
+
+```sh
+duck makeblueprint Blog # This will create blueprint structure in directory 'blog'
+```
+
 ### Routing rules
 
 - Never hardcode URL strings — always use `resolve()` from `duck.shortcuts`.
 - Use `not_found404()` and `redirect()` from `duck.shortcuts`, never raw responses.
 - Route `<param>` converters are defined directly inside `path()`.
+
+
+### Notes
+
+- For complex applications, organize functionality into **blueprints** to improve modularity, maintainability, and flexibility.
+- Within a blueprint package, prefer **relative imports** over **absolute imports**. This keeps blueprints self-contained, portable, and easier to reuse or plug into other Duck projects without modification.
+- When building UIs with HTML components, the same principles, conventions, and best practices used in the main project apply equally to blueprints. Blueprint UIs should follow the same component architecture, styling patterns, reactivity guidelines, and code organization standards to ensure consistency across the entire application.
 
 ---
 

@@ -117,7 +117,15 @@ class ASGI:
         Finalizes response by adding final touches and sending response to client.
         """
         try:
+            # Apply middlewares in reverse order
+            if isinstance(response, HttpProxyResponse):
+                await self.django_apply_middlewares_to_response(response, request)
+            else:
+                 await self.apply_middlewares_to_response(response, request)
+                 
+            # Finalize response - compress response, etc
             await async_response_finalizer.finalize_response(response, request)
+        
         except Exception as e:
             logger.log_exception(e)
 
@@ -147,7 +155,7 @@ class ASGI:
         from duck.settings.loaded import SettingsLoaded
         
         middlewares = SettingsLoaded.MIDDLEWARES
-        failed_middleware = request.META.get("FAILED_MIDDLEWARE")
+        failed_middleware = request.META.get("FAILED_MIDDLEWARE") if request else None
         
         if failed_middleware:
             # strip other middlewares if the request didn't get to reach them or come through any of them
@@ -194,12 +202,6 @@ class ASGI:
             assert iscoroutinefunction(response_producer_callable), "Response producer callable must be a coroutine function."
             response: Union[HttpResponse, HttpProxyResponse] = await response_producer_callable(processor)
             
-            # Apply middlewares in reverse order
-            if isinstance(response, HttpProxyResponse):
-                await self.django_apply_middlewares_to_response(response, request)
-            else:
-                 await self.apply_middlewares_to_response(response, request)
-                 
         except (RouteNotFoundError, FileNotFoundResponseError):
             # The request url cannot match any registered routes.
             response = await async_not_found(request)
@@ -433,12 +435,18 @@ class ASGI:
             # Internal server error
             response = await async_server_error(e, None)
             
+            # Finalize and return response
+            await self.finalize_response(response, None)
+            
+            # Send response immediately
             await self.send_response(
                 response,
                 client_socket,
                 request=None,
-            )  # send response to client
-            raise e  # reraise error so that it will be logged
+            )
+            
+            # Reraise error so that it will be logged
+            raise e
             
         request.application = application
         request.asgi = self

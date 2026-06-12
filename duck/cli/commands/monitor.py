@@ -19,12 +19,14 @@ from typing import (
     Any,
 )
 
+from rich import box
 from rich.console import Console, Group
 from rich.table import Table
 from rich.live import Live
 from rich.text import Text
-from rich import box
+
 from duck.utils.platform import is_phone
+
 
 console = Console()
 

@@ -57,6 +57,19 @@ BLUEPRINTS: list[str] = [
 ]
 
 
+# Dashboard
+# Whether to enable dashboard blueprint.
+ENABLE_DASHBOARD: bool = True
+
+
+# Default dashboard username.
+DASHBOARD_USERNAME: str = os.getenv("DASHBOARD_USERNAME", "")
+
+
+# Default dashboard password
+DASHBOARD_PWD: str = os.getenv("DASHBOARD_PWD", "")
+
+
 # List of all middlewares as strings in form "middleware.MiddlewareClass"
 # WARNING: The middlewares should be arranged in order at this point.
 MIDDLEWARES: list[str] = middlewares

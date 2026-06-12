@@ -261,29 +261,45 @@ def get_blueprints() -> List[Blueprint]:
     Notes:
      - In condition that the user hasn't defined urlpatterns and blueprints,
        or all of the defined blueprints are builtins,
-       **Duck's** default site blueprint will be added blueprints list.
+       **Duck's** welcome blueprint will be added blueprints list.
     """
-    welcome_blueprint = x_import("duck.etc.blueprints.welcome.blueprint.Welcome")
-    blueprints = SETTINGS["BLUEPRINTS"]
-    final_blueprints = []
-    builtins_count = 0  # number of builtin blueprints
-
-    try:
-        for i in blueprints:
-            blueprint = x_import(i)
-            if not isinstance(blueprint, Blueprint):
-                raise SettingsError(
-                    f'Blueprint "{i}" should be an instance of Blueprint not {type(blueprint)}'
-                )
-            if blueprint.is_builtin:
-                builtins_count += 1
-            final_blueprints.append(blueprint)
+    welcome_blueprint = "duck.etc.blueprints.welcome.blueprint.Welcome"
+    dashboard_blueprint = "duck.etc.blueprints.dashboard.blueprint.Dashboard"
+    
+    # Initialize some data
+    blueprints = [*SETTINGS["BLUEPRINTS"]]
+    blueprint_objs = []
+    builtin_blueprints_only = True
+    
+    if SETTINGS['ENABLE_DASHBOARD'] and dashboard_blueprint not in blueprints:
+        blueprints.append(dashboard_blueprint)
         
-        if SETTINGS['DEBUG'] and not SettingsLoaded.URLPATTERNS and len(blueprints) == builtins_count:
+    try:
+        for blueprint_path in blueprints:
+            blueprint_obj = x_import(blueprint_path)
+            
+            if not isinstance(blueprint_obj, Blueprint):
+                raise SettingsError(
+                    f'Blueprint "{blueprint_path}" must be an instance of Blueprint not {type(blueprint)}'
+                )
+            
+            if not blueprint_obj.is_builtin:
+                builtin_blueprints_only = False
+                
+            # Add blueprint object.
+            blueprint_objs.append(blueprint_obj)
+        
+        if (SETTINGS['DEBUG']
+            and not SettingsLoaded.URLPATTERNS
+            and builtin_blueprints_only
+        ):
             # No urlpatterns defined
             # No blueprints defined or all of the defined blueprints are builtins
-            final_blueprints.append(welcome_blueprint)
-        return final_blueprints
+            blueprint_objs.append(x_import(welcome_blueprint))
+        
+        # Return the blueprint objects.
+        return blueprint_objs
+    
     except Exception as e:
         raise SettingsError(f"Error loading blueprints: {e}") from e
 
@@ -309,8 +325,14 @@ def get_user_middlewares() -> List[Type]:
     Returns:
         List[Type]: List of middleware classes, optionally patched for compatibility.
     """
+    middlewares = SETTINGS["MIDDLEWARES"] or []
+    dashboard_middleware = "duck.etc.blueprints.dashboard.middleware.MetricsMiddleware"
+    
+    if SETTINGS['ENABLE_DASHBOARD'] and not dashboard_middleware not in middlewares:
+        middlewares.append(dashboard_middlewares)
+        
     try:
-        middlewares = [x_import(path) for path in SETTINGS["MIDDLEWARES"]]
+        middlewares = [x_import(path) for path in middlewares]
         return middlewares
     except Exception as e:
         raise MiddlewareLoadError(f"Failed to load middlewares: {e}") from e

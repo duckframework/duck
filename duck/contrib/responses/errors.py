@@ -21,6 +21,7 @@ from duck.http.response import (
     HttpUnsupportedVersionResponse,
     HttpRequestTimeoutResponse,
 )
+from duck.contrib.sync import ensure_async
 from duck.contrib.responses.base import make_response
 from duck.exceptions.all import (
     RequestSyntaxError,

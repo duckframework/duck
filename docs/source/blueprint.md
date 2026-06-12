@@ -13,9 +13,9 @@ your `urlpatterns` in an organized manner.
 myproject/  
 ├── web/
 │    ├── myblueprint/       # Any name for your blueprint.
-│    │    ├── ui/           # Includes blueprint UI components
+│    │    ├── ui/           # Staticfiles and UI components
 │    │    ├── blueprint.py  # Entry python file for your blueprint defination
-│    └─  └── views.py  # Views for your blueprint
+│    └─ └── views.py  # Views for your blueprint
 └── ... # Root project files
 ```
 
@@ -66,6 +66,25 @@ From the above example, it shows a blueprint named `products` in a variable call
 ``` {note}
 The url for `list-products` urlpattern will be resolved as `resolve('products.list-products')`.
 ```
+
+---
+
+## Blueprint generation
+
+Duck provides a builtin command `duck makeblueprint` for generating blueprints.  
+
+Example:
+
+```sh
+duck makeblueprint Blog # This will create blueprint structure in directory 'blog'
+```
+
+---
+
+## Notes
+
+- For complex applications, organize functionality into **blueprints** to improve modularity, maintainability, and flexibility.
+- Within a blueprint package, prefer **relative imports** over **absolute imports**. This keeps blueprints self-contained, portable, and easier to reuse or plug into other Duck projects without modification.
 
 ---
 

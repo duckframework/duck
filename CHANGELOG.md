@@ -19,8 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   - `views.py` is now generated automatically.
   - Blueprints can now automatically resolve static assets from `ui/static/`.
   - Blueprints can now automatically resolve templates from `ui/templates/`.
-- Added a built-in Dashboard blueprint for monitoring and managing Duck applications, including request metrics, logs, latency tracking, errors, routes, and server state.
-- Add handlers for the `duck.logging` module, for performing events upon logging.
+- Added a built-in Dashboard blueprint for monitoring and managing Duck applications, including request metrics, response statistics, latency tracking, error reporting, route inspection, logs, and real-time server state monitoring.
+- Added support for log handlers in the `duck.logging.handler` module, allowing custom actions and integrations to be triggered whenever log messages are emitted.
+- Added a built-in Dashboard accessible through the `/dashboard` route, providing visibility into requests, responses, errors, logs, routes, performance metrics, and other server diagnostics.
+- Added support for the `ENABLE_DASHBOARD` setting, allowing the Dashboard to be enabled or disabled without requiring manual blueprint registration.
+- Added `DASHBOARD_USERNAME` and `DASHBOARD_PWD` settings for securing Dashboard access during development and debugging.
 
 ### Changed
 
@@ -37,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Fixed various issues related to blueprint generation and resource discovery.
 - Fixed inconsistencies in default blueprint structure and asset resolution.
+- Fixed middlewares' `process_response` not running on error response - middleware `process_response` now being executed everytime.
 
 ---
 

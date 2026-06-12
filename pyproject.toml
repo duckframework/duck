@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "duckframework"
-dynamic = ["version"]
+dynamic = ["version", "dependencies"]
 description = "Duck is a powerful, open-source, full-fledged Python-based web server, framework, and reverse proxy designed for building modern, customizable web applications — from small sites to large-scale platforms."
 readme = "README.md"
 license = "BSD-3-Clause"
@@ -15,24 +15,7 @@ authors = [
 maintainers = [
     { name = "Brian Musakwa", email = "digreatbrian@gmail.com" },
 ]
-dependencies = [
-    "Django>=5.1.5",
-    "Jinja2>=3.1.5",
-    "watchdog>=4.0.1",
-    "requests>=2.31.0",
-    "h2>=4.2.0",
-    "msgpack>=1.1.1",
-    "diskcache",
-    "colorama",
-    "tzdata",
-    "click",
-    "asgiref>=3.8.1",
-    "psutil>=7.0.0",
-    "rich>=14.1.0",
-    "setproctitle",
-    "pyJWT",
-    "pynacl",
-]
+
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Web Environment",
@@ -76,10 +59,11 @@ keywords = [
 ]
 
 [project.urls]
+Organization = "https://github.com/duckframework"
 Homepage = "https://duckframework.com"
 Source = "https://github.com/duckframework/duck"
 Issues = "https://github.com/duckframework/duck/issues"
-Funding = "https://duckframework.xyz/contribute"
+Contribution = "https://duckframework.com/contribute"
 Documentation = "https://docs.duckframework.com"
 
 [project.scripts]
@@ -87,6 +71,7 @@ duck = "duck.__main__:cli"
 
 [tool.setuptools.dynamic]
 version = {attr = "duck.__version__"}
+dependencies = { file = ["requirements.txt"] }
 
 [tool.setuptools.packages.find]
 include = ["duck*"]

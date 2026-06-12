@@ -1411,10 +1411,50 @@ Button()  # then later setting display
 - ❌ Trying to alter root/parent directly through attribute alteration
 - ❌ Binding events to components that will never be in the component tree
 
+### Avoid These Common Mistakes
+
+- ❌ Do not add a component that already belongs to another parent component unless it has first been removed from its existing parent. Components should only have a single parent at any given time.
+- ❌ Avoid using generic components when a dedicated component already exists. Generic components should only be used when no suitable specialized component is available. For example, do not use a `Container` as a link when a `Link` component exists.
+- ❌ Do not use the `tag` argument on components. Use the `element` argument or override the `get_element()` hook instead. The `tag` argument is only valid for the `to_component()` function.
+- ❌ Avoid embedding large blocks of raw HTML inside components unless absolutely necessary. Prefer building UIs with existing HTML components whenever possible. If you need to convert existing HTML, use `to_component()`. For custom or frequently reused UI patterns that do not have built-in component equivalents, create reusable components instead of repeatedly embedding raw HTML. This improves maintainability, readability, consistency, and reactivity.
+
+  **Avoid:**
+  ```python
+  Container(
+      inner_html="<p>Some HTML</p>"
+  )
+  ```
+
+  **Prefer:**
+  ```python
+  Container(
+      children=[
+          Paragraph(text="Some Text"),
+      ]
+  )
+  ```
+
+  **Alternative (HTML conversion):**
+  ```python
+  component = Container(
+      children=[
+          to_component("Some inner HTML", tag="p")
+      ]
+  )
+  ```
+
+  **Alternative (reusable component):**
+  ```python
+  class Span(InnerComponent):
+      def get_element(self):
+          return "span"
+  ```
+
 ---
 
 ### Consistency Rule
 
+- When building UIs with HTML components, the same principles, conventions, and best practices used in the main project apply equally to blueprints. Blueprint UIs should follow the same component architecture, styling patterns, reactivity guidelines, and code organization standards to ensure consistency across the entire application.
 - Once a pattern is chosen in a file:
   - **Do not mix styles**
   - Maintain consistency throughout

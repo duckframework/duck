@@ -33,7 +33,7 @@ from duck.utils.rand_domain import generate_random_domain
 
 # Secrets are stored in a .duck directory relative to the project root
 SECRETS_DIR = Path(os.environ.get("DUCK_SECRETS_DIR", ".duck/secrets"))
-
+    
 # POSIX: owner read+write only (0o600 file, 0o700 dir)
 SECRET_FILE_MODE = stat.S_IRUSR | stat.S_IWUSR
 SECRET_DIR_MODE = stat.S_IRWXU

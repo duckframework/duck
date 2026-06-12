@@ -291,7 +291,7 @@ class HtmlComponent:
         # Note: id, bg_color, color is handled by the BasicExtension
         element = element or self.get_element()
         
-        assert len(element) < 24, f"HTML tags should not be longer than 24 characters. Got tag: `{element}`, len={len(element)}."
+        assert len(element) < 24, f"HTML tags should not be longer than 24 characters. Got element: `{element}`, len={len(element)}."
         
         if not isinstance(element, str):
             raise HtmlComponentError(
@@ -388,8 +388,8 @@ class HtmlComponent:
         props = props or {}
         style = style or {}
         
-        assert isinstance(properties, dict) == True, f"Properties for the Html component must be a dictionary not '{type(properties)}' "
-        assert isinstance(style, dict) == True, f"Style for the Html component must be a dictionary not '{type(properties)}'"
+        assert isinstance(properties, dict), f"Properties for the Html component must be a dictionary not '{type(properties)}' "
+        assert isinstance(style, dict), f"Style for the Html component must be a dictionary not '{type(style)}'"
         assert not (props and properties), "Properties and props cannot be provided at the same time. Provide one of them instead." 
         
         # Update some styles and properties

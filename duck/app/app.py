@@ -1160,6 +1160,16 @@ class App(BaseApp):
             # Setup Duck environment and the entire application.
             setup()
             
+            # Log some setup warnings.
+            if SETTINGS['ENABLE_DASHBOARD']:
+                if not SETTINGS['DEBUG']:
+                    # We are in production.
+                    if not os.getenv("DASHBOARD_USERNAME"):
+                        logger.log("DASHBOARD_USERNAME not set in environment, using default credentials from settings.py not recommended.", level=logger.WARNING)
+                    
+                    if not os.getenv("DASHBOARD_PWD"):
+                        logger.log("DASHBOARD_PWD not set in environment, using default credentials from settings.py not recommended.", level=logger.WARNING)
+            
         # Record application metadata and run the server
         self.record_metadata()
         
