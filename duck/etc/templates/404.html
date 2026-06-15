@@ -36,7 +36,11 @@
       <span class="request-meta-item">{{ request.path }}</span>
       {% if request.http_version is defined and request.http_version %}
         <span class="request-meta-sep">·</span>
-        <span class="request-meta-item">{{ request.http_version }}</span>
+        {% if request.request_store.get("h2_handling") %}
+          <span class="request-meta-item">HTTP/2</span>
+        {% else %}
+          <span class="request-meta-item">{{ request.http_version }}</span>
+         {% endif %}
       {% endif %}
     </div>
   {% endif %}
@@ -184,7 +188,7 @@
   /* Grid — 1px gaps act as borders between cards */
   .routes-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(1, 1fr);
     gap: 1px;
     background: rgba(255, 255, 255, 0.04);
     max-height: 420px;

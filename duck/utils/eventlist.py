@@ -99,9 +99,11 @@ class EventList(list):
         """
         Clear the list by removing all items individually (triggering events).
         """
-        items = list(self)  # Copy to avoid mutation during iteration
+        items = list(self)
+        
         for item in items:
-            self.remove(item)
+            self.on_delete_item(item)
+        super().clear()  # bypass self.remove()
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {list(self)}>"
@@ -128,7 +130,7 @@ class EventList(list):
         else:
             self.on_delete_item(self[index])
         super().__delitem__(index)
-
+        
     def __setitem__(self, index, value):
         """
         Set the item at the given index or slice, triggering appropriate events.
@@ -136,19 +138,21 @@ class EventList(list):
         For single index assignment, calls on_delete_item (old) and on_new_item (new).
         For slice assignment, replaces old items individually and adds new ones.
         """
-        # Single index assignment
         if isinstance(index, int):
             old_item = self[index]
             self.on_delete_item(old_item)
-            self.on_new_item(item)
-            super().__setitem__(index, item)
+            self.on_new_item(value)        # was `item`
+            super().__setitem__(index, value)  # was `item`
             
-        # Slice replacement
         elif isinstance(index, slice):
             old_items = self[index]
+            for item in old_items:
+                self.on_delete_item(item)  # fire event once
             
-            for index, i in enumerate(old_items):
-                self.remove(i)
-             
-            for index, i in enumerate(item):
-                self.insert(index, i)
+            # Let super handle the actual splice, bypassing self.remove/self.insert
+            new_items = list(value)
+            for item in new_items:
+                self.on_new_item(item)
+            
+            # Superly set item
+            super().__setitem__(index, new_items)

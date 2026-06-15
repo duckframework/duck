@@ -27,8 +27,8 @@ class Button(InnerComponent):
         self.style.setdefaults(btn_style)
         
         # SEO and other metadata for the button
-        self.props.setdefault("role", "button")
-        self.props.setdefault("type", "button")
+        self.props.setdefault("role", self.kwargs.get("role", "button"))
+        self.props.setdefault("type", self.kwargs.get("type", "button"))
 
 
 class RoundedButton(Button):

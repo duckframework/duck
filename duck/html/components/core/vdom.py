@@ -130,8 +130,9 @@ class VDomNode:
             patches.append([PatchCode.REPLACE_STYLE, old.key, new.style])
         
         # Map old and new children by key
-        old_children_map = {child.key: child for child in old.children if child.key is not None}
-        new_children_map = {child.key: child for child in new.children if child.key is not None}
+        old_children_order = {child.key: idx for idx, child in enumerate(old.children)}
+        old_children_map = {child.key: child for child in old.children}
+        new_children_map = {child.key: child for child in new.children}
     
         # Remove nodes that no longer exist
         for key in old_children_map:
@@ -141,12 +142,20 @@ class VDomNode:
         # Insert new nodes and diff existing nodes
         for idx, new_child in enumerate(new.children):
             old_child = old_children_map.get(new_child.key)
+            
             if old_child is None:
                 # Node is new -> insert
-                patches.append([PatchCode.INSERT_NODE, old.key, [idx, new_child.to_list()]])
+                patch = [PatchCode.INSERT_NODE, old.key, [idx, new_child.to_list()]]
+                patches.append(patch)
             else:
-                # Node exists -> diff recursively
-                patches.extend(VDomNode.diff(old_child, new_child))
+                if old_children_order[new_child.key] != idx:
+                    # No MOVE_NODE — remove and re-insert at correct position
+                    remove_patch = [PatchCode.REMOVE_NODE, old.key]
+                    insert_patch = [PatchCode.INSERT_NODE, old.key, [idx, new_child.to_list()]]
+                    patches.extend([remove_patch, insert_patch])
+                else:
+                    # Node exists -> diff recursively
+                    patches.extend(VDomNode.diff(old_child, new_child))
         return patches
 
     @staticmethod
@@ -171,66 +180,70 @@ class VDomNode:
         """
         is_async_action = iscoroutinefunction(action)
         
-        # Replace node if tags differ
-        if old.tag != new.tag:
-            patch = [PatchCode.REPLACE_NODE, old.key, new.to_list()]
+        async def act(patch):
+            """
+            Execute patch action.
+            """
             if is_async_action:
                 await action(patch)
             else:
                 action(patch)
+        
+        # Replace node if tags differ
+        if old.tag != new.tag:
+            patch = [PatchCode.REPLACE_NODE, old.key, new.to_list()]
+            await act(patch)
             return
             
         # Text update
         if old.text != new.text:
             patch = [PatchCode.ALTER_TEXT, old.key, new.text]
-            if is_async_action:
-                await action(patch)
-            else:
-                action(patch)
+            await act(patch)
                 
         # Props update
         if old.props != new.props:
             patch = [PatchCode.REPLACE_PROPS, old.key, new.props]
-            if is_async_action:
-                await action(patch)
-            else:
-                action(patch)
+            await act(patch)
                 
         # Style update
         if old.style != new.style:
             patch = [PatchCode.REPLACE_STYLE, old.key, new.style]
-            if is_async_action:
-                await action(patch)
-            else:
-                action(patch)
+            await act(patch)
                 
         # Map old and new children by key
-        old_children_map = {child.key: child for child in old.children if child.key is not None}
-        new_children_map = {child.key: child for child in new.children if child.key is not None}
-    
+        old_children_order = {child.key: idx for idx, child in enumerate(old.children)}
+        old_children_map = {child.key: child for child in old.children}
+        new_children_map = {child.key: child for child in new.children}
+        
         # Remove nodes that no longer exist
         for key in old_children_map:
             if key not in new_children_map:
                 patch = [PatchCode.REMOVE_NODE, key]
-                if is_async_action:
-                    await action(patch)
-                else:
-                    action(patch)
+                await act(patch)
                 
         # Insert new nodes and diff existing nodes
         for idx, new_child in enumerate(new.children):
             old_child = old_children_map.get(new_child.key)
+            
             if old_child is None:
                 # Node is new -> insert
                 patch = [PatchCode.INSERT_NODE, old.key, [idx, new_child.to_list()]]
-                if is_async_action:
-                    await action(patch)
-                else:
-                    action(patch)
+                await act(patch)
+                
             else:
-                # Node exists -> diff recursively
-                await VDomNode.diff_and_act(action, old_child, new_child)
-    
+                if old_children_order[new_child.key] != idx:
+                    # No MOVE_NODE — remove and re-insert at correct position
+                    remove_patch = [PatchCode.REMOVE_NODE, old.key]
+                    await act(remove_patch)
+                    
+                    # Execute insert patch
+                    insert_patch = [PatchCode.INSERT_NODE, old.key, [idx, new_child.to_list()]]
+                    await act(insert_patch)
+                    
+                else:
+                    # Node exists -> diff recursively
+                    await VDomNode.diff_and_act(action, old_child, new_child)
+                    
     def __repr__(self):
         return f"<{self.__class__.__name__} key='{self.key}', children={len(self.children)}>"
         

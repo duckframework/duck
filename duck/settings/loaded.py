@@ -135,6 +135,7 @@ def get_content_compression_settings():
             raise SettingsError("CONTENT_COMPRESSION should be a dictionary.")
         
         encoding = content_compression.get("encoding")
+        
         if encoding not in ("gzip", "deflate", "br", "identity"):
             raise SettingsError(
                 f"Invalid encoding: {encoding}. Must be one of 'gzip', 'deflate', 'identity' or 'br'."
@@ -263,6 +264,8 @@ def get_blueprints() -> List[Blueprint]:
        or all of the defined blueprints are builtins,
        **Duck's** welcome blueprint will be added blueprints list.
     """
+    from duck.security.dashboard import is_dashboard_securely_configured
+    
     welcome_blueprint = "duck.etc.blueprints.welcome.blueprint.Welcome"
     dashboard_blueprint = "duck.etc.blueprints.dashboard.blueprint.Dashboard"
     
@@ -271,7 +274,7 @@ def get_blueprints() -> List[Blueprint]:
     blueprint_objs = []
     builtin_blueprints_only = True
     
-    if SETTINGS['ENABLE_DASHBOARD'] and dashboard_blueprint not in blueprints:
+    if SETTINGS['ENABLE_DASHBOARD'] and is_dashboard_securely_configured() and dashboard_blueprint not in blueprints:
         blueprints.append(dashboard_blueprint)
         
     try:
@@ -325,11 +328,13 @@ def get_user_middlewares() -> List[Type]:
     Returns:
         List[Type]: List of middleware classes, optionally patched for compatibility.
     """
+    from duck.security.dashboard import is_dashboard_securely_configured
+    
     middlewares = SETTINGS["MIDDLEWARES"] or []
     dashboard_middleware = "duck.etc.blueprints.dashboard.middleware.MetricsMiddleware"
     
-    if SETTINGS['ENABLE_DASHBOARD'] and not dashboard_middleware not in middlewares:
-        middlewares.append(dashboard_middlewares)
+    if SETTINGS['ENABLE_DASHBOARD'] and is_dashboard_securely_configured() and dashboard_middleware not in middlewares:
+        middlewares.append(dashboard_middleware)
         
     try:
         middlewares = [x_import(path) for path in middlewares]

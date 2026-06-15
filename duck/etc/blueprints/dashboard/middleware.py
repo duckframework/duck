@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from duck.http.middlewares import BaseMiddleware
 from duck.http.request import HttpRequest
 from duck.http.response import HttpResponse
+from duck.utils.ansi import remove_ansi_escape_codes_str
 from duck.logging import logger
 
 
@@ -263,6 +264,7 @@ class MetricsMiddleware(BaseMiddleware):
         Writes a log record into the metrics store ring buffer.
         """
         level = cls.LOG_LEVEL_MAP.get(level, "INFO")
+        message = remove_ansi_escape_codes_str(message)
         store.append_log(level=level, message=message)
         
     @classmethod

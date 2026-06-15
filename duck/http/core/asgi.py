@@ -154,17 +154,20 @@ class ASGI:
         """
         from duck.settings.loaded import SettingsLoaded
         
+        if not request:
+            return
+            
         middlewares = SettingsLoaded.MIDDLEWARES
         failed_middleware = request.META.get("FAILED_MIDDLEWARE") if request else None
         
         if failed_middleware:
-            # strip other middlewares if the request didn't get to reach them or come through any of them
+            # Strip other middlewares if the request didn't get to reach them or come through any of them
             index = middlewares.index(failed_middleware)
             middlewares = middlewares[:index]
-
+            
         for middleware in reversed(middlewares):
             await ensure_async(middleware.process_response)(response, request)
-    
+            
     async def django_apply_middlewares_to_response(self, response: HttpProxyResponse, request):
         """
         Applies middlewares to the final http proxy response.

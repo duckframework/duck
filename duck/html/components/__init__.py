@@ -1940,24 +1940,34 @@ class InnerHtmlComponent(
         """
         return self.__children
          
-    def add_child(self, child: HtmlComponent):
+    def add_child(self, child: HtmlComponent, force_reparent: bool = False):
         """
         Adds a child component to this HTML component.
 
         Args:
             child (HtmlComponent): The child component to add.
+            force_reparent (boo): Whether to automatically detach child from any
+                existing parent and component tree before adding them to this
+                component. This is useful when reusing components that were
+                temporarily attached elsewhere during construction.
         """
+        if force_reparent and child.parent is not None:
+            child.parent.remove_child(child)
         self.children.append(child) 
         
-    def add_children(self, children: List[HtmlComponent]):
+    def add_children(self, children: List[HtmlComponent], force_reparent: bool = False):
         """
         Adds multiple child components to this HTML component.
 
         Args:
             children (list): The list of child components to add.
+            force_reparent: Whether to automatically detach children from any
+                existing parent and component tree before adding them to this
+                component. This is useful when reusing components that were
+                temporarily attached elsewhere during construction.
         """
-        for child in children:
-            self.add_child(child)
+        for child in list(children):  # Create a copy to avoid issues if `children` is modified during iteration.
+            self.add_child(child, force_reparent=force_reparent)
     
     def remove_child(self, child: HtmlComponent):
         """
@@ -2010,3 +2020,4 @@ Component = HtmlComponent
 InnerComponent = InnerHtmlComponent
 NoInnerComponent = NoInnerHtmlComponent
 ComponentError = HtmlComponentError
+''

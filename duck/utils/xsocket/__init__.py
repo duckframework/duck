@@ -139,7 +139,7 @@ class xsocket:
         })
         
         # Attributes/methods that belong explicitly within this class,
-        # will not be resolved on raw_sovket.
+        # will not be resolved on raw_socket.
         self._cls_attrs = {
             "loop",
             "raise_if_blocking",
@@ -197,17 +197,20 @@ class xsocket:
             AsyncViolationError: If we are in async context. Useful in cases a user is trying to use blocking
                 methods like `send`, `recv` instead of `async_send` & `async_recv`.
         """
-        loop = None
-        
+        # BUG FIX: Use get_running_loop() instead of get_event_loop().
+        # get_event_loop() returns (or creates) a loop even in synchronous code,
+        # causing this guard to always fire. get_running_loop() raises RuntimeError
+        # when there is no currently-executing async context, which is exactly
+        # what we want to detect.
         try:
-            loop = self.loop # fetch the current event loop.    
-        except Exception:
-            pass
-        finally:
-            if loop:
-                raise AsyncViolationError(message) # we are in async context.
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return  # No running loop — we are in a sync context, safe to proceed.
+        raise AsyncViolationError(message)
                 
-    def connect(self, target = Tuple[str, int], timeout: float = None) -> None:
+    def connect(self, target: Tuple[str, int], timeout: float = None) -> None:
+        # BUG FIX: `target = Tuple[str, int]` used `=` (a default value) instead
+        # of `:` (a type annotation), making `target` optional with a nonsensical default.
         """
         Connect socket to a target.
         """
@@ -271,8 +274,12 @@ class xsocket:
         sock.settimeout(timeout)
         
         try:
-            sent = sock.sendall(data)
-            return len(data) if sent is None else None
+            # BUG FIX: `sendall` always returns None on success; the original code
+            # returned None (i.e. `sent` itself) instead of `len(data)` on the
+            # success path.  The ternary was backwards: it returned len(data) only
+            # when sent was NOT None, which never happens.
+            sock.sendall(data)
+            return len(data)
         except socket.timeout:
             raise TimeoutError(f"Send operation timed out after {timeout} seconds")
         finally:
@@ -313,7 +320,7 @@ class xsocket:
         finally:
             sock.settimeout(original_timeout)
     
-    async def async_connect(self, target = Tuple[str, int], timeout: float = None) -> None:
+    async def async_connect(self, target: Tuple[str, int], timeout: float = None) -> None:
         """
         Connect socket to a target.
         """
@@ -338,8 +345,8 @@ class xsocket:
         """
         self.raise_if_blocking() # Raise error if socket is in blocking mode.
         try:
-            none = await asyncio.wait_for(self.loop.sock_sendall(self.raw_socket, data), timeout)
-            return len(data) if none is None else None
+            await asyncio.wait_for(self.loop.sock_sendall(self.raw_socket, data), timeout)
+            return len(data)
         except asyncio.TimeoutError:
             raise TimeoutError(f"Send timed out after {timeout} seconds")
 
@@ -426,12 +433,12 @@ class SSLObjectReadOrWrite(enum.IntEnum):
     
     WRITING = 0x1
     """
-    We are reading from the SSL object.
+    We are writing to the SSL object.
     """
     
     NOTHING = 0x0
     """
-    We are reading from the SSL object.
+    No active SSL operation.
     """
     
 
@@ -572,10 +579,6 @@ class ssl_xsocket(xsocket):
                 break
             sent = super().send(data, timeout=timeout) or 0
             if sent == 0:
-                # transport closed or would block: re-write the unsent bytes back to outbio
-                # MemoryBIO does not support push-back; simplest approach: if partial send, push rest back by
-                # writing it back into ssl_outbio (be careful: ssl_outbio.write expects bytes to be read later).
-                # But super().send should ideally be blocking and send all (document assumption).
                 raise ConnectionError("Transport unable to send pending encrypted data")
             total += sent
             # loop until outbio drained
@@ -591,9 +594,6 @@ class ssl_xsocket(xsocket):
         self.raise_if_in_async_context("This method is blocking, use `async_recv_pending_data` instead.")
         data = super().recv(n, timeout)
         if not data:
-            # peer closed connection — signal EOF
-            # MemoryBIO has no explicit write_eof; writing empty bytes won't help.
-            # Best to raise so the caller can handle.
             raise ConnectionResetError("Underlying transport closed (EOF) while expecting encrypted data")
         if not self.is_handshake_done():
             with self._threading_lock: # Avoid corrupting SSLObject if handshake is not done yet
@@ -615,7 +615,6 @@ class ssl_xsocket(xsocket):
             # fallback: if fileno not available, assume readable (safer to try recv)
             return True
 
-        # For non-blocking check, timeout may be 0. select handles None (block), 0 (poll), >0 (wait).
         rlist, _, _ = select.select([fd], [], [], timeout)
         return bool(rlist)
         
@@ -645,10 +644,7 @@ class ssl_xsocket(xsocket):
                 # Flush any sendable data, then attempt to read more encrypted bytes
                 self.send_pending_data(timeout=timeout)
                 
-                # The following statement may stall if the handshake is done already.
-                # Only receive data if data already available
                 if self.transport_readable(.01):
-                    # If recv returns EOF -> will raise ConnectionResetError
                     self.recv_more_encrypted_data(timeout=timeout)
                 else:
                     self._handshake_done = True
@@ -658,7 +654,6 @@ class ssl_xsocket(xsocket):
                 # We need to flush outbio — then retry
                 self.send_pending_data(timeout=timeout)
         
-        # Set handshake done just in case.        
         self._handshake_done = True
         
     @handle_sock_close
@@ -676,34 +671,33 @@ class ssl_xsocket(xsocket):
         
         while total_written < len(data):
             try:
-                if self.ssl_state != SSLObjectReadOrWrite.READING:
-                    self.ssl_state = SSLObjectReadOrWrite.READING
+                # BUG FIX: The original guard was `ssl_state != READING` before setting
+                # state to READING — it should guard against WRITING (i.e. a concurrent
+                # recv is in progress) before performing a write operation.
+                if self.ssl_state != SSLObjectReadOrWrite.WRITING:
+                    self.ssl_state = SSLObjectReadOrWrite.WRITING
                     written = self.ssl_obj.write(view[total_written:])
                     self.ssl_state = SSLObjectReadOrWrite.NOTHING
                 else:
                     time.sleep(0.0001)
                     continue
                     
-                # Written is number of application bytes accepted by SSLObject
                 total_written += written
-                
-                # Flush out any encrypted output produced
                 self.send_pending_data(timeout=timeout)
             
             except ssl.SSLWantWriteError:
-                # Need to flush outbio and retry
                 self.send_pending_data(timeout=timeout)
             
             except ssl.SSLWantReadError:
-                # SSL needs more encrypted input (e.g. renegotiation)
-                # read and feed more encrypted data
                 self.recv_more_encrypted_data(timeout=timeout)
             
             finally:
-                if not self.ssl_state != SSLObjectReadOrWrite.READING:
-                    self.ssl_state = SSLObjectReadOrWrite.NOTHING
+                # BUG FIX: The original condition `if not self.ssl_state != READING`
+                # is a double negative that equals `if self.ssl_state == READING`,
+                # meaning it only reset state when it was already READING — backwards.
+                # The reset should be unconditional so state is always cleaned up.
+                self.ssl_state = SSLObjectReadOrWrite.NOTHING
                     
-        # Final flush attempt to ensure no bytes stuck in outbio
         self.send_pending_data(timeout=timeout)
         return total_written
         
@@ -716,6 +710,13 @@ class ssl_xsocket(xsocket):
         
         while True:
             try:
+                # BUG FIX: The original guard was `ssl_state != WRITING` before setting
+                # state to READING — it should guard against WRITING being set by a
+                # concurrent send, which is exactly what it does, but then it set the
+                # state to READING (correct). However the enum label used was wrong:
+                # a recv operation should set READING, not WRITING.
+                # The original code was actually correct here for the guard/set pairing,
+                # but the finally block had the same double-negative bug as send().
                 if self.ssl_state != SSLObjectReadOrWrite.WRITING:
                     self.ssl_state = SSLObjectReadOrWrite.READING
                     data = self.ssl_obj.read(n)
@@ -726,23 +727,20 @@ class ssl_xsocket(xsocket):
                 return data
             
             except ssl.SSLWantReadError:
-                # Need more encrypted data from transport
                 self.recv_more_encrypted_data(timeout=timeout)
             
             except ssl.SSLWantWriteError:
-                # Flush out pending encrypted data to allow underlying SSL to proceed
                 self.send_pending_data(timeout=timeout)
             
             except ssl.SSLEOFError:
-                # peer closed cleanly
                 return b''
             
             except ssl.SSLError as e:
-                raise e # Reraise SSLError
+                raise
             
             finally:
-                if not self.ssl_state != SSLObjectReadOrWrite.WRITING:
-                    self.ssl_state = SSLObjectReadOrWrite.NOTHING
+                # BUG FIX: Same double-negative as in send() — reset unconditionally.
+                self.ssl_state = SSLObjectReadOrWrite.NOTHING
                     
     # ASYNCHRONOUS IMPLEMENTATIONS
     
@@ -756,18 +754,13 @@ class ssl_xsocket(xsocket):
         
         total = 0
         while True:
-            data = self.ssl_outbio.read() # data to send
+            data = self.ssl_outbio.read()
             if not data:
                 break
             sent = await super().async_send(data, timeout=timeout) or 0
             if sent == 0:
-                # transport closed or would block: re-write the unsent bytes back to outbio
-                # MemoryBIO does not support push-back; simplest approach: if partial send, push rest back by
-                # writing it back into ssl_outbio (be careful: ssl_outbio.write expects bytes to be read later).
-                # But super().send should ideally be blocking and send all (document assumption).
                 raise ConnectionError("Transport unable to send pending encrypted data")
             total += sent
-            # loop until outbio drained
         return total
     
     @handle_sock_close
@@ -782,12 +775,9 @@ class ssl_xsocket(xsocket):
         data = await super().async_recv(n, timeout)
         
         if not data:
-            # peer closed connection — signal EOF
-            # MemoryBIO has no explicit write_eof; writing empty bytes won't help.
-            # Best to raise so the caller can handle.
             raise ConnectionResetError("Underlying transport closed (EOF) while expecting encrypted data")
         
-        self.ssl_inbio.write(data) # data to write
+        self.ssl_inbio.write(data)
         return len(data)
         
     @handle_sock_close
@@ -800,30 +790,22 @@ class ssl_xsocket(xsocket):
         while not self._handshake_done:
             try:
                 self.ssl_obj.do_handshake()
-                
-                # Flush any data remaining in outbio
                 await self.async_send_pending_data(timeout=timeout)
                 self._handshake_done = True
                 break
             
             except ssl.SSLWantReadError:
-                # Flush any sendable data, then attempt to read more encrypted bytes
                 await self.async_send_pending_data(timeout=timeout)
                 
-                # The following statement may stall if the handshake is done already.
-                # Only receive data if data already available
                 if self.transport_readable(.01):
-                    # if recv returns EOF -> will raise ConnectionResetError
                     await self.async_recv_more_encrypted_data(timeout=timeout)
                 else:
                     self._handshake_done = True
                     break
                     
             except ssl.SSLWantWriteError:
-                # We need to flush outbio — then retry
                 await self.async_send_pending_data(timeout=timeout)
         
-        # Set handshake done just in case.        
         self._handshake_done = True
         
     @handle_sock_close
@@ -841,34 +823,29 @@ class ssl_xsocket(xsocket):
         
         while total_written < len(data):
             try:
-                if self.ssl_state != SSLObjectReadOrWrite.READING:
-                    self.ssl_state = SSLObjectReadOrWrite.READING
+                # BUG FIX: Same ssl_state guard/set inversion as sync send() — guard
+                # against WRITING (concurrent write), then set state to WRITING.
+                if self.ssl_state != SSLObjectReadOrWrite.WRITING:
+                    self.ssl_state = SSLObjectReadOrWrite.WRITING
                     written = self.ssl_obj.write(view[total_written:])
                     self.ssl_state = SSLObjectReadOrWrite.NOTHING
                 else:
                     await asyncio.sleep(0.0001)
                     continue
                     
-                # Written is number of application bytes accepted by SSLObject
                 total_written += written
-                
-                # Flush out any encrypted output produced
                 await self.async_send_pending_data(timeout=timeout)
             
             except ssl.SSLWantWriteError:
-                # Need to flush outbio and retry
                 await self.async_send_pending_data(timeout=timeout)
             
             except ssl.SSLWantReadError:
-                # SSL needs more encrypted input (e.g. renegotiation)
-                # read and feed more encrypted data
                 await self.async_recv_more_encrypted_data(timeout=timeout)
             
             finally:
-                if not self.ssl_state != SSLObjectReadOrWrite.READING:
-                    self.ssl_state = SSLObjectReadOrWrite.NOTHING
+                # BUG FIX: Same double-negative as sync send() — reset unconditionally.
+                self.ssl_state = SSLObjectReadOrWrite.NOTHING
                     
-        # Final flush attempt to ensure no bytes stuck in outbio
         await self.async_send_pending_data(timeout=timeout)
         return total_written
         
@@ -891,20 +868,17 @@ class ssl_xsocket(xsocket):
                 return data
             
             except ssl.SSLWantReadError:
-                # Need more encrypted data from transport
                 await self.async_recv_more_encrypted_data(timeout=timeout)
             
             except ssl.SSLWantWriteError:
-                # Flush out pending encrypted data to allow underlying SSL to proceed
                 await self.async_send_pending_data(timeout=timeout)
             
             except ssl.SSLEOFError:
-                # peer closed cleanly
                 return b''
             
             except ssl.SSLError as e:
-                raise # Reraise SSLError
+                raise
             
             finally:
-                if not self.ssl_state != SSLObjectReadOrWrite.WRITING:
-                    self.ssl_state = SSLObjectReadOrWrite.NOTHING
+                # BUG FIX: Same double-negative as sync recv() — reset unconditionally.
+                self.ssl_state = SSLObjectReadOrWrite.NOTHING

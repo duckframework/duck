@@ -8,6 +8,8 @@ tagline, the pip install command card, and the primary CTA buttons.
 from duck.html.components import InnerComponent
 from duck.html.components.container import Container
 
+from .nav_footer import resolve_dashboard_url
+
 
 class HeroSection(InnerComponent):
     """
@@ -93,21 +95,43 @@ class HeroSection(InnerComponent):
         """
         Returns the row of primary and secondary CTA buttons.
 
+        When the project has a registered dashboard, the primary
+        button links there instead of to the external docs.
+
         Returns:
             A Container with both buttons.
         """
-        return Container(
-            klass="wc-cta-row",
-            inner_html=(
+        dashboard_url = resolve_dashboard_url()
+
+        if dashboard_url:
+            primary = (
+                f'<a href="{dashboard_url}" class="wc-btn-primary">'
+                + self.arrow_right_icon()
+                + ' Go to Dashboard</a>'
+            )
+            secondary = (
+                '<a href="https://docs.duckframework.com" target="_blank" '
+                'rel="noopener" class="wc-btn-ghost">'
+                + self.globe_icon()
+                + ' Read the Docs</a>'
+            )
+        else:
+            primary = (
                 '<a href="https://docs.duckframework.com" target="_blank" '
                 'rel="noopener" class="wc-btn-primary">'
                 + self.arrow_right_icon()
                 + ' Get Started</a>'
+            )
+            secondary = (
                 '<a href="https://duckframework.com" target="_blank" '
                 'rel="noopener" class="wc-btn-ghost">'
                 + self.globe_icon()
                 + ' Official Site</a>'
-            ),
+            )
+
+        return Container(
+            klass="wc-cta-row",
+            inner_html=primary + secondary,
         )
 
     def build_install_card(self) -> Container:

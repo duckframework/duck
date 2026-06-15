@@ -607,7 +607,7 @@ class Page(InnerComponent):
                 """
             )
             
-    def add_child(self, child):
+    def add_child(self, child, *args, **kwargs):
         try:
             from duck.logging import logger
         except Exception:
@@ -618,7 +618,7 @@ class Page(InnerComponent):
         
         if child not in [head, body]:
             logger.warn("Adding a child directly to page component is not recommended. Consider using `add_to_body` or `add_to_head` instead.", UnrecommendedAddChildWarning)
-        return super().add_child(child)
+        return super().add_child(child, *args, **kwargs)
         
     def set_title(self, title: str):
         """
@@ -1085,21 +1085,21 @@ class Page(InnerComponent):
         # Return the added scripts.
         return [s0, s1]
         
-    def add_to_head(self, child_or_childs: Union[Component, List[Component]]):
+    def add_to_head(self, child_or_childs: Union[Component, List[Component]], *args, **kwargs):
         """
         Add component(s) to the head.
         """
         if isinstance(child_or_childs, Component):
             child_or_childs = [child_or_childs]
-        self.head.add_children(child_or_childs)
+        self.head.add_children(child_or_childs, *args, **kwargs)
 
-    def add_to_body(self, child_or_childs: Union[Component, List[Component]]):
+    def add_to_body(self, child_or_childs: Union[Component, List[Component]], *args, **kwargs):
         """
         Add component(s) to the body.
         """
         if isinstance(child_or_childs, Component):
             child_or_childs = [child_or_childs]
-        self.body.add_children(child_or_childs)
+        self.body.add_children(child_or_childs, *args, **kwargs)
 
 
 class ErrorPage(Page):

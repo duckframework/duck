@@ -20,7 +20,7 @@ from duck import processes
 from duck.logging.handler import emit
 from duck.settings import SETTINGS
 from duck.utils.path import paths_are_same, joinpaths
-from duck.ansi import remove_ansi_escape_codes
+from duck.utils.ansi import remove_ansi_escape_codes_str
 from duck.env import is_testing_environment
 
 
@@ -63,7 +63,7 @@ def log_raw(
     
     if SILENT:
         if LOG_TO_FILE:
-            cleaned_data = remove_ansi_escape_codes([msg])[0]
+            cleaned_data = remove_ansi_escape_codes_str(msg)
             Logger.log_to_file(cleaned_data, end=end)
         return
 
@@ -123,7 +123,7 @@ def log(
     
     if SILENT:
         if LOG_TO_FILE:
-            cleaned_data = remove_ansi_escape_codes([msg])[0]
+            cleaned_data = remove_ansi_escape_codes_str(msg)
             Logger.log_to_file(cleaned_data, end=end)
         return
 
@@ -363,7 +363,7 @@ class Logger:
             Args:
                 data (str): The data to be written.
             """
-            cleaned_data = remove_ansi_escape_codes([data])[0]  # remove ansi escape codes if present
+            cleaned_data = remove_ansi_escape_codes_str(data) # remove ansi escape codes if present
             
             with write_lock:
                 file_fd.write(bytes(cleaned_data, "utf-8"))
@@ -377,7 +377,7 @@ class Logger:
             Args:
                 data (str): The data to be written.
             """
-            cleaned_data = remove_ansi_escape_codes([data])[0]  # remove ansi escape codes if present
+            cleaned_data = remove_ansi_escape_codes_str(data)  # remove ansi escape codes if present
             
             with write_lock:
                 file_fd.write(bytes(cleaned_data, "utf-8"))

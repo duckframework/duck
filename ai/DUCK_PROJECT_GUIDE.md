@@ -76,6 +76,7 @@ myproject/
 - Use `duck makeproject myproject --mini` for creating mini project for beginners or simple projects. Always refer to the README for the
 - Always refer to README for the repo to get a clear picture on project structure.
 - This is in markdown format and all headings, sections or codeblock must be parsed as markdown and not to be treated as plain text.
+- All Python source files must reside within the `web` directory. UI-related resources—including components, templates, stylesheets, JavaScript, and other frontend assets—must always be placed inside the `ui` directory, whether they belong to the main project or a blueprint. This structure ensures consistency, maintainability, and predictable project organization across all Duck applications.
 
 ### Strict Rules:
 

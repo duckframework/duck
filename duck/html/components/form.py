@@ -27,7 +27,7 @@ class Form(InnerComponent):
         super().on_create()
         
         # Always set form method
-        self.props["method"] = self.kwargs.get("method", "post")
+        self.props.setdefault("method", self.kwargs.get("method", "post"))
         
         if "action" in self.kwargs:
             self.props["action"] = self.kwargs.get("action") or "#"

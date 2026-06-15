@@ -710,7 +710,11 @@
           <span class="request-meta-item">{{ request.path }}</span>
           {% if request.http_version is defined and request.http_version %}
             <span class="request-meta-sep">·</span>
-            <span class="request-meta-item">{{ request.http_version }}</span>
+            {% if request.request_store.get("h2_handling") %}
+              <span class="request-meta-item">HTTP/2</span>
+            {% else %}
+              <span class="request-meta-item">{{ request.http_version }}</span>
+            {% endif %}
           {% endif %}
         </div>
       {% endif %}

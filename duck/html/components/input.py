@@ -21,7 +21,6 @@ class BaseInput(NoInnerComponent):
          super().on_create()
          style = {
             "padding": "10px",
-            "border": "1px solid #ccc",
             "border-radius": Theme.border_radius,
             "font-size": Theme.normal_font_size,
          }

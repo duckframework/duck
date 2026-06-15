@@ -61,4 +61,4 @@ def remove_ansi_escape_codes_str(string: str) -> str:
     """
     if not isinstance(string, str):
         raise TypeError(f"string must be a string, not {type(string).__name__!r}.")
-    return "\n".join(remove_ansi_escape_codes(string.splitlines()))
+    return ANSI_REMOVAL_PATTERN.sub("", string)

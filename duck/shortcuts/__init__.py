@@ -720,19 +720,19 @@ def resolve(name: str, absolute: bool = True, fallback_url: Optional[str] = None
         handler = info["handler"]
         
         if absolute:
-            # build absolute url
+            # Build absolute url
             if type(handler) == type and issubclass(handler, WebSocketView):
                 root_url = Meta.get_absolute_ws_server_url()
             else:
                 root_url = Meta.get_absolute_server_url()
 
-            # return absolute url
+            # Return absolute url
             abs_url = build_absolute_uri(root_url, url, normalization_ignore_chars=["*", "<", ">"])
             return abs_url
         return "/" + url if not url.startswith("/") else url
 
     except RouteNotFoundError:
-        if fallback_url:
+        if fallback_url is not None:
             return fallback_url
         raise URLResolveError(f"No URL in registry is associated with name '{name}' ")
 

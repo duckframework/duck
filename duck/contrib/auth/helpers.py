@@ -57,6 +57,25 @@ DEFAULT_AUTH_BACKEND = "session"
 SUPPORTED_BACKENDS = ("session", "jwt")
 
 
+def get_user_id(request, backend: str | None = None):
+    """
+    Returns the user ID from a supported backend.
+    """
+    backend = backend or DEFAULT_AUTH_BACKEND
+    
+    if backend == "jwt":
+        return request.JWT.get(USER_ID_KEY, None)
+        
+    elif backend == "session":
+        return request.SESSION.get(USER_ID_KEY, None)
+        
+    else:
+        raise ValueError(
+            f"Unknown auth backend: '{resolved}'. "
+            f"Supported backends are: {', '.join(SUPPORTED_BACKENDS)}."
+        )
+
+
 def set_default_auth_backend(backend: str) -> None:
     """
     Set the process-wide default authentication backend.
@@ -71,11 +90,11 @@ def set_default_auth_backend(backend: str) -> None:
         ValueError: If the given backend is not a supported identifier.
 
     Example:
-        .. code-block:: python
+    ```py
+    from duck.contrib.auth import set_default_auth_backend
 
-            from duck.contrib.auth import set_default_auth_backend
-
-            set_default_auth_backend("jwt")
+    set_default_auth_backend("jwt")
+    ```
     """
     global DEFAULT_AUTH_BACKEND
 
@@ -136,52 +155,102 @@ def authenticate(request: Any, username: str, password: str) -> Any:
     return user
 
 
-def login(request: Any, user: Any, backend: str | None = None) -> None:
+def login(
+    request: Any,
+    user: Any | None = None,
+    user_id: str | int | None = None,
+    backend: str | None = None,
+) -> None:
     """
-    Record a successfully authenticated user on the request.
+    Log in an authenticated user using the configured authentication backend.
 
-    For the session backend the user id and backend name are written into
-    ``request.SESSION``. For the JWT backend the same fields are written
-    into ``request.JWT``.
+    Either ``user`` or ``user_id`` must be provided, but not both. When ``user``
+    is provided, its ``pk`` attribute is used as the authenticated identity.
+    When ``user_id`` is provided, it is used directly, which is useful for fast
+    logins where the user identity is already known.
+
+    For the ``session`` backend, the user ID and backend name are stored in
+    ``request.SESSION``. For the ``jwt`` backend, the same values are stored in
+    ``request.JWT``.
 
     Args:
         request: The Duck request object.
-        user: An authenticated User instance returned by ``authenticate``.
-        backend: Either ``"session"`` or ``"jwt"``. Defaults to the value
-            set by ``set_default_auth_backend()`` (initially ``"session"``).
+        user: Authenticated user instance returned by ``authenticate``.
+        user_id: Authenticated user's unique ID.
+        backend: Authentication backend to use. Supported values are
+            ``"session"`` and ``"jwt"``. Defaults to ``DEFAULT_AUTH_BACKEND``.
 
     Raises:
-        AuthenticationError: If ``user`` is ``None`` or has no primary key.
-        ValueError: If an unsupported backend name is given.
+        AuthenticationError: If neither ``user`` nor ``user_id`` is provided,
+            if both are provided, if ``user`` has no valid ``pk``, or if
+            ``user_id`` is invalid.
+        ValueError: If an unsupported backend name is provided.
 
-    Example:
+    Example 1:
     ```py
     user = authenticate(request, "brian@example.com", "secret")
-    login(request, user)
+    login(request, user=user)
+    ```
+    
+    Example 2:
+    ```py
+    user_id = 1 # If user id is already known.
+    login(request, user_id=user_id)
     ```
     """
-    if not user or not user.pk:
-        raise AuthenticationError("Cannot log in an anonymous or unsaved user.")
+    if user is None and user_id is None:
+        raise AuthenticationError(
+            "Cannot log in without a user identity. "
+            "Provide either 'user' or 'user_id'."
+        )
 
-    # Resolve the effective backend
+    if user is not None and user_id is not None:
+        raise AuthenticationError(
+            "Cannot log in with both 'user' and 'user_id'. "
+            "Provide only one identity source."
+        )
+
+    # Resolve user ID from the user object.
+    if user is not None:
+        user_id = getattr(user, "pk", None)
+
+        if user_id is None:
+            raise AuthenticationError(
+                "Cannot log in an anonymous or unsaved user because "
+                "the user object has no valid 'pk'."
+            )
+
+    # Validate explicit or resolved user ID.
+    if isinstance(user_id, bool) or not isinstance(user_id, (str, int)):
+        raise AuthenticationError(
+            "Invalid user_id. Expected a non-empty string or integer."
+        )
+
+    if isinstance(user_id, str) and not user_id.strip():
+        raise AuthenticationError(
+            "Invalid user_id. Expected a non-empty string or integer."
+        )
+
     resolved = backend or DEFAULT_AUTH_BACKEND
-
+    user_id = str(user_id)
+    
+    if resolved not in SUPPORTED_BACKENDS:
+        raise ValueError(
+            f"Unknown auth backend: {resolved!r}. "
+            f"Supported backends are: {', '.join(sorted(SUPPORTED_BACKENDS))}."
+        )
+    
     if resolved == "session":
-        # Write identity into the session store
-        request.SESSION[USER_ID_KEY] = str(user.pk)
+        # Write identity into the session store.
+        request.SESSION[USER_ID_KEY] = user_id
         request.SESSION[BACKEND_KEY] = resolved
         return
 
     if resolved == "jwt":
-        # Write identity into the JWT store
-        request.JWT[USER_ID_KEY] = str(user.pk)
+        # Write identity into the JWT store.
+        request.JWT[USER_ID_KEY] = user_id
         request.JWT[BACKEND_KEY] = resolved
         return
-
-    raise ValueError(
-        f"Unknown auth backend: '{resolved}'. "
-        f"Supported backends are: {', '.join(SUPPORTED_BACKENDS)}."
-    )
 
 
 def logout(request: Any, backend: str | None = None) -> None:
@@ -242,8 +311,8 @@ def get_user_from_session(request: Any) -> Any | None:
         print(f"Logged in as {user}")
     ```
     """
-    user_id = request.SESSION.get(USER_ID_KEY)
-
+    user_id = get_user_id(request, backend="session")
+    
     if user_id is None:
         return None
 
@@ -278,8 +347,8 @@ def get_user_from_jwt(request: Any) -> Any | None:
         print(f"JWT user: {user}")
     ```
     """
-    user_id = request.JWT.get(USER_ID_KEY)
-
+    user_id = get_user_id(request, backend="jwt")
+    
     if user_id is None:
         return None
 
@@ -321,23 +390,48 @@ async def async_authenticate(
 
 async def async_login(
     request: Any,
-    user: Any,
+    user: Any | None = None,
+    user_id: str | int | None = None,
     backend: str | None = None,
 ) -> None:
     """
-    Async version of ``login``.
+    Asynchronously log in an authenticated user using the configured authentication backend.
+
+    Either ``user`` or ``user_id`` must be provided, but not both. When ``user``
+    is provided, its ``pk`` attribute is used as the authenticated identity.
+    When ``user_id`` is provided, it is used directly, which is useful for fast
+    logins where the user identity is already known.
+
+    For the ``session`` backend, the user ID and backend name are stored in
+    ``request.SESSION``. For the ``jwt`` backend, the same values are stored in
+    ``request.JWT``.
 
     Args:
         request: The Duck request object.
-        user: An authenticated User instance.
-        backend: Either ``"session"`` or ``"jwt"``. Defaults to the value
-            set by ``set_default_auth_backend()`` (initially ``"session"``).
+        user: Authenticated user instance returned by ``authenticate``.
+        user_id: Authenticated user's unique ID.
+        backend: Authentication backend to use. Supported values are
+            ``"session"`` and ``"jwt"``. Defaults to ``DEFAULT_AUTH_BACKEND``.
 
     Raises:
-        AuthenticationError: Propagated from ``login``.
-        ValueError: Propagated from ``login``.
+        AuthenticationError: If neither ``user`` nor ``user_id`` is provided,
+            if both are provided, if ``user`` has no valid ``pk``, or if
+            ``user_id`` is invalid.
+        ValueError: If an unsupported backend name is provided.
+
+    Example 1:
+    ```py
+    user = authenticate(request, "brian@example.com", "secret")
+    login(request, user=user)
+    ```
+    
+    Example 2:
+    ```py
+    user_id = 1 # If user id is already known.
+    login(request, user_id=user_id)
+    ```
     """
-    await ensure_async(login)(request, user, backend)
+    await ensure_async(login)(request, user, user_id, backend)
 
 
 async def async_logout(request: Any, backend: str | None = None) -> None:

@@ -2,13 +2,15 @@
 DashboardTopbar component — sticky top navigation bar for the dashboard.
 
 Displays the Duck Framework brand, a live server status pill, a
-last-updated timestamp, and a refresh button that triggers a Lively
-data reload over WebSocket.
+last-updated timestamp, a refresh button, and a logout link.
+The refresh button triggers a Lively data reload over WebSocket.
 """
 
 from duck.html.components import InnerComponent
 from duck.html.components.container import Container
 from duck.html.components.button import Button
+from duck.html.components.link import Link
+from duck.shortcuts import resolve
 
 
 class DashboardTopbar(InnerComponent):
@@ -31,7 +33,7 @@ class DashboardTopbar(InnerComponent):
 
     def on_create(self) -> None:
         """
-        Builds the topbar with brand, status pill, and action row.
+        Builds the topbar with brand, status pill, timestamp, refresh, and logout.
         """
         super().on_create()
 
@@ -57,25 +59,19 @@ class DashboardTopbar(InnerComponent):
         ])
 
     def build_brand(self) -> Container:
-        """
-        Returns the brand section with animated dot and label.
-
-        Returns:
-            A Container with the brand markup.
-        """
         return Container(
             klass="db-brand",
             inner_html=(
                 '<span class="db-brand-dot"></span>'
-                'Duck &nbsp;<span style="color:var(--muted);font-weight:400;">/'
-                '</span>&nbsp; Dashboard'
+                'Duck &nbsp;<span style="color:var(--muted);font-weight:400;">/</span>'
+                '&nbsp; Dashboard'
             ),
         )
 
     def build_actions(self) -> Container:
         """
         Returns the right-side action area with status pill, timestamp,
-        and refresh button.
+        refresh button, and logout link.
 
         Returns:
             A Container holding the action widgets.
@@ -85,12 +81,21 @@ class DashboardTopbar(InnerComponent):
             inner_html='<span class="db-status-pill-dot"></span> Running',
         )
 
+        # Resolve the logout URL from the blueprint route name
+        logout_url = resolve("dashboard.logout")
+        logout_link = Link(
+            url=logout_url,
+            text="Logout",
+            klass="db-logout-link",
+        )
+
         return Container(
             klass="db-topbar-right",
             children=[
                 status_pill,
                 self.last_updated_label,
                 self.refresh_btn,
+                logout_link,
             ],
         )
 

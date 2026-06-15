@@ -9,6 +9,7 @@ middleware.py. Swap the import target if you move to a persistent backend.
 """
 
 import platform
+
 from datetime import datetime, timezone
 
 from .middleware import store
@@ -234,6 +235,6 @@ def read_worker_count() -> int:
     try:
         from duck.app import App
         app = App.get_main_app()
-        return app.server.workers
+        return app.server.workers or 1
     except Exception:
         return 1

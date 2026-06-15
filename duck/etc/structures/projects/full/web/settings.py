@@ -63,11 +63,11 @@ ENABLE_DASHBOARD: bool = True
 
 
 # Default dashboard username.
-DASHBOARD_USERNAME: str = os.getenv("DASHBOARD_USERNAME", "")
+DASHBOARD_USERNAME: str = "admin"
 
 
 # Default dashboard password
-DASHBOARD_PWD: str = os.getenv("DASHBOARD_PWD", "")
+DASHBOARD_PWD: str = "admin"
 
 
 # List of all middlewares as strings in form "middleware.MiddlewareClass"
@@ -297,6 +297,7 @@ CSP_TRUSTED_SOURCES: dict = {
     "style-src": [
         "'self'",
         "'unsafe-inline'",  # Needed for Lively components' inline styles.
+        "https://fonts.googleapis.com", # Remove if unnecessary
         # Do NOT add csp_nonce_flag here if using Lively components.
         # Add CDN/style sources below, e.g. "https://fonts.googleapis.com"
     ],
@@ -306,6 +307,7 @@ CSP_TRUSTED_SOURCES: dict = {
     ],
     "font-src": [
         "'self'",
+        "https://fonts.gstatic.com" # Remove if unneccessary.
         # Add font/CDN sources, e.g. "https://fonts.gstatic.com"
     ],
     "connect-src": [

@@ -34,6 +34,7 @@ from duck.contrib.auth.helpers import (
     authenticate,
     login,
     logout,
+    get_user_id,
     get_user_from_session,
     get_user_from_jwt,
     async_authenticate,
@@ -50,6 +51,7 @@ __all__ = [
     "authenticate",
     "login",
     "logout",
+    "get_user_id",
     "get_user_from_session",
     "get_user_from_jwt",
     # Async

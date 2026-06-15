@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added a built-in Dashboard accessible through the `/dashboard` route, providing visibility into requests, responses, errors, logs, routes, performance metrics, and other server diagnostics.
 - Added support for the `ENABLE_DASHBOARD` setting, allowing the Dashboard to be enabled or disabled without requiring manual blueprint registration.
 - Added `DASHBOARD_USERNAME` and `DASHBOARD_PWD` settings for securing Dashboard access during development and debugging.
+- Added helper function `get_user_id` to `duck.contrib.auth` for efficiently retrieving the authenticated user's ID from supported authentication backends such as `jwt` and `session`. This is useful when only the user identifier is required, avoiding the overhead of loading the full user object.
+- Added `duck.security` module for security utilities.
+- Added `user_id` argument to the `duck.contrib.auth.login` function (including `async_login`) for fast login when user ID is already known. 
+- Added `force_reparent` argument to `InnerHtmlComponent` methods `add_child` and `add_children` to to automatically detach children from any existing parent and component tree before adding them to this component. This is useful when reusing components that were temporarily attached elsewhere during construction.
+- Added `remove_ansi_escape_codes_str` to `duck.utils.ansi` module.
 
 ### Changed
 
@@ -35,12 +40,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Refined middleware implementations and improved middleware debugging messages.
 - Improved and modernized Duck's default pages and error pages with a cleaner, more polished user interface.
 - Simplified and reduced complexity within `duck.contrib.responses.errors`.
+- Dashboard is only enabled when securely configured.
+- Moved `duck.ansi` module to `duck.utils.ansi` module.
+- Added `https://fonts.googleapis.com` and `https://fonts.gstatic.com` to default CSP rules.
 
 ### Fixed
 
 - Fixed various issues related to blueprint generation and resource discovery.
 - Fixed inconsistencies in default blueprint structure and asset resolution.
-- Fixed middlewares' `process_response` not running on error response - middleware `process_response` now being executed everytime.
+- Fixed middlewares' `process_response` not running on error response - middleware `process_response` now being executed everytime (only when request object avaible).
+- Fixed `InnerHtmlComponent.add_children` to use a copy of children to avoid issues if `children` is modified during iteration.
+- Fixed subtle `duck.utils.xsocket` bugs.
 
 ---
 

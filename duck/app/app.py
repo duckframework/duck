@@ -875,6 +875,8 @@ class App(BaseApp):
         Covers allowed hosts, domain, and CSP policy checks
         relevant to the component system.
         """
+        from duck.security.dashboard import get_dashboard_security_issues
+        
         if not SETTINGS['DEBUG'] and "*" in SETTINGS['ALLOWED_HOSTS']:
             logger.log(
                 "WARNING: ALLOWED_HOSTS seem to have global host (*)",
@@ -887,6 +889,17 @@ class App(BaseApp):
                 level=logger.WARNING,
             )
             
+        # Log some setup warnings.
+        if SETTINGS['ENABLE_DASHBOARD']:
+            issues = get_dashboard_security_issues() or []
+            
+            for issue in issues:
+                logger.log(issue, level=logger.WARNING)
+                
+            # Log a message that dashboard has been disabled if insecure.
+            if issues:
+                logger.log(f"Dashboard disabled for security reasons: {len(issues)} issue(s) found", level=logger.WARNING)
+                
     def log_component_system_warnings(self):
         """
         Warns about missing CSP flags required by the Lively component system.
@@ -1159,16 +1172,6 @@ class App(BaseApp):
         if not self.skip_setup:
             # Setup Duck environment and the entire application.
             setup()
-            
-            # Log some setup warnings.
-            if SETTINGS['ENABLE_DASHBOARD']:
-                if not SETTINGS['DEBUG']:
-                    # We are in production.
-                    if not os.getenv("DASHBOARD_USERNAME"):
-                        logger.log("DASHBOARD_USERNAME not set in environment, using default credentials from settings.py not recommended.", level=logger.WARNING)
-                    
-                    if not os.getenv("DASHBOARD_PWD"):
-                        logger.log("DASHBOARD_PWD not set in environment, using default credentials from settings.py not recommended.", level=logger.WARNING)
             
         # Record application metadata and run the server
         self.record_metadata()

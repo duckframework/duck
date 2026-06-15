@@ -149,6 +149,9 @@ class WSGI:
         """
         from duck.settings.loaded import SettingsLoaded
         
+        if not request:
+            return
+            
         middlewares = SettingsLoaded.MIDDLEWARES
         failed_middleware = request.META.get("FAILED_MIDDLEWARE") if request else None
         

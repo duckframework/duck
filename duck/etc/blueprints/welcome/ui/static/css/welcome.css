@@ -22,17 +22,20 @@
   --border:        rgba(255,255,255,0.06);
   --border-subtle: rgba(255,255,255,0.03);
   --mono:          'JetBrains Mono', monospace;
-  --radius-sm:     6px;
-  --radius:        10px;
-  --radius-lg:     14px;
-  --radius-xl:     20px;
+  --radius-sm:     8px;
+  --radius:        14px;
+  --radius-lg:     18px;
+  --radius-xl:     24px;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; overflow-x: hidden; }
 
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 15% 0%, rgba(245,166,35,0.05) 0%, transparent 45%),
+    radial-gradient(circle at 85% 20%, rgba(96,165,250,0.04) 0%, transparent 40%),
+    var(--bg);
   color: var(--text);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   min-height: 100dvh;
@@ -132,8 +135,18 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 0;
+  padding: 0.85rem 1.25rem;
+  margin-top: 1rem;
+  border-radius: var(--radius-lg);
+  background: rgba(16,16,16,0.55);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  position: sticky;
+  top: 1rem;
+  z-index: 100;
   animation: fade-up 0.5s ease both;
+  gap: 5px;
 }
 
 .wc-nav-brand {
@@ -186,6 +199,23 @@ body::before {
   border-color: var(--border);
 }
 
+.wc-nav-link-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #0a0a0a !important;
+  background: var(--orange);
+  border-color: var(--orange) !important;
+  font-weight: 700;
+}
+
+.wc-nav-link-cta:hover {
+  background: #f7b540;
+  color: #0a0a0a !important;
+  border-color: #f7b540 !important;
+  transform: translateY(-1px);
+}
+
 /* Hero section */
 .wc-hero {
   width: 100%;
@@ -194,7 +224,7 @@ body::before {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 5rem 0 3rem;
+  padding: 3.5rem 0 3rem;
   gap: 1.5rem;
 }
 
@@ -303,29 +333,20 @@ body::before {
   font-weight: 700;
   letter-spacing: 0.04em;
   color: #0a0a0a;
-  background: var(--orange);
+  background: linear-gradient(135deg, #FFC56E 0%, var(--orange) 100%);
   border: none;
-  border-radius: var(--radius);
-  padding: 0.7rem 1.4rem;
+  border-radius: 999px;
+  padding: 0.75rem 1.6rem;
   cursor: pointer;
   text-decoration: none;
-  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   position: relative;
   overflow: hidden;
 }
 
-.wc-btn-primary::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%);
-  pointer-events: none;
-}
-
 .wc-btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(245,166,35,0.35);
-  background: #f7b540;
+  box-shadow: 0 10px 32px rgba(245,166,35,0.4);
 }
 
 .wc-btn-primary:active { transform: translateY(0); }
@@ -342,8 +363,8 @@ body::before {
   color: var(--text-dim);
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.7rem 1.4rem;
+  border-radius: 999px;
+  padding: 0.75rem 1.6rem;
   cursor: pointer;
   text-decoration: none;
   transition: color 0.15s, border-color 0.15s, background 0.15s, transform 0.15s;
@@ -448,7 +469,7 @@ body::before {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  transition: background 0.15s;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   cursor: default;
   position: relative;
   overflow: hidden;
@@ -465,7 +486,11 @@ body::before {
   transition: transform 0.3s cubic-bezier(0.22,1,0.36,1);
 }
 
-.wc-feature-card:hover { background: var(--surface-2); }
+.wc-feature-card:hover {
+  background: var(--surface-2);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+}
 .wc-feature-card:hover::after { transform: scaleX(1); }
 
 .wc-feature-icon {
@@ -600,12 +625,16 @@ body::before {
   gap: 0.6rem;
   text-decoration: none;
   color: inherit;
-  transition: background 0.15s;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   position: relative;
   overflow: hidden;
 }
 
-.wc-link-card:hover { background: var(--surface-2); }
+.wc-link-card:hover {
+  background: var(--surface-2);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+}
 
 .wc-link-card::before {
   content: '';
@@ -779,4 +808,112 @@ body::before {
   .wc-hero { padding: 3rem 0 2rem; }
   .wc-stats-ticker { gap: 1.25rem; }
   .wc-stat-num { font-size: 1.1rem; }
+}
+
+/* Mobile nav — hamburger + drawer
+   -------------------------------------------------------- */
+
+/* Hide burger on desktop */
+.wc-nav-burger {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  /* The nav becomes a flex column when open */
+  .wc-nav {
+    flex-wrap: wrap;
+    padding: 0.85rem 1.1rem;
+    /* Allow the drawer to expand below the brand row */
+    align-items: flex-start;
+  }
+
+  /* Brand stays in its row */
+  .wc-nav-brand {
+    flex: 1;
+    /* Vertically center with the burger button */
+    align-self: center;
+  }
+
+  /* Show the burger button */
+  .wc-nav-burger {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    flex-shrink: 0;
+    align-self: center;
+    transition: border-color 0.15s;
+  }
+
+  .wc-nav-burger:hover {
+    border-color: var(--muted);
+  }
+
+  /* Three bars */
+  .wc-burger-bar {
+    display: block;
+    width: 16px;
+    height: 1.5px;
+    background: var(--muted);
+    border-radius: 2px;
+    transition: transform 0.25s ease, opacity 0.2s ease;
+    transform-origin: center;
+  }
+
+  /* Animate bars into X when open */
+  .wc-nav-open .wc-burger-bar:nth-child(1) {
+    transform: translateY(6.5px) rotate(45deg);
+  }
+  .wc-nav-open .wc-burger-bar:nth-child(2) {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  .wc-nav-open .wc-burger-bar:nth-child(3) {
+    transform: translateY(-6.5px) rotate(-45deg);
+  }
+
+  /* Link drawer — hidden by default, slides in when open */
+  .wc-nav-links {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+    /* Slide-down reveal */
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.25s ease, padding 0.25s ease;
+    padding-top: 0;
+  }
+
+  .wc-nav-open .wc-nav-links {
+    max-height: 400px;
+    opacity: 1;
+    padding-top: 0.75rem;
+    /* Take full width below the brand/burger row */
+    flex-basis: 100%;
+  }
+
+  /* Each link fills the full width of the drawer */
+  .wc-nav-link {
+    width: 100%;
+    padding: 0.7rem 0.85rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    border-color: transparent;
+    text-align: left;
+  }
+
+  /* Dashboard CTA stretches full width too */
+  .wc-nav-link-cta {
+    justify-content: space-between;
+    margin-top: 0.25rem;
+  }
 }

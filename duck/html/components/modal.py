@@ -263,9 +263,9 @@ class Modal(FlexContainer):
         super().add_child(self.modal_content_container)
         self.modal_content_container.add_child(self.modal_content)
 
-    def add_child(self, child):
+    def add_child(self, child, *args, **kwargs):
         if not hasattr(self, 'modal_content'):
-            super().add_child(child)
+            super().add_child(child, *args, **kwargs)
             return
 
         # Script and header are added directly — everything else goes into
