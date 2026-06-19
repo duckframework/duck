@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Dashboard is only enabled when securely configured.
 - Moved `duck.ansi` module to `duck.utils.ansi` module.
 - Added `https://fonts.googleapis.com` and `https://fonts.gstatic.com` to default CSP rules.
+- `duck.utils.fileio.FileIOStream` now caches reads/writes data for faster repeated access.
 
 ### Fixed
 

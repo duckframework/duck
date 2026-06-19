@@ -620,17 +620,18 @@ class StreamingHttpResponse(HttpResponse):
         if isinstance(self.stream, FileIOStream) and not isinstance(self.stream, AsyncFileIOStream):
             self.stream = to_async_fileio_stream(self.stream)
             
+        # Get content/generator
         content = self.content_provider()
         
         if isinstance(content, (str, bytes)):
             raise TypeError(
-                "Expected iterable or generator yielding bytes, got raw string or bytes. "
+                "Expected iterable or async generator yielding bytes, got raw string or bytes. "
                 "Wrap your content in a generator or iterable."
             )
             
         if not isinstance(content, Iterable) and not isasyncgen(content):
             raise TypeError(
-                f"Expected an iterable, generator or async_generator, got {type(content).__name__}"
+                f"Expected an iterable or async generator, got {type(content).__name__}"
             )
     
         return content
@@ -857,6 +858,7 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
         if not hasattr(self.stream, 'seek') or not hasattr(self.stream, 'tell'):
             raise ValueError("Stream must support seeking to handle partial content.")
     
+        # Seek to start_pos
         self.stream.seek(self.start_pos)
         
         # If start_pos == end_pos, this mean last byte is required. This is represented by `or 1` statement.
@@ -881,6 +883,7 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
         if not hasattr(self.stream, 'seek') or not hasattr(self.stream, 'tell'):
             raise ValueError("Stream must support seeking to handle partial content.")
     
+        # Seek to start_pos
         self.stream.seek(self.start_pos)
         
         # If start_pos == end_pos, this mean last byte is required. This is represented by `or 1` statement.
@@ -960,7 +963,7 @@ class FileResponse(StreamingRangeHttpResponse):
                 file_stream = StreamingHttpResponse.file_io_stream(filepath)
             
             if not file_stream.is_open():
-                # Open file stream
+                # Open file stream immediately
                  file_stream.open()
         
         except FileNotFoundError as e:
