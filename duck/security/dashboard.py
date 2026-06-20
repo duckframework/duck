@@ -18,6 +18,7 @@ def get_dashboard_security_issues() -> list[str]:
             indicates that the dashboard is securely configured.
     """
     from duck.settings import SETTINGS
+    from duck.security.passwords import validate_password_strength, PasswordValidationError
     
     # Only retrieve credentials from environment in production - it's more sure that way.
     if SETTINGS["DEBUG"]:
@@ -25,8 +26,8 @@ def get_dashboard_security_issues() -> list[str]:
 
     # We are in production at this point.
     issues = []
-    username = os.getenv("DASHBOARD_USERNAME")
-    password = os.getenv("DASHBOARD_PWD")
+    username = os.getenv("DASHBOARD_USERNAME", "").strip()
+    password = os.getenv("DASHBOARD_PWD", "").strip()
 
     if not username:
         issues.append(
@@ -45,7 +46,14 @@ def get_dashboard_security_issues() -> list[str]:
         issues.append(
             "DASHBOARD_PWD is using the default value."
         )
-
+    
+    # Check for password strength
+    if password and username and os.getenv("DASHBOARD_IGNORE_PWD_VALIDATION", None) not in ("true", "1"):
+        try:
+            validate_password_strength(password, user_attributes=(username, ))
+        except PasswordValidationError as e:
+            issues.append(f"Dashboard {e} To ignore validation set environment variable 'DASHBOARD_IGNORE_PWD_VALIDATION' to '1'.")
+            
     return issues
 
 

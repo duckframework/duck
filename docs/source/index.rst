@@ -64,6 +64,7 @@ Contents
    sitemap
    deployment
    monitoring
+   dashboard
    service-management
    free-ssl-certificate
    xsocket

@@ -18,9 +18,9 @@ from duck.routes import (
     blueprint_joinpath,
 )
 from duck.settings import SETTINGS
+from duck.shortcuts import not_found404
 from duck.http.request import HttpRequest
 from duck.http.response import FileResponse
-from duck.shortcuts import not_found404
 from duck.utils.path import joinpaths
 
 
@@ -109,7 +109,7 @@ async def async_staticfiles_view(request: HttpRequest, staticfile: str):
     View for serving staticfiles for the app.
     """
     staticfile = resolve_staticfile(request, staticfile)
-    
+    print(staticfile)
     if not os.path.isfile(staticfile):
         if SETTINGS["DEBUG"]:
             response = not_found404(

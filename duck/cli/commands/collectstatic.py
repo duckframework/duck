@@ -62,34 +62,23 @@ class CollectStaticCommand:
                 return
         
         for static_dir in global_static_dirs:
-            dst = static_root
+            destination = static_root
+            
             if os.path.isdir(static_dir):
-                shutil.copytree(static_dir, dst, dirs_exist_ok=True)
+                shutil.copytree(static_dir, destination, dirs_exist_ok=True)
             
         for static_dir, blueprint in blueprint_static_dirs:
             # Convert staticdir to relative path
             abs_static_dir = static_dir
-            relative_static_dir = pathlib.Path(static_dir).relative_to(pathlib.Path(blueprint.location).parent)
             
-            # The blueprint stripped_staticdir is a dir with removed staticdir name from it
-            # so that function static() can resolve files correctly in production.
-            parts = pathlib.Path(relative_static_dir).parts
-            staticdir_name = ""
-            
-            if parts:
-                staticdir_name = parts[0]
-            
-            # Set staticdir without staticdir name
-            blueprint_stripped_staticdir = str(relative_static_dir).lstrip(staticdir_name)
-            
-            dst = joinpaths(
+            # Build destination path
+            destination = joinpaths(
                 static_root,
                 blueprint.name,
-                blueprint_stripped_staticdir,
             )
             
             # Copy static files
-            shutil.copytree(abs_static_dir, dst, dirs_exist_ok=True)
+            shutil.copytree(abs_static_dir, destination, dirs_exist_ok=True)
     
         console.log_raw(f"\nSuccessfully copied {staticfiles_len} staticfile(s) to {static_root}", level=console.SUCCESS)
         

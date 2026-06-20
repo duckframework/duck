@@ -140,6 +140,7 @@ def validate_credit_card(card_number: str) -> bool:
     
     total = 0
     reverse_digits = card_number[::-1]
+    
     for i, digit in enumerate(reverse_digits):
         n = int(digit)
         if i % 2 == 1:

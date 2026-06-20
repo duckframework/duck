@@ -53,6 +53,14 @@ http://localhost:8000
 
 🎉 Your Duck app is now running.
 
+### Preview
+
+1. **Terminal:**
+![Terminal](./_static/images/duck-terminal.jpg)
+
+2. **Browser:**
+![Welcome](./_static/images/welcome.jpg)
+
 ---
 
 ## 4. Understand the Project Structure

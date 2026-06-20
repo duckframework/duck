@@ -18,13 +18,13 @@ By the end:
 
 You'll create these files:
 
-```
+```bash
 web/ui/
 ├── components/
-│    └── message_bubble.py  # Reusable message display
+│     └── message_bubble.py  # Reusable message display
 ├── pages/
-│    ├── base.py   # Shared page layout
-│    └── chat.py    # The chat page + logic
+│     ├── base.py   # Shared page layout
+│     └── chat.py    # The chat page + logic
 ├── web/urls.py  # Routes
 └── (other files)
 ```

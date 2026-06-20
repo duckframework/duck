@@ -12,46 +12,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Added `is_valid_host` to the `duck.utils.net` module.
-- Added two built-in template tags and one filter: `smart_truncate`, `expand_exception`, and `to_spaced_camel_case`.
-  - `smart_truncate` and `to_spaced_camel_case` are powered by utilities from the `duck.utils.string` module.
-- Added improved default blueprint scaffolding:
+- Added two built-in template tags and one filter:
+  - `smart_truncate`
+  - `expand_exception`
+  - `to_spaced_camel_case`
+  `smart_truncate` and `to_spaced_camel_case` are powered by utilities from the `duck.utils.string` module.
+
+- Improved default blueprint scaffolding:
   - New blueprints now include a `ui/` directory by default.
-  - `views.py` is now generated automatically.
-  - Blueprints can now automatically resolve static assets from `ui/static/`.
-  - Blueprints can now automatically resolve templates from `ui/templates/`.
-- Added a built-in Dashboard blueprint for monitoring and managing Duck applications, including request metrics, response statistics, latency tracking, error reporting, route inspection, logs, and real-time server state monitoring.
-- Added support for log handlers in the `duck.logging.handler` module, allowing custom actions and integrations to be triggered whenever log messages are emitted.
-- Added a built-in Dashboard accessible through the `/dashboard` route, providing visibility into requests, responses, errors, logs, routes, performance metrics, and other server diagnostics.
-- Added support for the `ENABLE_DASHBOARD` setting, allowing the Dashboard to be enabled or disabled without requiring manual blueprint registration.
+  - `views.py` is generated automatically.
+  - Static assets are automatically discovered from `ui/static/`.
+  - Templates are automatically discovered from `ui/templates/`.
+
+- Added a built-in Dashboard blueprint for monitoring and managing Duck applications, including:
+  - Request and response metrics
+  - Latency tracking
+  - Error reporting
+  - Route inspection
+  - Log monitoring
+  - Real-time server state monitoring
+  
+- Added support for log handlers in the `duck.logging.handler` module, enabling custom integrations and actions to be executed whenever log messages are emitted.
+- Added a built-in Dashboard accessible via the `/dashboard` route, providing visibility into:
+  - Requests and responses
+  - Errors and exceptions
+  - Logs and routes
+  - Performance metrics
+  - Server diagnostics
+  
+- Added support for the `ENABLE_DASHBOARD` setting, allowing the Dashboard to be enabled or disabled without manual blueprint registration.
 - Added `DASHBOARD_USERNAME` and `DASHBOARD_PWD` settings for securing Dashboard access during development and debugging.
-- Added helper function `get_user_id` to `duck.contrib.auth` for efficiently retrieving the authenticated user's ID from supported authentication backends such as `jwt` and `session`. This is useful when only the user identifier is required, avoiding the overhead of loading the full user object.
-- Added `duck.security` module for security utilities.
-- Added `user_id` argument to the `duck.contrib.auth.login` function (including `async_login`) for fast login when user ID is already known. 
-- Added `force_reparent` argument to `InnerHtmlComponent` methods `add_child` and `add_children` to to automatically detach children from any existing parent and component tree before adding them to this component. This is useful when reusing components that were temporarily attached elsewhere during construction.
-- Added `remove_ansi_escape_codes_str` to `duck.utils.ansi` module.
+- Added `get_user_id` to `duck.contrib.auth` for efficiently retrieving the authenticated user's ID from supported authentication backends such as `jwt` and `session`, avoiding the overhead of loading the full user object when only the identifier is required.
+- Added the `duck.security` package for security-related utilities.
+- Added a `user_id` argument to `duck.contrib.auth.login` and `duck.contrib.auth.async_login`, enabling fast authentication when the user ID is already known.
+- Added a `force_reparent` argument to `InnerHtmlComponent.add_child` and `InnerHtmlComponent.add_children` that automatically detaches a component from any existing parent and component tree before reattaching it. This is useful when reusing components that were temporarily attached elsewhere during construction.
+- Added `remove_ansi_escape_codes_str` to the `duck.utils.ansi` module.
+- Added the `duck.security.passwords` module for password strength validation and security checks.
 
 ### Changed
 
-- Renamed `duck.etc.apps` to `duck.etc.blueprints` to better reflect its purpose and usage.
-- Renamed the built-in blueprint `duck.etc.apps.defaultsite.blueprint.Ducksite` to `duck.etc.blueprints.welcome.blueprint.Welcome`.
+- Renamed `duck.etc.apps` to `duck.etc.blueprints` to better reflect its purpose.
+- Renamed the built-in blueprint:
+  
+  ```python
+  duck.etc.apps.defaultsite.blueprint.Ducksite
+  ```
+  
+  to:
+  
+  ```python
+  duck.etc.blueprints.welcome.blueprint.Welcome
+  ```
+
 - Removed `simple_response` from `duck.contrib.responses`.
 - Renamed `template_response` to `make_response` for improved clarity and consistency.
-- Added an asynchronous equivalent, `async_make_response`.
+- Added `async_make_response` as the asynchronous equivalent of `make_response`.
 - Refined middleware implementations and improved middleware debugging messages.
-- Improved and modernized Duck's default pages and error pages with a cleaner, more polished user interface.
+- Modernized Duck's default pages and error pages with a cleaner, more polished user experience.
 - Simplified and reduced complexity within `duck.contrib.responses.errors`.
-- Dashboard is only enabled when securely configured.
-- Moved `duck.ansi` module to `duck.utils.ansi` module.
-- Added `https://fonts.googleapis.com` and `https://fonts.gstatic.com` to default CSP rules.
-- `duck.utils.fileio.FileIOStream` now caches reads/writes data for faster repeated access.
+- Dashboard functionality is now only enabled when securely configured.
+- Moved the `duck.ansi` module to `duck.utils.ansi`.
+- Added `https://fonts.googleapis.com` and `https://fonts.gstatic.com` to the default Content Security Policy (CSP) rules.
+- `duck.utils.fileio.FileIOStream` now caches read and write operations to improve performance during repeated access.
 
 ### Fixed
 
 - Fixed various issues related to blueprint generation and resource discovery.
-- Fixed inconsistencies in default blueprint structure and asset resolution.
-- Fixed middlewares' `process_response` not running on error response - middleware `process_response` now being executed everytime (only when request object avaible).
-- Fixed `InnerHtmlComponent.add_children` to use a copy of children to avoid issues if `children` is modified during iteration.
-- Fixed subtle `duck.utils.xsocket` bugs.
+- Fixed inconsistencies in default blueprint structure and automatic asset resolution.
+- Fixed middleware `process_response` hooks not executing for error responses. `process_response` is now always executed whenever a request object is available.
+- Fixed `InnerHtmlComponent.add_children` to iterate over a copy of the provided children collection, preventing issues caused by mutations during iteration.
+- Fixed several subtle bugs in `duck.utils.xsocket`.
+- Fixed an issue with the `duck collectstatic` command.
 
 ---
 

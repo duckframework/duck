@@ -6,6 +6,7 @@ authenticates via duck.contrib.auth, issues a JWT token, and redirects
 to the dashboard. Incorrect credentials re-render the form with an
 animated error state.
 """
+import asyncio
 
 from duck.html.components.page import Page
 from duck.html.components.container import Container
@@ -254,10 +255,12 @@ class LoginPage(Page):
         # Show spinner while processing
         await ws.execute_js(
             "document.getElementById('login-btn-text').textContent='Signing in...';"
-            "document.getElementById('login-btn-text').style.opacity='0';"
             "document.getElementById('login-btn-spinner').classList.remove('login-spinner--hidden');"
             "document.getElementById('login-submit-btn').disabled=true;"
         )
+        
+        # Sleep a little for the spinner to be bit visible.
+        await asyncio.sleep(.5)
         
         # Resolve provided username and password
         username = form_inputs.get("username", "").strip()
