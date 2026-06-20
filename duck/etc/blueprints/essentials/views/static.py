@@ -109,7 +109,7 @@ async def async_staticfiles_view(request: HttpRequest, staticfile: str):
     View for serving staticfiles for the app.
     """
     staticfile = resolve_staticfile(request, staticfile)
-    print(staticfile)
+    
     if not os.path.isfile(staticfile):
         if SETTINGS["DEBUG"]:
             response = not_found404(
