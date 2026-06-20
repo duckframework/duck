@@ -68,7 +68,7 @@ And more — see [feature list](https://duckframework.com/features)
 1. **HTTP/3 with QUIC** – Faster, modern transport for improved performance.  
 2. **QUIC WebTransport** – A next-gen alternative to WebSockets for real-time communication.  
 3. **Component Pre-rendering System** – A system to preload components in the background thread to reduce initial load times of component trees.
-4. **Customizable Dashboards** – Tailor interfaces to your workflow and preferences.  
+4. ~~**Customizable Dashboards** – Tailor interfaces to your workflow and preferences.~~  
 5. **MQTT (Message Queuing Telementry Transport) Integration** – Run your own broker and manage IoT devices with ease.  
 6. **Duck WebApp to APK** – Easily convert a Duck web application to APK.
 7. **DuckSight Hot Reload** – Instead of full reload on file changes, implement **hot reload** for the **DuckSight Reloader**. This is faster and efficient than full reload.

@@ -14,8 +14,9 @@ Helpers support both sync and async usage.
 Sync:
 
 - `authenticate(request, username, password)`
-- `login(request, user, backend=None)`
+- `login(request, user=None, user_id=None, backend=None)`
 - `logout(request, backend=None)`
+- `get_user_id(request, backend=None)`
 - `get_user_from_session(request)`
 - `get_user_from_jwt(request)`
 - `set_default_auth_backend("session" | "jwt")`
@@ -60,9 +61,10 @@ Storage target depends on backend:
 
 ### 3) User resolution
 
+- `get_user_id(...)` helps with fast login when user ID is already known.
 - `get_user_from_session(...)` reads `_auth_user_id` from session
 - `get_user_from_jwt(...)` reads `_auth_user_id` from JWT claims
-- Both return `None` if user no longer exists
+- All these functions return `None` if user no longer exists
 
 ### 4) Logout behavior
 
@@ -92,7 +94,7 @@ set_default_auth_backend("jwt")
 
 ## Requirements
 
-- Auth helpers rely on Django auth models/ORM.
+- Most auth helpers rely on Django auth models/ORM.
 - For JWT auth persistence, keep `JWTMiddleware` enabled so tokens can be read and re-issued correctly.
 
 ---
@@ -110,6 +112,7 @@ def sign_in(request):
     except AuthenticationError:
         return HttpResponse("invalid credentials", status_code=401)
 
+    # Login user and return response.
     login(request, user, backend="session")
     return HttpResponse("signed in")
 ```
@@ -129,6 +132,7 @@ def sign_in_jwt(request):
     except AuthenticationError:
         return HttpResponse("invalid credentials", status_code=401)
 
+    # Login user and return response.
     login(request, user, backend="jwt")
     return HttpResponse("signed in")
 ```

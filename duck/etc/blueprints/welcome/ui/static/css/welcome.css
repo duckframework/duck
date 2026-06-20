@@ -581,7 +581,7 @@ body::before {
   padding: 1.25rem;
   font-family: var(--mono);
   font-size: 0.76rem;
-  line-height: 1.8;
+  line-height: 1.5;
   color: #B8B8B8;
   white-space: pre;
   overflow-x: auto;
