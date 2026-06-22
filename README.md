@@ -57,9 +57,10 @@ Build high-performance, scalable, server-side reactive web applications — with
 21. [Log management](https://docs.duckframework.com/main/logging) with `duck logs` and file-based logging by default  
 22. Real-time [system monitoring](https://docs.duckframework.com/main/monitoring) for CPU, RAM, Disk usage, and I/O activity with `duck monitor`
 23. Easily generate app sitemap using command [`duck sitemap`](https://docs.duckframework.com/main/sitemap) or just use 
-       the builtin blueprint [`duck.etc.apps.essentials.blueprint.Sitemap`](https://docs.duckframework.com/main/sitemap) for dynamic cached sitemap serving.
+       the builtin blueprint [`duck.etc.blueprints.essentials.blueprint.Sitemap`](https://docs.duckframework.com/main/sitemap) for dynamic cached sitemap serving.
 24. Comes with independant [micro applications](https://docs.duckframework.com/main/microapps) which runs on their own servers for micro services support.
-25. Highly **customizable** to fit any use case  
+25. Highly **customizable** to fit any use case
+26. Builtin [dashboard](https://docs.duckframework.com/main/dashboard) for monitoring requests, latency and system metrics.
 
 And more — see [feature list](https://duckframework.com/features)
 
