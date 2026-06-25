@@ -1750,7 +1750,7 @@ class NavigationHandler {
       
       // We have received all patches but we might not be done patching the DOM.
       if (isFinal) {
-        const progressBarInner = progressBar.querySelector('#progress-bar-inner');
+        const progressBarInner = progressBar.querySelector('.progress-bar-inner');
         
         // Scroll to top (if not already at top).
         if (!fullpath.includes("#")) {
@@ -1929,12 +1929,14 @@ class LivelyWebSocketClient {
         }
       }
       
-      // Show connected snackbar.
-      const snackbar = window.LIVELY_APPLICATION.PAGE_SNACKBAR;
-      snackbar.LABEL.textContent = "Connected"
+      // Show connected snackbar - only if it's a reconnect.
+      if (this._reconnectInProgress) {
+        const snackbar = window.LIVELY_APPLICATION.PAGE_SNACKBAR;
+        snackbar.LABEL.textContent = "Connection restored"
       
-      // Show a success snackbar and autohide.
-      showSnackbar(snackbar, "success", 2000);
+        // Show a success snackbar and autohide.
+        showSnackbar(snackbar, "success", 2000);
+      }
       
       // Connected, no reconnect ongoing
       this._reconnectInProgress = false;
@@ -1965,10 +1967,10 @@ class LivelyWebSocketClient {
       // Reset progressbar if present.
       window.LIVELY_APPLICATION.resetPageProgressBar();
       
-      // Show not connected snackbar.
+      // Show not connected snackbar - If no reconnect attempt.
       if (!this._reconnectInProgress) {
         const snackbar = window.LIVELY_APPLICATION.PAGE_SNACKBAR;
-        snackbar.LABEL.textContent = "Disconnected!"
+        snackbar.LABEL.textContent = "You're offline"
       
         // Show an error snackbar and autohide.
        showSnackbar(snackbar, "error", 2000);
@@ -2181,7 +2183,7 @@ class LivelyApp {
     this.defineLiveElementProperty("PAGE_PROGRESS_BAR", "page-progress-bar");
     
     // Assign important elem specific attributes
-    this.PAGE_SNACKBAR.LABEL = this.PAGE_SNACKBAR.querySelector("#snackbar-label");
+    this.PAGE_SNACKBAR.LABEL = this.PAGE_SNACKBAR.querySelector(".snackbar-label");
     this.PAGE_PROGRESS = 0;
     
     // Do some magic

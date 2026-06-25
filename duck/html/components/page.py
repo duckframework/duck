@@ -111,8 +111,45 @@ from duck.html.components.label import Label
 from duck.html.components.style import Style
 from duck.html.components.modal import Modal
 from duck.html.components.paragraph import Paragraph
+from duck.html.components.unsupported_browser import UnsupportedBrowserBanner
 from duck.contrib.sync import convert_to_async_if_needed
 from duck.utils.lazy import Lazy
+
+
+try:
+    from duck.logging import logger
+except Exception:
+    from duck.logging import console as logger
+
+
+BASE_CSS = """
+/* Fade-in on add/replace */
+.patch-fade-in {
+  opacity: 0;
+  animation: fadeIn 0.1s forwards;
+}
+
+@keyframes fadeIn {
+  to { opacity: 1; }
+}
+
+/* Fade-out on remove */
+.patch-fade-out {
+  opacity: 1;
+  animation: fadeOut 0.1s forwards;
+}
+
+@keyframes fadeOut {
+  to { opacity: 0; }
+}
+"""
+
+GA_SCRIPT = """
+window.dataLayer = window.dataLayer || [];
+function gtag(){{dataLayer.push(arguments);}}
+gtag('js', new Date());
+gtag('config', '{tracking_id}');
+"""
 
 
 class PageError(Exception):
@@ -401,6 +438,9 @@ class Page(InnerComponent):
         return event_info
         
     def on_create(self):
+        """
+        Build the whole page component.
+        """
         from duck.html.components.core.system import LivelyComponentSystem
         
         # Super create
@@ -427,11 +467,9 @@ class Page(InnerComponent):
         
         # Core html structure
         self.head = to_component("", "head")
-        self.body = to_component("", "body")
+        self.body = to_component("", "body", style={"display": "flex", "flex-direction": "column"})
         
-        self.body.style["display"] = "flex"
-        self.body.style["flex-direction"] = "column"
-        
+        # Meta component builder
         meta = lambda **kwargs: to_component("", "meta", no_closing_tag=True, **kwargs)
         
         # Basic meta tags
@@ -466,158 +504,73 @@ class Page(InnerComponent):
             self.title,
         ])
         
-        
-        # Expose the component UID via JS
-        # This next line should be first before adding LivelyScripts for these scripts to
-        # be able to resolve the Page UID.
-        self.page_uid_script = self.add_script(inline=f"window.PAGE_UID=document.getElementById(`{self.id}`).dataset.uid;")
-        
-        if self.disable_lively:
+        if self.disable_lively or not LivelyComponentSystem.is_active():
             # Disable Lively scripts and other Lively components.
             return
             
-        # Add base css style to be used by lively system
-        self.base_css = Style(
-            inner_html="""
-            /* Fade-in on add/replace */
-            .patch-fade-in {
-              opacity: 0;
-              animation: fadeIn 0.1s forwards;
-            }
-            
-            @keyframes fadeIn {
-              to { opacity: 1; }
-            }
-            
-            /* Fade-out on remove */
-            .patch-fade-out {
-              opacity: 1;
-              animation: fadeOut 0.1s forwards;
-            }
-            
-            @keyframes fadeOut {
-              to { opacity: 0; }
-            }
-            """
-        )
-        self.add_to_head(self.base_css)
+        # Expose the component UID via JS
+        # This next line should be first before adding LivelyScripts for these scripts to
+        # be able to resolve the Page UID.
+        self.add_script(inline=f"window.PAGE_UID=document.getElementById(`{self.id}`).dataset.uid;")
         
-        if LivelyComponentSystem.is_active():
-            livelyscripts = LivelyScripts()
-            
-            # Only add script tags of livelyscripts Div
-            scripts = livelyscripts.children.copy()
-            
-            # Unset the lively scripts parent so that they will be addable to 'head'
-            livelyscripts.clear_children()
-            self.add_to_head(scripts)
-            
-        # Add progress bar to show page reloading
-        # and snackbar to show network status.
-        self.snackbar =  Snackbar(
+        # Add other head components
+        self.add_to_head([Style(inner_html=BASE_CSS), *LivelyScripts().children], force_reparent=True)
+        
+        # Add body components
+        # Initialize top page snackbar
+        self.page_snackbar = Snackbar(
             id="page-snackbar",
             type="info",
             color="white",
+            variant="glacier",
             style={
                 "height": ".5px",
                 "font-size": ".5rem",
                 "width": "fit-content",
-                "padding": "8px 4px",
+                "padding": "8px",
                 "margin-top": "7px",
                 "margin-left": "auto",
                 "margin-right": "auto",
-                "min-width": "100px",
                 "border-radius": "8px",
             },
+            children=[
+                Label(
+                    klass="snackbar-label",
+                    color="white",
+                    style={
+                        "text-align": "center",
+                        "margin": "auto",
+                    }
+                ),
+            ]
         )
         
-        # Add snackbar label
-        self.snackbar_label = Label(
-            id="snackbar-label",
-            color="white",
-            style={
-                "text-align": "center",
-                "margin": "auto",
-            }
-        ) 
-        self.snackbar.add_child(self.snackbar_label)
-        
-        # Add snackbar and progress bar
-        self.progress_bar = ProgressBar(
+        # Initialize top page progress
+        self.page_progress_bar = ProgressBar(
             id="page-progress-bar",
             style={
                 "position": "fixed",
                 "z-index": "50000",
             }
         )
-        self.add_to_body([self.snackbar, self.progress_bar])
         
-        # Add unsupported browser version banner.
-        self.unsupported_browser_banner = Modal(
-            title="🌐 Unsupported Browser Detected",
-            id="unsupported-browser-banner",
-            style={
-                "align-items": "flex-start",
-                "padding": "20px",
-            },
-            add_to_registry=False,
-        )
-
-        # Minimalist dark modal content styling
-        self.unsupported_browser_banner.modal_content.style.update({
-            "padding": "24px 20px",               # Classic padding
-            "text-align": "center",
-        })
+        # Initialize unsupported browser banner
+        self.unsupported_browser_banner = UnsupportedBrowserBanner()
         
-        self.unsupported_browser_info = Paragraph(
-            inner_html=(
-                "<div style='font-size:2em;margin-bottom:0.3em;'>🚫</div>"
-                "<b>Unsupported Browser</b><br>"
-                "Your browser isn't supported.<br>"
-                "Please update or switch to a modern browser.<br><br>"
-                "<a href='https://www.google.com/chrome/' target='_blank' style='color:#4fd1c5;text-decoration:underline;'>Chrome</a> &nbsp;|&nbsp; "
-                "<a href='https://www.mozilla.org/firefox/new/' target='_blank' style='color:#fbbf24;text-decoration:underline;'>Firefox</a> &nbsp;|&nbsp; "
-                "<a href='https://www.microsoft.com/edge' target='_blank' style='color:#60a5fa;text-decoration:underline;'>Edge</a>"
-            ),
-            style={
-                "text-align": "center",
-                "color": "#ccc",
-            }
-        )
+        # Add all body components.
+        self.add_to_body([self.page_snackbar, self.page_progress_bar, self.unsupported_browser_banner])
         
-        # Set banner content.
-        self.unsupported_browser_banner.set_content(self.unsupported_browser_info)
-        
-        # Add unsupported browser banner
-        self.add_to_body(self.unsupported_browser_banner)
-        
-        if LivelyComponentSystem.is_active():
-            # On syntax error, this means browser is incompatible
-            # Show browser incompatibility banner
-            self.add_script(
-                inline=f"""
-                document.addEventListener("DOMContentLoaded", () => {{
-                  const unsupportedBrowserBanner = document.getElementById(`{self.unsupported_browser_banner.id}`);
-                  setTimeout(() => {{
-                    if (!window.LIVELY_SCRIPT_COMPATIBLE && window.receivedFullLivelyJs) {{
-                      openModal(unsupportedBrowserBanner);
-                    }}
-                  }}, 10); // Delay a little bit
-                }});
-                """
-            )
-            
     def add_child(self, child, *args, **kwargs):
-        try:
-            from duck.logging import logger
-        except Exception:
-            from duck.logging import console as logger
-            
+        """
+        Add a child component to the page.
+        """
         head = getattr(self, 'head', None)
         body = getattr(self, "body", None)
         
         if child not in [head, body]:
             logger.warn("Adding a child directly to page component is not recommended. Consider using `add_to_body` or `add_to_head` instead.", UnrecommendedAddChildWarning)
+        
+        # Finally add the child component.
         return super().add_child(child, *args, **kwargs)
         
     def set_title(self, title: str):
@@ -643,7 +596,7 @@ class Page(InnerComponent):
             self.head.remove_child(self._author_tag)
         
         # The below line adds meta component to the head
-        self._author_tag = self.add_meta(props={"name": "author", "content": author})
+        self._author_tag = self.add_meta(name="author", content=author)
         
     def set_keywords(self, keywords: List[str]):
         """
@@ -685,22 +638,6 @@ class Page(InnerComponent):
         if role:
             self.body.props["role"] = role
             
-    def set_meta(self, name: str, content: str) -> NoInnerComponent:
-        """
-        Add a meta tag to the head.
-
-        Args:
-            name: The name attribute of the meta tag.
-            content: The content attribute of the meta tag.
-        
-        Returns:
-            NoInnerComponent: The generated meta component.
-        """
-        meta_tag = to_component("", "meta", no_closing_tag=True, props={"name": name, "content": content})
-        self.meta_tags.append(meta_tag)
-        self.add_to_head(meta_tag)
-        return meta_tag
-
     def set_favicon(self, source: str, icon_type: str = "image/png", rel: str = "icon", sizes: Optional[str] = None) -> NoInnerComponent:
         """
         Add a favicon or icon link tag.
@@ -937,20 +874,21 @@ class Page(InnerComponent):
             data["image"] = image
         self.set_json_ld(data)
         
-    def add_meta(self, **kwargs) -> NoInnerComponent:
+    def add_meta(self, name: str, content: str) -> NoInnerComponent:
         """
-        Add meta tag to the page's head.
-        
+        Add a meta tag to the head.
+
         Args:
-            **kwargs: Additional keyword arguments to pass to meta component. 
-            
+            name: The name attribute of the meta tag.
+            content: The content attribute of the meta tag.
+        
         Returns:
             NoInnerComponent: The generated meta component.
         """
-        meta = lambda **kwargs: to_component("", "meta", no_closing_tag=True, **kwargs)
-        meta = meta(**kwargs)
-        self.add_to_head(meta)
-        return meta
+        meta_tag = to_component("", "meta", no_closing_tag=True, props={"name": name, "content": content})
+        self.meta_tags.append(meta_tag)
+        self.add_to_head(meta_tag)
+        return meta_tag
         
     def add_stylesheet(self, href: str, add_to_noscript: bool = False, **attrs) -> Optional[Component]:
         """
@@ -1001,7 +939,7 @@ class Page(InnerComponent):
             
             # Return the link component.
             return link
-        
+            
     def add_script(
         self,
         src: Optional[str] = None,
@@ -1027,15 +965,19 @@ class Page(InnerComponent):
         
         if src:
             props["src"] = src
+        
         if async_:
             props["async"] = "async"
+        
         if defer:
             props["defer"] = "defer"
         
         # Update props
         attrs.setdefault("type", "text/javascript")
+        
         if "source" in attrs:
             raise PageError("Keyword argument `source` not allowed. Defer to using `src` instead.")
+        
         props.update(attrs)
 
         # Prevent duplicates by src
@@ -1071,16 +1013,9 @@ class Page(InnerComponent):
         if not tracking_id:
             return
         
-        ga_script = f"""
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){{dataLayer.push(arguments);}}
-        gtag('js', new Date());
-        gtag('config', '{tracking_id}');
-        """
-        
         # Load GA script async in head, plus inline config
         s0 = self.add_script("https://www.googletagmanager.com/gtag/js?id=" + tracking_id, async_=True)
-        s1 = self.add_script(inline=ga_script)
+        s1 = self.add_script(inline=GA_SCRIPT.format(tracking_id=tracking_id))
         
         # Return the added scripts.
         return [s0, s1]
@@ -1091,7 +1026,7 @@ class Page(InnerComponent):
         """
         if isinstance(child_or_childs, Component):
             child_or_childs = [child_or_childs]
-        self.head.add_children(child_or_childs, *args, **kwargs)
+        return self.head.add_children(child_or_childs, *args, **kwargs)
 
     def add_to_body(self, child_or_childs: Union[Component, List[Component]], *args, **kwargs):
         """
@@ -1099,7 +1034,7 @@ class Page(InnerComponent):
         """
         if isinstance(child_or_childs, Component):
             child_or_childs = [child_or_childs]
-        self.body.add_children(child_or_childs, *args, **kwargs)
+        return self.body.add_children(child_or_childs, *args, **kwargs)
 
 
 class ErrorPage(Page):

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- Added the `UnsupportedBrowserBanner` component to the `duck.html.components.unsupported_browser` module.
+- Added the `glacier` variant to the `Snackbar` component, providing a modern frosted-glass appearance.
+
+### Changed
+
+- Updated the `Snackbar` and `Progress` components to support dynamic color updates after initialization.
+- Updated `lively.js` and `lively.min.js` to support the new page progress bar and snackbar behavior.
+- Simplified the `Page` component implementation.
+- Refined Lively's WebSocket connection notifications to display only meaningful status changes, removing the initial **"Connected"** toast.
+
+### Fixed
+
+- Fixed several issues related to snackbar state synchronization and dynamic updates.
+
+---
+
 ## [2.1.0] - June 20, 2026
 
 ### Added

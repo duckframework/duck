@@ -5,123 +5,124 @@ from duck.html.components.container import Container
 from duck.html.components.script import Script
 
 
+PROGRESS_BAR_SCRIPT = """
+function updateProgressBar(progressBar, progress, autoHideWhenZero = true) {{
+  const progressBarInner = progressBar.querySelector('.progress-bar-inner');
+  progress = Math.max(0, Math.min(100, progress));
+  
+  requestAnimationFrame(() => {{
+    if (!progressBarInner) return;
+
+    if (progress > 0) {{
+      progressBar.style.display = 'inline-block';
+      progressBarInner.style.transform = `scaleX(${{progress / 100}})`;
+    }} else if (autoHideWhenZero) {{
+      hideProgressBar(progressBar, false);
+    }} else {{
+      progressBarInner.style.transform = 'scaleX(0)';
+    }}
+  }});
+}}
+
+function hideProgressBar(progressBar, nextAnimationFrame = true) {{
+  const progressBarInner = progressBar.querySelector('.progress-bar-inner');
+
+  const applyHiddenState = () => {{
+    progressBar.style.display = 'none';
+
+    if (progressBarInner) {{
+      progressBarInner.style.transform = 'scaleX(0)';
+    }}
+  }};
+
+  if (nextAnimationFrame) {{
+    requestAnimationFrame(applyHiddenState);
+    return;
+  }}
+
+  applyHiddenState();
+}}
+"""
+
+
 class ProgressBar(Container):
     """
-    A modern loading bar component with interactive JavaScript toggles and Python toggles.
-
-    Attributes:
-        progress_bar (Container): The progress bar element.
+    Modern loading bar with JavaScript and Python update helpers.
     """
     
-    def on_create(self):
+    def on_create(self) -> None:
         """
-        Initializes the loading bar component.
-
-        Sets up the styles and adds the progress bar element.
+        Initialize and compose the progress bar.
         """
         super().on_create()
-        
-        # Set up the styles for the loading bar
-        self.bg_color = "rgba(0, 255, 0, 0.1)"
-        self.style["width"] = "100%"
-        self.style["height"] = "3px"
-        self.style["border-radius"] = "3px"
-        self.style["overflow"] = "hidden"
-        self.style["display"] = "none"
-        self.style["transition"] = "display 0.1s ease"
-        
-        # Create a progress bar      
-        self._progress_bar = Container(bg_color="#4CAF50", id="progress-bar-inner")
-        self._progress_bar.style["width"] = "100%"
-        self._progress_bar.style["height"] = "100%"
-        self._progress_bar.style["transition"] = "transform 0.1s ease"
-        self._progress_bar.style["will-change"] = "transform"
-        self._progress_bar.style["transform-origin"] = "left"
-        
-        # Add the progress bar element to the loading bar
-        self.add_child(self._progress_bar)
 
-        # Add a JavaScript function to toggle the loading bar
-        self.script = Script(
-            inner_html="""
-            function updateProgressBar(progressBar, progress, autoHideWhenZero = true) {
-              // Clamp progress value to [0, 100] for safety
-              progress = Math.max(0, Math.min(100, progress));
-              
-              // Find the inner progress bar element by id or class
-              const progressBarInner =
-                progressBar.querySelector('#progress-bar-inner') ||
-                progressBar.querySelector('.progress-bar-inner');
-            
-              // Schedule updates for the next animation frame for smooth UI
-              requestAnimationFrame(() => {
-                if (!progressBarInner) return;
-            
-                if (progress > 0) {
-                  // Show the progress bar if progress is nonzero
-                  progressBar.style.display = 'inline-block';
-                  // Animate the width (scaleX) to represent progress
-                  progressBarInner.style.transform = `scaleX(${progress / 100})`;
-                } else if (autoHideWhenZero) {
-                  // Hide the bar and reset the inner transform if enabled
-                  hideProgressBar(progressBar, false);
-                } else {
-                  // If not hiding, reset inner bar to zero width
-                  progressBarInner.style.transform = 'scaleX(0)';
-                }
-              });
-            }
-            
-            /**
-             * Hides the progress bar and resets inner bar transform.
-             * Useful for manual control or after navigation/transition.
-             * @param {HTMLElement} progressBar - The outer progress bar element.
-             * @param {boolean} nextAnimationFrame - Whether to run in the next animation frame. Defaults to true.
-             */
-            function hideProgressBar(progressBar, nextAnimationFrame = true) {
-              // Find inner bar element
-              const progressBarInner =
-                progressBar.querySelector('#progress-bar-inner') ||
-                progressBar.querySelector('.progress-bar-inner');
-            
-              if (nextAnimationFrame) {
-                requestAnimationFrame(() => {
-                  // Hide the outer bar
-                  progressBar.style.display = 'none';
-                  
-                  // Reset inner bar transform for future use
-                  if (progressBarInner) {
-                    progressBarInner.style.transform = 'scaleX(0)';
-                  }
-                });
-              }
-              else {
-                // Hide the outer bar
-                progressBar.style.display = 'none';
-                
-                // Reset inner bar transform for future use
-                if (progressBarInner) {
-                  progressBarInner.style.transform = 'scaleX(0)';
-                }
-              }
-            }
-            """
+        # Component setup
+        self.bg_color = "rgba(0, 0, 0, .1)"
+        self.props.setdefault("id", "progress-bar")
+        self.style.update({
+            "width": "100%",
+            "height": "3px",
+            "border-radius": "3px",
+            "overflow": "hidden",
+            "display": "none",
+            "transition": "display 0.1s ease",
+        })
+
+        # Component children
+        self._progress_bar = Container(
+            klass="progress-bar-inner",
+            bg_color="#F5C842",
+            style={
+                "width": "100%",
+                "height": "100%",
+                "transition": "transform 0.1s ease",
+                "will-change": "transform",
+                "transform-origin": "left",
+                "transform": "scaleX(0)",
+            },
         )
-        self.add_child(self.script)
 
-    def update_progress(self, progress: int):
+        self.add_children([
+            self._progress_bar,
+            Script(inner_html=PROGRESS_BAR_SCRIPT.format(progress_bar_id=self.id)),
+        ])
+
+    # Public API
+
+    def update_progress(self, progress: int) -> None:
         """
-        Updates the progress of the loading bar.
+        Update the progress bar from Python.
 
         Args:
-            progress (int): The progress percentage.
+            progress: Progress percentage between ``0`` and ``100``.
+
+        Raises:
+            TypeError: If progress is not an integer.
+            ValueError: If progress is outside ``0`` to ``100``.
         """
-        assert isinstance(progress, int), "Progress must be an integer."
-        
-        if progress > 0 and self.style.get("display") == "none":
-            self.style["display"] = "inline-block"
-        elif progress <= 0:
-          self.style["display"] = "none"
-          
-        # Update the progress bar width
-        self._progress_bar.style["width"] = f"{progress}%"
+        if not isinstance(progress, int):
+            raise TypeError("Progress must be an integer.")
+
+        if not 0 <= progress <= 100:
+            raise ValueError("Progress must be between 0 and 100.")
+
+        self.style["display"] = "inline-block" if progress > 0 else "none"
+        self._progress_bar.style["transform"] = f"scaleX({progress / 100})"
+
+    def set_progress_color(self, color: str) -> None:
+        """
+        Set the filled progress indicator color.
+
+        Args:
+            color: CSS color value.
+        """
+        self._progress_bar.bg_color = color
+
+    def set_track_color(self, color: str) -> None:
+        """
+        Set the progress track/background color.
+
+        Args:
+            color: CSS color value.
+        """
+        self.bg_color = color
