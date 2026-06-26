@@ -70,6 +70,7 @@ Contents
    xsocket
    shortcuts
    utils
+   changelog
 
 .. toctree::
    :maxdepth: 2

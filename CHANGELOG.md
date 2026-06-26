@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Updated `lively.js` and `lively.min.js` to support the new page progress bar and snackbar behavior.
 - Simplified the `Page` component implementation.
 - Refined Lively's WebSocket connection notifications to display only meaningful status changes, removing the initial **"Connected"** toast.
+- Updated `Page` methods such as `set_author`, `set_canonical`, `set_pagination`, and `set_json_ld` to allow multiple invocations without raising `ComponentAttributeProtection` error, making them safe to update or override throughout the page lifecycle.
 
 ### Fixed
 

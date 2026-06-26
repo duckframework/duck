@@ -588,16 +588,17 @@ class Page(InnerComponent):
     def set_author(self, author: str):
         """
         Set the author meta tag.
-        
+    
         Args:
             author (str): The author name - personal or organisation name. 
         """
-        if self._author_tag and self._author_tag in self.head.children:
-            self.head.remove_child(self._author_tag)
-        
-        # The below line adds meta component to the head
-        self._author_tag = self.add_meta(name="author", content=author)
-        
+        if not self._author_tag:
+            self._author_tag = self.add_meta(name="author", content=author)
+        else:
+            self._author_tag.props.update({"content": author})
+            if self._author_tag not in self.head.children:
+                self.add_to_head(self._author_tag)
+    
     def set_keywords(self, keywords: List[str]):
         """
         Set the keywords meta tag.
@@ -694,38 +695,42 @@ class Page(InnerComponent):
         """
         Add or update the canonical URL.
         """
-        if self.canonical_link and self.canonical_link in self.head.children:
-            self.head.remove_child(self.canonical_link)
-        
-        # Create canonical link component.
-        self.canonical_link = to_component("", "link", no_closing_tag=True, props={"rel": "canonical", "href": url})
-        self.add_to_head(self.canonical_link)
+        if not self.canonical_link:
+            # Create canonical link component.
+            self.canonical_link = to_component("", "link", no_closing_tag=True, props={"rel": "canonical", "href": url})
+        else:
+            self.canonical_link.props.update({"href": url})
+        self.add_to_head(self.canonical_link, force_reparent=True)
 
     def set_pagination(self, prev_url: Optional[str] = None, next_url: Optional[str] = None):
         """
         Add pagination links.
-
-        Args:
-            prev_url: URL of previous page.
-            next_url: URL of next page.
         """
-        if self.prev_link and self.prev_link in self.head.children:
-            self.head.remove_child(self.prev_link)
-        
-        if self.next_link and self.next_link in self.head.children:
-            self.head.remove_child(self.next_link)
-
         if prev_url:
-            self.prev_link = to_component("", "link", no_closing_tag=True, props={"rel": "prev", "href": prev_url})
-            self.add_to_head(self.prev_link)
-        else:
-            self.prev_link = None
-
+            if not self.prev_link:
+                self.prev_link = to_component("", "link", no_closing_tag=True, props={"rel": "prev", "href": prev_url})
+                self.add_to_head(self.prev_link)
+            else:
+                self.prev_link.props.update({"href": prev_url})
+                if self.prev_link not in self.head.children:
+                    self.add_to_head(self.prev_link)
+        elif self.prev_link:
+            if self.prev_link in self.head.children:
+                self.head.remove_child(self.prev_link)
+            self.prev_link.props.update({"href": ""})
+    
         if next_url:
-            self.next_link = to_component("", "link", no_closing_tag=True, props={"rel": "next", "href": next_url})
-            self.add_to_head(self.next_link)
-        else:
-            self.next_link = None
+            if not self.next_link:
+                self.next_link = to_component("", "link", no_closing_tag=True, props={"rel": "next", "href": next_url})
+                self.add_to_head(self.next_link)
+            else:
+                self.next_link.props.update({"href": next_url})
+                if self.next_link not in self.head.children:
+                    self.add_to_head(self.next_link)
+        elif self.next_link:
+            if self.next_link in self.head.children:
+                self.head.remove_child(self.next_link)
+            self.next_link.props.update({"href": ""})
             
     def set_opengraph(
         self,
@@ -813,19 +818,20 @@ class Page(InnerComponent):
         """
         if not isinstance(data, dict):
             raise ValueError("JSON-LD data must be a dictionary")
-        
-        if self._json_ld_tag and self._json_ld_tag in self.head.children:
-            self.head.remove_child(self._json_ld_tag)
-        
-        # Create json ld
+    
+        # Serialize to JSON
         json_str = json.dumps(data, ensure_ascii=False)
-        self._json_ld_tag = Script(
-            inner_html=json_str,
-            props={"type": "application/ld+json"}
-        )
-        
-        # Add the json ld component.
-        self.add_to_head(self._json_ld_tag)
+    
+        if not self._json_ld_tag:
+            self._json_ld_tag = Script(
+                inner_html=json_str,
+                props={"type": "application/ld+json"}
+            )
+            self.add_to_head(self._json_ld_tag)
+        else:
+            self._json_ld_tag.inner_html = json_str
+            if self._json_ld_tag not in self.head.children:
+                self.add_to_head(self._json_ld_tag)
         
     def set_article_json_ld(self, headline: str, author_name: str, date_published: str, description: str, url: Optional[str] = None):
         """
