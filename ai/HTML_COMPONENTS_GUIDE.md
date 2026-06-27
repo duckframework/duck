@@ -1415,6 +1415,7 @@ Button()  # then later setting display
 
 - ❌ Do not add a component that already belongs to another parent component unless it has first been removed from its existing parent. Components should only have a single parent at any given time.
 - ❌ Avoid using generic components when a dedicated component already exists. Generic components should only be used when no suitable specialized component is available. For example, do not use a `Container` as a link when a `Link` component exists.
+- ❌ Avoid using `window.location.href = someLink` for navigation, especially when Lively is active. Instead, use `window.open(someLink)`. Lively automatically patches `window.open()` to perform soft navigation whenever possible, preserving application state and avoiding unnecessary full page reloads.
 - ❌ Do not use the `tag` argument on components. Use the `element` argument or override the `get_element()` hook instead. The `tag` argument is only valid for the `to_component()` function.
 - ❌ Avoid embedding large blocks of raw HTML inside components unless absolutely necessary. Prefer building UIs with existing HTML components whenever possible. If you need to convert existing HTML, use `to_component()`. For custom or frequently reused UI patterns that do not have built-in component equivalents, create reusable components instead of repeatedly embedding raw HTML. This improves maintainability, readability, consistency, and reactivity.
 

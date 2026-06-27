@@ -454,7 +454,7 @@ class CSRFMiddleware(BaseMiddleware):
             unmasked_csrf_secret = "<invalid-token>"
 
         if not (
-            constant_time_compare(sent_csrf_token_secret, correct_csrf_secret)
+            constant_time_compare(unmasked_csrf_secret, correct_csrf_secret)
             and len(correct_csrf_secret) == CSRF_SECRET_LENGTH
             and len(sent_csrf_token_secret) == CSRF_SECRET_LENGTH
         ):
