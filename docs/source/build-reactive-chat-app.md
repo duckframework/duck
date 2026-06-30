@@ -14,6 +14,17 @@ By the end:
 
 ---
 
+## Create Your Project
+
+Create a mini Duck project first:
+
+```bash
+duck makeproject myproject --mini
+cd myproject
+```
+
+---
+
 ## Project structure
 
 You'll create these files:
@@ -464,13 +475,13 @@ All communication between browser and Python happens over **WebSocket** — supe
 
 ## Improvements (next level)
 
-1. **Persist messages** → Save to a database instead of in-memory
-2. **User names** → Add a login form so users pick their own name
-3. **Timestamps** → Show when each message was sent
-4. **Typing indicator** → Show "User X is typing..."
-5. **Delete messages** → Add a delete button on each bubble
-6. **Emoji reactions** → Click a reaction emoji on a message
-7. **Private messages** → Allow 1-on-1 conversations
+1. **Persist messages** ➝‬ Save to a database instead of in-memory
+2. **User names** ➝‬ Add a login form so users pick their own name
+3. **Timestamps** ➝‬ Show when each message was sent
+4. **Typing indicator** ➝‬ Show "User X is typing..."
+5. **Delete messages** ➝‬ Add a delete button on each bubble
+6. **Emoji reactions** ➝‬ Click a reaction emoji on a message
+7. **Private messages** ➝‬ Allow 1-on-1 conversations
 
 ---
 

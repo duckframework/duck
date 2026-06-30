@@ -1,4 +1,4 @@
-# 🚀 Getting Started with Duck
+# 🚀 Getting Started
 
 *Simple. Powerful. Reactive web apps in pure Python — no JavaScript, no extra tools.*  
 
