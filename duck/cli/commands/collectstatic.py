@@ -114,9 +114,10 @@ class CollectStaticCommand:
         try:
             prepare_django(True)
         except Exception as e:
-            logger.warn(f"Django setup failed: {e}", DjangoSetupWarning)
+            console.warn(f"Django setup failed: {e}", DjangoSetupWarning)
+            
             if SETTINGS['DEBUG']:
-                logger.log_exception(e)
+                console.log_exception(e)
         
         for blueprint in blueprints:
             if blueprint.enable_static_dir:
