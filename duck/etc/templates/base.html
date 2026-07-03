@@ -848,6 +848,15 @@
     }
 
     // Highlight key parts of the traceback for faster scanning
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     (function colourTraceback() {
       const pre = document.getElementById('traceback-pre');
       if (!pre) return;
@@ -856,21 +865,23 @@
       const lines = raw.split('\n');
 
       const html = lines.map(function (line) {
+        const safeLine = escapeHtml(line);
+
         // File reference lines — "  File "path/to/file.py", line N, in fn"
         if (/^\s*File ".+", line \d+/.test(line)) {
-          return line
+          return safeLine
             .replace(/(File ")([^"]+)(", line )(\d+)/,
               '<span class="tb-file">$1$2$3</span><span class="tb-lineno">$4</span>');
         }
         // Final error line — "ExceptionType: message"
         if (/^[A-Z][a-zA-Z0-9_]*(\.[A-Z][a-zA-Z0-9_]*)*:\s/.test(line.trim())) {
-          return `<span class="tb-error">${line}</span>`;
+          return `<span class="tb-error">${safeLine}</span>`;
         }
         // Code lines inside a frame — indented non-File lines
         if (/^\s{4}[^\s]/.test(line)) {
-          return `<span class="tb-code">${line}</span>`;
+          return `<span class="tb-code">${safeLine}</span>`;
         }
-        return line;
+        return safeLine;
       });
 
       pre.innerHTML = html.join('\n');
