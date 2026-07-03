@@ -468,9 +468,10 @@ duck runserver -dj
 
 ## Useful Links
 
-1. [Official Website](https://duckframework.com)    
-2. [Documentation](https://docs.duckframework.com)
-3. [Lively UI Documentation](https://docs.duckframework.com/main/lively-components)
+1. [Official Website](https://duckframework.com)
+2. [Blog](https://duckframework.com/blog)
+3. [Documentation](https://docs.duckframework.com)
+4. [Lively UI Documentation](https://docs.duckframework.com/main/lively-components)
 
 ---
 
