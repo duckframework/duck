@@ -78,7 +78,7 @@ And more — see the [full feature list](https://duckframework.com/features).
 8. **Internal updates** — securely list and apply updates using cryptographic code signing (e.g. TUF) to verify GitHub-sourced updates, protecting against rollbacks and man-in-the-middle attacks
 9. ~~**Worker processes** — use worker processes to utilize all available CPU cores for improved request handling~~
 10. **Complete reverse proxy server** — Duck currently proxies only Django; the goal is a full-fledged reverse proxy server with optional sticky sessions
-11. ~~**Component mutation observer** — an optional mutation observer to track child changes for faster re-renders (~75x faster on unchanged children)~~
+11. ~~**Component mutation observer** — an optional mutation observer to track child changes for faster re-renders (75x faster on unchanged children)~~
 12. ~~**MCP (Model Context Protocol) server** — make it easy to build MCP servers for seamless AI communication
 13. ~~**JWT (JSON Web Token) authentication** — persistent logins via JWT~~
 14. **...and more** — [request a feature](./feature_request.md)
