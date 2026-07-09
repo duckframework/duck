@@ -33,47 +33,84 @@ Contents
 
 .. toctree::
    :maxdepth: 2
-   :caption: Table of Contents:
-   
+   :caption: Getting Started
+
    getting-started
-   build-reactive-chat-app
    project-structure
-   cached-views
    settings
-   lively-components
+   build-reactive-chat-app
    counterapp
-   cached-components
+   microapp
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Core Concepts
+
    templates
    templatetags
+   lively-components
    blueprint
-   microapp
+   shortcuts
+   utils
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Reactivity & Real-Time
+
+   websocket
+   xsocket
+   cached-views
+   cached-components
+   background-managers
    automations
-   https-and-http2
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Networking & Protocols
+
    wsgi
    asgi
-   websocket
-   background-managers
+   https-and-http2
+   free-ssl-certificate
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Request Handling & Auth
+
    request-and-response
+   middlewares
    authentication
    jwt
    sessions
-   middlewares
-   logging
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Data Layer & Integrations
+
    database
    django-integration
+   mcp
    sitemap
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Deployment & Operations
+
    deployment
    monitoring
    dashboard
    service-management
-   free-ssl-certificate
-   xsocket
-   shortcuts
-   utils
+   logging
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Reference
+
+   ai-guidelines/index
    changelog
 
 .. toctree::
    :maxdepth: 2
-   :caption: API Documentation:
-   
+   :caption: API Documentation
+
    api/index

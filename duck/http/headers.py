@@ -44,6 +44,12 @@ class Headers(dict):
         """
         return self.__setitem__(header, value)
 
+    def set_header_if_absent(self, header: str, value: str):
+        """
+        Set header only if missing.
+        """
+        return self.setdefault(header, value)
+        
     def delete_header(self, header: str, failsafe: bool = True):
         """
         Deletes a header and if failsafe is True, no error will be raised if header doesn't exist
@@ -63,11 +69,16 @@ class Headers(dict):
                 delimeter (str | bytes): Delimeter separating the headers.
         """
         assert isinstance(data, bytes), "Only bytes is allowed as data."
-        delimeter = (delimeter.decode("utf-8")
-                     if isinstance(delimeter, bytes) else delimeter)
+        
+        delimeter = (
+            delimeter.decode("utf-8") if isinstance(delimeter, bytes)
+            else delimeter
+        )
+        
         data = data.strip().decode("utf-8")
         lines = data.split(delimeter)
-        # set headers to self
+        
+        # Set headers to self
         for line in lines:
             if ": " in line:
                 parts = line.split(": ", 1)
@@ -79,11 +90,8 @@ class Headers(dict):
         """
         if not isinstance(key, str) or not isinstance(value, str):
             if not isinstance(key, str):
-                raise KeyError(
-                    f"Only an instance of string is allowed for key '{key}'")
-            raise ValueError(
-                f"Only an instance of string is allowed for value of key '{key}'"
-            )
+                raise KeyError(f"Only an instance of string is allowed for key '{key}'")
+            raise ValueError(f"Only an instance of string is allowed for value of key '{key}'")
     
     def setdefault(self, key: str, value: str):
         self.validate_key_value(key, value)

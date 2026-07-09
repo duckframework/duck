@@ -278,7 +278,7 @@ class WebSocketView(View):
             # Set debug message.
             self.request.META["DEBUG_MESSAGE"] = f"WebSocket Error: {error_msg}."
             
-            # Send the error reeponse immediately.
+            # Send the error response immediately.
             await self._response_handler.async_send_response(response, self.sock, request=self.request)
             return
             

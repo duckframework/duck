@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Added the `UnsupportedBrowserBanner` component to the `duck.html.components.unsupported_browser` module.
 - Added the `glacier` variant to the `Snackbar` component, providing a modern frosted-glass appearance.
+- Added `set_header_if_absent` to the `Response` object.
+- Added `duck.contrib.mcp` for MCP communications.
 
 ### Changed
 
@@ -25,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Fixed several issues related to snackbar state synchronization and dynamic updates.
+- Fixed and refined the `response_finalizer` module.
 
 ---
 

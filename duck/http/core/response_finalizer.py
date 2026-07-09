@@ -33,6 +33,8 @@ from duck.shortcuts import (
     replace_response,
     make_response,
     to_response,
+    content_replace,
+    streaming_content_replace,
 )
 from duck.csp import csp_nonce, csp_nonce_flag
 
@@ -159,12 +161,13 @@ class ResponseFinalizer:
         security = SECURITY_HEADERS or {}
         
         for h, v in {**security, **cors,  **extra}.items():
-            response.headers[h] = v
+            response.set_header_if_absent(h, v)
         
         # Set CSP header
         if request and SETTINGS["ENABLE_HEADERS_SECURITY_POLICY"]:
             csp_directives = SETTINGS['CSP_TRUSTED_SOURCES']
             nonce = csp_nonce(request)
+            
             if csp_directives:
                 csp_parts = []
                 for directive, sources in csp_directives.items():
@@ -176,8 +179,12 @@ class ResponseFinalizer:
                         for i in sources
                     ]
                     csp_parts.append(f"{directive} {' '.join(source_parts)}")
+                
+                # Generate the CSP value.
                 csp_value = "; ".join(csp_parts) + ";"
-                response.set_header("Content-Security-Policy", csp_value)
+                
+                # Finally, set the header
+                response.set_header_if_absent("Content-Security-Policy", csp_value)
 
     @log_failsafe
     def do_set_connection_mode(self, response, request) -> None:
@@ -188,13 +195,15 @@ class ResponseFinalizer:
         server_mode = SETTINGS["CONNECTION_MODE"].lower()
 
         if not request:
-            response.set_header("Connection", "close")
+            response.set_header_if_absent("Connection", "close")
             return
 
         if request.connection == server_mode:
             connection_mode = server_mode
         else:
             connection_mode = "close"
+        
+        # Set the header explicitly even if modified by user.
         response.set_header("Connection", connection_mode)
 
     @log_failsafe
@@ -202,14 +211,13 @@ class ResponseFinalizer:
         """
         Sets last final extra headers like Date & Cache-Control.
         """
-        response.set_header("date", gmt_date())
+        response.set_header_if_absent("date", gmt_date())
         
         if SETTINGS['DEBUG']:
-            cache_control = response.get_header("cache-control")
             default_cache_control = SECURITY_HEADERS.get("Cache-Control")
             
-            if not cache_control or cache_control is default_cache_control:
-                response.set_header("cache-control", "no-cache")
+            # Set the default cache control
+            response.set_header_if_absent("cache-control", default_cache_control)
         
     @log_failsafe
     def do_content_compression(self, response, request) -> None:
@@ -236,21 +244,16 @@ class ResponseFinalizer:
             if existing_vary_headers:
                 existing_vary_headers += ", "
             
-            response.set_header(
-                "Vary",
-                existing_vary_headers + "Accept-Encoding",
-            )
+            # Explitly set vary header
+            response.set_header("Vary", existing_vary_headers + "Accept-Encoding",)
             
         if (not request or not SETTINGS["ENABLE_CONTENT_COMPRESSION"]
             or COMPRESSION_ENCODING not in accept_encoding
             or COMPRESSION_ENCODING not in supported_encodings
             or response.content_obj.correct_encoding() != "identity"
-            ):
+        ):
             # No need to compress content if correct_encoding is not identity (might already be compressed)
-            response.set_header(
-                "Content-Encoding",
-                response.content_obj.correct_encoding(),
-            )
+            response.set_header("Content-Encoding", response.content_obj.correct_encoding())
             return
 
         if not isinstance(response, StreamingHttpResponse):
@@ -423,10 +426,7 @@ class ResponseFinalizer:
             # Replace response data
             new_response = make_response(
                 HttpRangeNotSatisfiableResponse,
-                body=(
-                    f"<p>Range is not satisfiable, could not resolve: {range_header}</p>"
-                    + (f"<p>Exception: {e}</p>" if SETTINGS['DEBUG'] else "")
-                )
+                extra_content={"exception": e},
             )
                 
             # Replace response with new data
@@ -456,13 +456,6 @@ class ResponseFinalizer:
             response (HttpResponse): The original response to be transformed.
             request (HttpRequest): The incoming HTTP request associated with the response.
         """
-        # Check if a custom template is configured for this response
-        
-        # Return the http response object.
-        if request and str(request.method).upper() == "HEAD":
-            # Reset content
-            request.set_content(b"", auto_add_content_headers=True)
-        
         if response:
             if response.status_code in CUSTOM_TEMPLATES:
                 response_callable = CUSTOM_TEMPLATES[response.status_code]
@@ -496,11 +489,17 @@ class ResponseFinalizer:
         # All of the following method calls are failsafe meaning failure of any method
         # will not affect the execution of other methods, thus an error encountered will be
         # logged appropriately. Decorator responsible: @log_failsafe
-        
         self.do_request_response_transformation(response, request) 
         self.do_set_fixed_headers(response, request)
         self.do_set_connection_mode(response, request)
         self.do_set_extra_headers(response, request)
+        
+        if request and request.method == "HEAD":
+            if isinstance(response, StreamingHttpResponse):
+                streaming_content_replace(response, stream=[b""])
+            else:
+                content_replace(response, b"", new_content_type="use_existing")
+            return
             
         if do_set_streaming_range:
             self.do_set_streaming_range(response, request)
@@ -543,21 +542,16 @@ class AsyncResponseFinalizer(ResponseFinalizer):
             if existing_vary_headers:
                 existing_vary_headers += ", "
             
-            response.set_header(
-                "Vary",
-                existing_vary_headers + "Accept-Encoding",
-            )
+            # Set vary header explicitly
+            response.set_header("Vary", existing_vary_headers + "Accept-Encoding")
             
         if (not request or not SETTINGS["ENABLE_CONTENT_COMPRESSION"]
             or COMPRESSION_ENCODING not in accept_encoding
             or COMPRESSION_ENCODING not in supported_encodings
             or response.content_obj.correct_encoding() != "identity"
-            ):
+        ):
             # No need to compress content if correct_encoding is not identity (might already be compressed)
-            response.set_header(
-                "Content-Encoding",
-                response.content_obj.correct_encoding(),
-            )
+            response.set_header("Content-Encoding", response.content_obj.correct_encoding())
             return
 
         if not isinstance(response, StreamingHttpResponse):
@@ -571,11 +565,8 @@ class AsyncResponseFinalizer(ResponseFinalizer):
             if compressed:
                 response.set_header("Content-Encoding", response.content_obj.encoding)
             else:
-                response.set_header(
-                    "Content-Encoding",
-                    response.content_obj.correct_encoding(),
-                )
-            
+                response.set_header("Content-Encoding", response.content_obj.correct_encoding())
+                
         else:
             # Streaming HTTP response here.
             if not COMPRESS_STREAMING_RESPONSES:
@@ -703,10 +694,7 @@ class AsyncResponseFinalizer(ResponseFinalizer):
             # Replace response data
             new_response = make_response(
                 HttpRangeNotSatisfiableResponse,
-                body=(
-                    f"<p>Range is not satisfiable, could not resolve: {range_header}</p>"
-                    + (f"<p>Exception: {e}</p>" if SETTINGS['DEBUG'] else "")
-                )
+                extra_content={"exception": e},
             )
             
             # Replace response with new data
@@ -734,11 +722,17 @@ class AsyncResponseFinalizer(ResponseFinalizer):
         # All of the following method calls are failsafe meaning failure of any method
         # will not affect the execution of other methods, thus an error encountered will be
         # logged appropriately. Decorator responsible: @log_failsafe
-        
         self.do_request_response_transformation(response, request) 
         self.do_set_fixed_headers(response, request)
         self.do_set_connection_mode(response, request)
         self.do_set_extra_headers(response, request)
+        
+        if request and request.method == "HEAD":
+            if isinstance(response, StreamingHttpResponse):
+                streaming_content_replace(response, stream=[b""])
+            else:
+                content_replace(response, b"", new_content_type="use_existing")
+            return
             
         if do_set_streaming_range:
             # This implementation needs to be awaited, it uses some asynchronous implementations.    

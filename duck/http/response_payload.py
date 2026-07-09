@@ -96,11 +96,16 @@ class BaseResponsePayload:
             include_cookie_name (bool): Whether to cookie name e.g. `cookie=something;`. Defaults to True.
         """
         cookie_obj = self.get_cookie_obj(name)
+        
         if not cookie_obj:
             return ""
+        
+        # Build cookie string
         cookie_str = cookie_obj.output(header="").strip()
+        
         if not include_cookie_name:
             cookie_str = cookie_str.split(name, 1)[-1].split('=', 1)[-1].strip()
+        
         return cookie_str
         
     def get_all_cookies(self) -> Dict[str, str]:
@@ -284,8 +289,14 @@ class SimpleHttpResponsePayload(BaseResponsePayload):
         """
         Sets header and value for the payload
         """
-        self.headers[header] = value
+        self.headers.set_header(header, value)
 
+    def set_header_if_absent(self, header: str, value: str):
+        """
+        Set header only if missing.
+        """
+        self.headers.set_header_if_absent(header, value)
+        
     def get_header(self, header: str, default_value=None) -> Optional[str]:
         """
         Returns a header value of default if not found.
@@ -299,7 +310,6 @@ class SimpleHttpResponsePayload(BaseResponsePayload):
 
         Returns:
             int: The HTTP status code (e.g., 200).
-        
         """
         return int(self.topheader.split(" ", 2)[1])
 
@@ -404,6 +414,12 @@ class HttpResponsePayload(BaseResponsePayload):
         """
         self.headers[header] = value
 
+    def set_header_if_absent(self, header: str, value: str):
+        """
+        Set header only if missing.
+        """
+        self.headers.set_header_if_absent(header, value)
+        
     def get_header(self, header: str, default_value=None) -> Optional[str]:
         """
         Returns a header value of default if not found.

@@ -330,15 +330,15 @@ def render(
     Renders a template and returns the response.
 
     Args:
-            request (HttpRequest): Http request object.
-            template (str): Template path within the TEMPLATE_DIR.
-            context (dict, optional): Dictionary respresenting template context.
-            status_code (int): The response status code, defaults to 200.
-            engine (str, optional): Template engine to use for rendering template, defaults to 'django'.
-            **kw: Additional keywords to parse to the http response for the current template engine.
+        request (HttpRequest): Http request object.
+        template (str): Template path within the TEMPLATE_DIR.
+        context (dict, optional): Dictionary respresenting template context.
+        status_code (int): The response status code, defaults to 200.
+        engine (str, optional): Template engine to use for rendering template, defaults to 'django'.
+        **kw: Additional keywords to parse to the http response for the current template engine.
 
     Returns:
-            TemplateResponse: Http response rendered using Django or Jinja2.
+        TemplateResponse: Http response rendered using Django or Jinja2.
     """
     allowed_engines = {"jinja2", "django"}
 
@@ -374,15 +374,15 @@ async def async_render(
     Asynchronously renders a template and returns the response.
 
     Args:
-            request (HttpRequest): Http request object.
-            template (str): Template path within global or blueprint template dirs.
-            context (dict, optional): Dictionary respresenting template context.
-            status_code (int): The response status code, defaults to 200.
-            engine (str, optional): Template engine to use for rendering template, defaults to 'django'.
-            **kw: Additional keywords to parse to the http response for the current template engine.
+        request (HttpRequest): Http request object.
+        template (str): Template path within global or blueprint template dirs.
+        context (dict, optional): Dictionary respresenting template context.
+        status_code (int): The response status code, defaults to 200.
+        engine (str, optional): Template engine to use for rendering template, defaults to 'django'.
+        **kw: Additional keywords to parse to the http response for the current template engine.
 
     Returns:
-            TemplateResponse: Http response rendered using Django or Jinja2.
+        TemplateResponse: Http response rendered using Django or Jinja2.
     """
     allowed_engines = {"jinja2", "django"}
 
@@ -509,7 +509,6 @@ def content_replace(
         new_data (Union[bytes, str]): String or bytes to set for content.
         new_content_type (str): The new content type, Defaults to `auto` to automatically determine the content type.
         new_content_filepath (str): Filepath to the content, Defaults to "use_existing" to use the already set filepath.
-
     """
     assert not isinstance(response, StreamingHttpResponse), "Streaming HTTP response not supported, use `streaming_content_replace` instead."
     assert isinstance(new_data, str) or isinstance(
@@ -752,6 +751,7 @@ def to_response(value: Any, **kwargs) -> Union[BaseResponse, HttpResponse]:
     - If value is already a response object, nothing will be done.
 
     """
+    # NB: Do not add tuple because most use case of it is a mistake - so leave it to catch mistaken errors.
     allowed_types = (int, str, bytes, float, dict, list, set, Component)
 
     if not isinstance(value, BaseResponse):

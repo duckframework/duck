@@ -61,8 +61,12 @@ class SessionStore(dict):
         return self._session_key
 
     @session_key.setter
-    def session_key(self, key: str):
-        self._session_key = key
+    def session_key(self, key: Optional[str]):
+        # Switching identities invalidates whatever we'd loaded for the old one.
+        if value != self._session_id:
+            self._session_key = key
+            self._loaded = False
+            super().clear()
 
     @property
     def modified(self) -> bool:
@@ -194,7 +198,8 @@ class SessionStore(dict):
         """
         @wraps(method)
         def wrapper(self, *args, **kwargs):
-            if not self.loaded:
+            if not self.loaded and self._session_key:
+                # Load the session key
                 self.load()
             
             # Execute the decorated method
@@ -290,6 +295,7 @@ class SessionStore(dict):
         Creates a new session with a new session key.
         """
         self.session_key = self.generate_session_id()
+        self._loaded = True  # brand-new id, nothing in cache to fetch
         return self.session_key
         
     @check_session_storage_connector

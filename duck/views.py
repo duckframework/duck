@@ -74,7 +74,7 @@ def csrf_exempt(view_func):
             ...
     """
     if iscoroutinefunction(view_func):
-        @wraps(view_func)
+        #@wraps(view_func)
         async def wrapped_view(request, *args, **kwargs):
             return await view_func(request, *args, **kwargs)
     else:

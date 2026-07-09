@@ -108,7 +108,7 @@ class RequestProcessor:
         # Set request
         self.request = request
         
-        # Perform some imnediate actions
+        # Perform some immediate actions
         self.normalize_request()
         self.process_view_decorators()
     
@@ -142,7 +142,33 @@ class RequestProcessor:
                 # Optionally log the normalization error
                 if not SETTINGS["IGNORE_NORMALIZATION_ERRORS"]:
                     raise e
-
+    
+    def process_view_decorators(self):
+        """
+        Process view-level decorators and apply their effects to the request context.
+    
+        Some decorators expose attributes on the view function (e.g. `csrf_exempt`)
+        which influence request handling behavior. This method inspects those
+        attributes and updates request metadata accordingly.
+        """
+        try:
+            view = self.route_info["handler"]
+        except Exception:
+            # This may be RouteNotFoundError
+            return
+            
+        # Process view here
+        view_func = view
+        
+        if type(view) == type and issubclass(view, View):
+            view_func = view.run
+            
+        # Process decorators now.
+        csrf_exempt = getattr(view_func, "csrf_exempt", False)
+        
+        if csrf_exempt:
+            self.request.META["CSRF_EXEMPT"] = True
+            
     def check_middlewares(self, ) -> tuple[str, Optional[BaseMiddleware]]:
         """
         Checks a request against all configured middlewares in settings.py.
@@ -355,32 +381,6 @@ class RequestProcessor:
         response = SettingsLoaded.WSGI.get_response(request)
         return response
         
-    def process_view_decorators(self):
-        """
-        Process view-level decorators and apply their effects to the request context.
-    
-        Some decorators expose attributes on the view function (e.g. `csrf_exempt`)
-        which influence request handling behavior. This method inspects those
-        attributes and updates request metadata accordingly.
-        """
-        try:
-            view = self.route_info["handler"]
-        except Exception:
-            # This may be RouteNotFoundError
-            return
-            
-        # Process view here
-        view_func = view
-        
-        if type(view) == type and issubclass(view, View):
-            view_func = view.run
-            
-        # Process decorators now.
-        csrf_exempt = getattr(view_func, "csrf_exempt", False)
-        
-        if csrf_exempt:
-            self.request.META["CSRF_EXEMPT"] = True
-            
     def process_request(self) -> HttpResponse:
         """
         Processes the http request and returns the appropriate http response.

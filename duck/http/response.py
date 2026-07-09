@@ -352,6 +352,12 @@ class BaseResponse:
         """
         self.payload_obj.set_header(header, f"{value}".strip())
 
+    def set_header_if_absent(self, header: str, value: str):
+        """
+        Set header only if missing.
+        """
+        self.payload_obj.set_header_if_absent(header, f"{value}".strip())
+        
     def get_header(self, header: str, default_value: Optional = None) -> Optional[str]:
         """
         Returns the case-insensitive header value or fallback to default value if not found.
