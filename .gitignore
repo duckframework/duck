@@ -6,4 +6,4 @@ testing/assets/
 .ipc
 dist/
 build/
-
+.duck/
