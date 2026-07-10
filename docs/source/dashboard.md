@@ -1,4 +1,4 @@
-# 📊 Duck Dashboard
+# 💻 Duck Dashboard
 
 Duck includes a built-in dashboard for monitoring application activity and server health in real time. The dashboard provides visibility into requests, responses, logs, errors, latency metrics, routes, and other system information through a modern reactive interface powered by Lively.
 

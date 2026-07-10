@@ -1,4 +1,4 @@
-# Duck MCP (Model Context Protocol) Support
+# 🤖 Duck MCP (Model Context Protocol) Support
 
 ![MCP](https://img.shields.io/badge/MCP-Protocol-blue)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
