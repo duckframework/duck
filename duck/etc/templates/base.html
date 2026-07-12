@@ -720,7 +720,7 @@
       {% endif %}
       
       {# Red error label — exception class name or short error string #}
-      {% if error_label is defined and error_label %}
+      {% if debug and error_label is defined and error_label %}
         <span class="error-label">{{ error_label }}</span>
       {% endif %}
       
@@ -730,7 +730,7 @@
       {% endif %}
 
       {# Expandable exception block with sticky toolbar + copy button #}
-      {% if exception is defined and exception %}
+      {% if debug and exception is defined and exception %}
         <details class="exception-block" open>
           <summary class="exception-summary">
             <span class="exception-label">
