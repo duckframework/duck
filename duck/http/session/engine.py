@@ -63,7 +63,7 @@ class SessionStore(dict):
     @session_key.setter
     def session_key(self, key: Optional[str]):
         # Switching identities invalidates whatever we'd loaded for the old one.
-        if value != self._session_id:
+        if key != self._session_id:
             self._session_key = key
             self._loaded = False
             super().clear()
