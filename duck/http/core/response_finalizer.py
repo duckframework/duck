@@ -213,11 +213,14 @@ class ResponseFinalizer:
         """
         response.set_header_if_absent("date", gmt_date())
         
-        if SETTINGS['DEBUG']:
+        if not SETTINGS['DEBUG']:
             default_cache_control = SECURITY_HEADERS.get("Cache-Control")
             
             # Set the default cache control
             response.set_header_if_absent("cache-control", default_cache_control)
+        else:
+            # Set the no-cache control
+            response.set_header("cache-control", "no-cache")
         
     @log_failsafe
     def do_content_compression(self, response, request) -> None:

@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 Duck Framework Documentation
-==========================
+===========================
 
 *Python Web Framework | No JavaScript Required*  
 
@@ -14,7 +14,7 @@ Build real-time, reactive web applications with pure Python — no React, no Vue
 A modern, full-stack alternative to Django and Flask with a built-in WebSocket-driven UI engine.
 
 Github
-----------
+-----------
 
 - **Organization**: https://github.com/duckframework
 - **Homepage**: https://github.com/duckframework/duck
@@ -23,7 +23,7 @@ Stay tuned for more updates as we continue to enhance Duck's capabilities.
 
 
 Author
--------
+-----------
 
 - **Author**: Brian Musakwa
 - **Email**: digreatbrian@gmail.com

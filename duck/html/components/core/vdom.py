@@ -95,7 +95,7 @@ class VDomNode:
         pass
         
     @staticmethod
-    def diff(old: "VDomNode", new: "VDomNode") -> List[list]:
+    def diff(old: "VDomNode", new: "VDomNode", reverse: bool = False) -> List[list]:
         """
         Compute a minimal set of patches to transform one virtual DOM tree into another.
     
@@ -105,13 +105,15 @@ class VDomNode:
         Args:
             old (VDomNode): The previous virtual DOM node.
             new (VDomNode): The updated virtual DOM node.
+            reverse (bool): Whether to patch children in reverse order. Useful for nodes
+                like a Page, where body must be patched before head.
     
         Returns:
             List[list]: A list of compact patch operations (lists) in the format:
                 [opcode, key, ...data]
         """
         patches = []
-        
+    
         # Replace node if tags differ
         if old.tag != new.tag:
             patches.append([PatchCode.REPLACE_NODE, old.key, new.to_list()])
@@ -120,29 +122,36 @@ class VDomNode:
         # Text/html update
         if old.text != new.text:
             patches.append([PatchCode.ALTER_TEXT, old.key, new.text])
-            
+    
         # Props update
         if old.props != new.props:
             patches.append([PatchCode.REPLACE_PROPS, old.key, new.props])
-            
+    
         # Style update
         if old.style != new.style:
             patches.append([PatchCode.REPLACE_STYLE, old.key, new.style])
-        
+    
         # Map old and new children by key
         old_children_order = {child.key: idx for idx, child in enumerate(old.children)}
         old_children_map = {child.key: child for child in old.children}
         new_children_map = {child.key: child for child in new.children}
     
+        # Build traversal order, reversed when bottom-up patching is required
+        old_keys = list(old_children_map.keys())
+        new_children = list(enumerate(new.children))
+        if reverse:
+            old_keys = list(reversed(old_keys))
+            new_children = list(reversed(new_children))
+    
         # Remove nodes that no longer exist
-        for key in old_children_map:
+        for key in old_keys:
             if key not in new_children_map:
                 patches.append([PatchCode.REMOVE_NODE, key])
-                
+    
         # Insert new nodes and diff existing nodes
-        for idx, new_child in enumerate(new.children):
+        for idx, new_child in new_children:
             old_child = old_children_map.get(new_child.key)
-            
+    
             if old_child is None:
                 # Node is new -> insert
                 patch = [PatchCode.INSERT_NODE, old.key, [idx, new_child.to_list()]]
@@ -157,29 +166,33 @@ class VDomNode:
                     # Node exists -> diff recursively
                     patches.extend(VDomNode.diff(old_child, new_child))
         return patches
-
+        
     @staticmethod
-    async def diff_and_act(action: Callable, old: "VDomNode", new: "VDomNode") -> None:
+    async def diff_and_act(
+        action: Callable, old: "VDomNode", new: "VDomNode", reverse: bool = False,
+    ) -> None:
         """
         Compute a minimal set of patches to transform one virtual DOM tree into another.
     
         This method performs key-based diffing on children and emits compact patch lists
         using PatchCode. Each patch is a list optimized for fast encoding with MessagePack.
-        
-        This method diffs and perform an action on every patch rather than returning a list of all 
-        computed patches.
-        
+    
+        This method diffs and performs an action on every patch rather than returning a
+        list of all computed patches.
+    
         Args:
             action (Callable): A synchronous/asynchronous callable to perform on every patch.
                 The first argument to this must be the patch.
             old (VDomNode): The previous virtual DOM node.
             new (VDomNode): The updated virtual DOM node.
+            reverse (bool): Whether to patch children in reverse order. Useful for nodes
+                like a Page, where body must be patched before head.
     
         Returns:
             None: Nothing to return.
         """
         is_async_action = iscoroutinefunction(action)
-        
+    
         async def act(patch):
             """
             Execute patch action.
@@ -188,58 +201,65 @@ class VDomNode:
                 await action(patch)
             else:
                 action(patch)
-        
+    
         # Replace node if tags differ
         if old.tag != new.tag:
             patch = [PatchCode.REPLACE_NODE, old.key, new.to_list()]
             await act(patch)
             return
-            
+    
         # Text update
         if old.text != new.text:
             patch = [PatchCode.ALTER_TEXT, old.key, new.text]
             await act(patch)
-                
+    
         # Props update
         if old.props != new.props:
             patch = [PatchCode.REPLACE_PROPS, old.key, new.props]
             await act(patch)
-                
+    
         # Style update
         if old.style != new.style:
             patch = [PatchCode.REPLACE_STYLE, old.key, new.style]
             await act(patch)
-                
+    
         # Map old and new children by key
         old_children_order = {child.key: idx for idx, child in enumerate(old.children)}
         old_children_map = {child.key: child for child in old.children}
         new_children_map = {child.key: child for child in new.children}
-        
+    
+        # Build traversal order, reversed when bottom-up patching is required
+        old_keys = list(old_children_map.keys())
+        new_children = list(enumerate(new.children))
+        if reverse:
+            old_keys = list(reversed(old_keys))
+            new_children = list(reversed(new_children))
+    
         # Remove nodes that no longer exist
-        for key in old_children_map:
+        for key in old_keys:
             if key not in new_children_map:
                 patch = [PatchCode.REMOVE_NODE, key]
                 await act(patch)
-                
+    
         # Insert new nodes and diff existing nodes
-        for idx, new_child in enumerate(new.children):
+        for idx, new_child in new_children:
             old_child = old_children_map.get(new_child.key)
-            
+    
             if old_child is None:
                 # Node is new -> insert
                 patch = [PatchCode.INSERT_NODE, old.key, [idx, new_child.to_list()]]
                 await act(patch)
-                
+    
             else:
                 if old_children_order[new_child.key] != idx:
                     # No MOVE_NODE — remove and re-insert at correct position
                     remove_patch = [PatchCode.REMOVE_NODE, old.key]
                     await act(remove_patch)
-                    
+    
                     # Execute insert patch
                     insert_patch = [PatchCode.INSERT_NODE, old.key, [idx, new_child.to_list()]]
                     await act(insert_patch)
-                    
+    
                 else:
                     # Node exists -> diff recursively
                     await VDomNode.diff_and_act(action, old_child, new_child)

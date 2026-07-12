@@ -740,7 +740,8 @@ class EventHandler:
                         next_vdom = next_component.to_vdom()
                         
                         # Send patches as we are generating every patch
-                        await next_component.vdom_diff_and_act(on_new_patch, old=prev_vdom, new=next_vdom)
+                        # Patch but with reverse=True to patch body first before head if component is a Page.
+                        await next_component.vdom_diff_and_act(on_new_patch, old=prev_vdom, new=next_vdom, reverse=True)
                         
                         # Send final empty patches - Flag as patches finished.
                         await self.ws_view.send_data([

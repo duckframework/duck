@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added the `glacier` variant to the `Snackbar` component, providing a modern frosted-glass appearance.
 - Added `set_header_if_absent` to the `Response` object.
 - Added `duck.contrib.mcp` for MCP communications.
+- Added a `reverse` argument to `VDomNode` to control patch application order. `Page` components now apply patches in reverse order, ensuring the `body` is patched before the `head`.
 
 ### Changed
 

@@ -16,6 +16,6 @@ For example, in Jinja2, the tag `{{ custom_tag("input") }}` is used, whereas in 
 To prevent such errors, ensure consistency between the template backends being used.
 """
 
-from duck.http.response import DjangoTemplateResponse, Jinja2TemplateResponse
+from duck.http.response import TemplateResponse
 
-__all__ = ["Jinja2TemplateResponse", "DjangoTemplateResponse"]
+__all__ = ["TemplateResponse"]

@@ -425,7 +425,7 @@ of `disabled` or `true`, you can just execute JavaScript (using `execute_js`) to
 
 ### Immediate Syncing
 
-```{info}
+```{note}
 Added in version 1.1.0
 ```
 

@@ -40,7 +40,7 @@ from django.conf import settings
 from duck.utils.importer import x_import
 
 
-DJANGO_MIDDLEWARE = x_import("duck.http.middlewares.contrib.DjangoMiddleware")  
+DJANGO_MIDDLEWARE = x_import("duck.http.middlewares.contrib.metashare.MetaShareMiddleware")  
 # Enables data sharing between Duck and Django.
 
 
