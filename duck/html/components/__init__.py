@@ -576,7 +576,7 @@ class HtmlComponent:
             on_mutation(self, Mutation(target=self, code=MutationCode.SET_INNER_HTML, payload={"inner_html": inner_html}))
                 
     @staticmethod
-    def vdom_diff(old: VDomNode, new: VDomNode) -> List[list]:
+    def vdom_diff(old: VDomNode, new: VDomNode, reverse: bool = False) -> List[list]:
         """
         Compute a minimal set of patches to transform one virtual DOM tree into another.
 
@@ -586,15 +586,17 @@ class HtmlComponent:
         Args:
             old (VDomNode): The previous virtual DOM node.
             new (VDomNode): The updated virtual DOM node.
+            reverse (bool): Whether to patch children in reverse order. Useful for nodes
+                like a Page, where body must be patched before head.
 
         Returns:
             List[list]: A list of compact patch operations (lists) in the format:
                 [opcode, key, ...data]
         """
-        return VDomNode.diff(old, new)
+        return VDomNode.diff(old, new, reverse=reverse)
         
     @staticmethod
-    async def vdom_diff_and_act(action: Callable, old: VDomNode, new: VDomNode) -> None:
+    async def vdom_diff_and_act(action: Callable, old: VDomNode, new: VDomNode, reverse: bool = False) -> None:
         """
         Compute a minimal set of patches to transform one virtual DOM tree into another.
     
@@ -609,11 +611,13 @@ class HtmlComponent:
                 The first argument to this must be the patch.
             old (VDomNode): The previous virtual DOM node.
             new (VDomNode): The updated virtual DOM node.
-    
+            reverse (bool): Whether to patch children in reverse order. Useful for nodes
+                like a Page, where body must be patched before head.
+                
         Returns:
             None: Nothing to return.
         """
-        await VDomNode.diff_and_act(action, old, new)
+        await VDomNode.diff_and_act(action, old, new, reverse=reverse)
         
     @staticmethod
     def assign_component_uids(root_component: "Component", base_uid: str = "0", force: bool = False) -> None:
