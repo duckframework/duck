@@ -127,7 +127,7 @@ def generate_sitemap():
                 console.log(f"Caught an error whilst scanning source dirs: {e}", level=console.WARNING)                
         
     # Build the sitemap.
-    sitemap_filepath = "./sitemap.xml"
+    sitemap_filepath = str(DOCS_DIR / "html/build/sitemap.xml")
     
     # Initialize the builder.
     builder = SitemapBuilder(
