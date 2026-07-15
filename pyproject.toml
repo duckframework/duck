@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "duckframework"
 dynamic = ["version", "dependencies"]
-description = "Duck is a powerful, open-source, full-fledged Python-based web server, framework, and reverse proxy designed for building modern, customizable web applications — from small sites to large-scale platforms."
+description = "Build high-performance, scalable, server-side reactive web applications — without a separate frontend framework or a complex JavaScript stack."
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE", "AUTHORS.md"]
@@ -36,35 +36,47 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 keywords = [
-    "Python",
+    "python",
     "web framework",
+    "python web framework",
+    "server-side rendering",
+    "reactive web framework",
+    "reactive ui",
+    "full-stack framework",
+    "full-stack web framework",
+    "web applications",
     "web server",
-    "reverse proxy",
-    "HTTP/2",
-    "WSGI",
-    "ASGI",
-    "Django integration",
-    "Flask",
-    "Tornado",
-    "FastAPI",
-    "microservices",
-    "middleware",
-    "high-performance",
+    "http server",
+    "https",
+    "http2",
+    "http/2",
+    "websockets",
+    "real-time",
     "async",
-    "Duck framework",
+    "asgi",
+    "wsgi",
+    "middleware",
     "routing",
-    "load balancing",
-    "HTTP proxy",
-    "web application"
+    "authentication",
+    "jwt",
+    "reverse proxy",
+    "load balancer",
+    "microservices",
+    "api framework",
+    "backend framework",
+    "high performance",
+    "scalable",
+    "duck framework"
 ]
 
 [project.urls]
 Organization = "https://github.com/duckframework"
 Homepage = "https://duckframework.com"
+Contribution = "https://duckframework.com/contribute"
+Blog = "https://duckframework.com/blog"
+Documentation = "https://docs.duckframework.com"
 Source = "https://github.com/duckframework/duck"
 Issues = "https://github.com/duckframework/duck/issues"
-Contribution = "https://duckframework.com/contribute"
-Documentation = "https://docs.duckframework.com"
 
 [project.scripts]
 duck = "duck.__main__:cli"

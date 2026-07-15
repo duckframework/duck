@@ -1582,14 +1582,25 @@ class NavigationHandler {
   }
   
   /**
-    * Scroll to page top if not.
-    * @param {boolean} smooth - Whether the scroll must be smooth. Defaults to false for instant scroll.
-    */
-  static scrollToTop(smooth = false) {
-    if (window.scrollY === 0) return;
-    if (smooth) window.scrollTo({ top: 0, behavior: 'smooth' });
-    else window.scrollTo({ top: 0});
-  }
+     * Scroll the page or a scrollable container to the top if not already there.
+     *
+     * @param {boolean} smooth - Whether the scroll should be smooth.
+     * Defaults to false for instant scrolling.
+     * @param {HTMLElement|Window} [container=window] - The scrollable container,
+     * or the window.
+     */
+    static scrollToTop(smooth = false, container = window) {
+      const scrollTop = container === window ? window.scrollY : container.scrollTop;
+      
+      // If scroll to zero or less, just return
+      if (scrollTop <= 0) return;
+      
+      // Perform actual scroll
+      container.scrollTo({
+        top: 0,
+        behavior: smooth ? "smooth" : "auto",
+      });
+    }
   
   /**
    * Sends a navigation request to the WebSocket.
@@ -1754,9 +1765,13 @@ class NavigationHandler {
       if (isFinal) {
         const progressBarInner = progressBar.querySelector('.progress-bar-inner');
         
-        // Scroll to top (if not already at top).
-        if (!fullpath.includes("#")) {
-          this.scrollToTop();
+        // Scroll to top unless the URL contains a valid hash anchor.
+        const hasHash = new URL(fullpath, window.location.origin).hash;
+        
+        if (!hasHash) {
+          requestAnimationFrame(() => {
+            this.scrollToTop(false, document.querySelector('#root') || window);
+          });
         }
 
         // Cancel navigation in progress flag.
