@@ -11,7 +11,7 @@ version = ".".join(map(str, version_info))
 
 # Server identification string
 python_version = ".".join(map(str, sys.version_info[:3]))
-server_version = f"Duck v{version} Python/{python_version}"
+server_version = f"Duck/{version} Python/{python_version}"
 
 # Public package version
 __version__ = version
