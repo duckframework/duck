@@ -1,44 +1,88 @@
 # Security Policy
 
 ## Supported Versions
-Currently, **Duck** is in early development with only **one version released**. Security updates and fixes will be addressed on a **best-effort basis**. 
 
-| Version | Supported? |
-|---------|------------|
-| 1.0.1   | ✅ Security updates provided |
+Security updates are provided for supported release branches.
 
-Future versions will follow a more structured support timeline.
+| Version | Supported |
+|---------|-----------|
+| Latest stable release | ✅ Yes |
+| Previous stable release | ✅ Best effort |
+| Older releases | ❌ No |
+
+Users are encouraged to upgrade to the latest supported release to receive the latest security fixes and improvements.
 
 ---
 
 ## Reporting a Vulnerability
-If you discover a security vulnerability in **Duck**, please report it responsibly by following these steps:
 
-1. **Do not disclose the vulnerability publicly** until it has been reviewed and patched.
-2. **Submit a report** by opening a **private discussion** via GitHub Security Advisories:
-   - [🔒 Submit a Security Advisory](https://github.com/duckframework/duck/security/advisories)
-3. Alternatively, you can **email the security team** at:  
-   📧 **digreatbrian@gmail.com**
-4. Include as much detail as possible:
-   - Steps to reproduce the vulnerability
-   - The affected version(s)
-   - Possible attack scenarios and impact
+If you believe you have discovered a security vulnerability in Duck Framework, please report it responsibly.
+
+**Please do not disclose the vulnerability publicly before it has been investigated and, where appropriate, fixed.**
+
+### Preferred Reporting Method
+
+Submit a private report through GitHub Security Advisories:
+
+https://github.com/duckframework/duck/security/advisories
+
+### Alternative Reporting Method
+
+If you are unable to use GitHub Security Advisories, email:
+
+**hello@duckframework.com**
+
+Please include:
+
+- A clear description of the vulnerability
+- Steps to reproduce the issue
+- The affected version(s)
+- The potential impact
+- Any proof-of-concept or example exploit (if available)
+
+Providing detailed information helps us investigate and resolve issues more quickly.
 
 ---
 
 ## Response Process
-- We will acknowledge receipt of your report **within 48 hours**.
-- An initial assessment will be conducted **within 7 days**.
-- If confirmed, we will develop a **patch or workaround** and release a **security advisory**.
-- Responsible disclosure will be coordinated with you before making any details public.
+
+Our goal is to:
+
+- Acknowledge reports within **48 hours**
+- Perform an initial assessment within **7 days**
+- Keep you informed throughout the investigation
+- Develop and release a fix or mitigation as quickly as reasonably possible
+- Publish a security advisory after a fix is available, coordinating disclosure with the reporter whenever practical
+
+Response times are goals rather than guarantees and may vary depending on the severity and complexity of the report.
+
+---
+
+## Security Updates
+
+Security fixes may be released as:
+
+- Patch releases
+- Hotfix releases
+- Mitigations or documented workarounds when an immediate fix is not possible
+
+Security advisories will be published through GitHub when appropriate.
 
 ---
 
 ## Security Best Practices
-While Duck is still in development, we encourage users to follow **best security practices** when deploying it:
-- **Use a Web Application Firewall (WAF)** to mitigate potential attacks.
-- **Limit access to the admin panel** and other sensitive endpoints.
-- **Regularly update Duck** to receive security patches.
 
-For any security concerns, please reach out via the **official reporting channels**.  
-Thank you for helping keep Duck secure! 🦆
+To help keep your deployment secure, we recommend:
+
+- Running the latest supported version of Duck Framework
+- Enabling HTTPS for production deployments
+- Keeping dependencies up to date
+- Restricting access to administrative interfaces and sensitive endpoints
+- Using strong authentication and secure secret management
+- Following the principle of least privilege
+- Monitoring application and server logs
+- Using a Web Application Firewall (WAF) where appropriate
+
+---
+
+Thank you for helping keep Duck Framework secure. We appreciate responsible disclosure and the contributions of the security community.
