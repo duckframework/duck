@@ -44,7 +44,7 @@ def on_build_finished(app, exception):
         app: The Sphinx application object.
         exception: Exception raised during build, if any.
     """
-    generate_sitemap(str(Path(app.outdir).parent))
+    generate_sitemap(str(pathlib.Path(app.outdir).parent))
 
 
 def read_metadata_from_init(init_path):

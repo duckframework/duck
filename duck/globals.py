@@ -5,8 +5,8 @@ Example usage:
 
 ```py
 import duck.globals
-	
-duck.global.some_variable = 1234
+
+duck.globals.some_variable = 1234
 	
 # then using this variable somewhere else
 # some_module.py
