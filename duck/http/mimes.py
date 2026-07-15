@@ -26,11 +26,8 @@ def guess_file_mimetype(filename: str) -> str:
 
 def guess_data_mimetype(data: bytes) -> str:
     """
-    Determine the MIME type of the provided content or file based on its initial bytes.
-
-    This function checks the initial bytes of the data to infer its MIME type by matching
-    known signatures for various file types (e.g., images, text, compressed files, etc.).
-    If no known signature is detected, it defaults to 'application/octet-stream'.
+    Determine the MIME type of the provided content or file based on its
+    initial bytes (magic numbers).
 
     Args:
         data (bytes): The input data for which the MIME type needs to be determined.
@@ -38,16 +35,19 @@ def guess_data_mimetype(data: bytes) -> str:
     Returns:
         str: The determined MIME type of the input data.
     """
-    html_tags = [
+    if not data:
+        return "application/octet-stream"
+
+    html_tags = (
         b"<html",
         b"<!DOCTYPE html",
-        b"<head>",
-        b"<body>",
-        b"<title>",
-        b"<h1>",
-        b"<div>",
-        b"<span>",
-        b"<p>",
+        b"<head",
+        b"<body",
+        b"<title",
+        b"<h1",
+        b"<div",
+        b"<span",
+        b"<p",
         b"<a ",
         b"<img ",
         b"<script",
@@ -55,79 +55,155 @@ def guess_data_mimetype(data: bytes) -> str:
         b"<meta",
         b"<link",
         b"<form",
-        b"<table>",
-        b"<tr>",
-        b"<td>",
-        b"<th>",
-        b"<ul>",
-        b"<ol>",
-        b"<li>",
-        b"<header>",
-        b"<footer>",
-        b"<nav>",
-        b"<section>",
-        b"<article>",
-        b"<aside>",
-        b"<main>",
-        b"<figure>",
-        b"<figcaption>",
-        b"<blockquote>",
-        b"<pre>",
-        b"<code>",
-        b"<canvas>",
-        b"<svg>",
+        b"<table",
+        b"<tr",
+        b"<td",
+        b"<th",
+        b"<ul",
+        b"<ol",
+        b"<li",
+        b"<header",
+        b"<footer",
+        b"<nav",
+        b"<section",
+        b"<article",
+        b"<aside",
+        b"<main",
+        b"<figure",
+        b"<figcaption",
+        b"<blockquote",
+        b"<pre",
+        b"<code",
+        b"<canvas",
+        b"<svg",
         b"<br",
-        b"<b>",
-    ]
-    if data.startswith(b"\xFF\xD8"):
-        return "image/jpeg"  # JPEG format
+        b"<b",
+    )
+
+    header = data[:512]
+
+    # Images
+    if data.startswith(b"\xFF\xD8\xFF"):
+        return "image/jpeg"
+
     elif data.startswith(b"\x89PNG\r\n\x1A\n"):
-        return "image/png"  # PNG format
-    elif data.startswith(b"GIF89a") or data.startswith(b"GIF87a"):
-        return "image/gif"  # GIF format
-    elif data.startswith(b"\x42\x4D"):  # BMP (Bitmap)
-        return "image/bmp"  # BMP format
-    elif data.startswith(b"\x47\x49\x46\x38"):  # WEBP (WebP Image)
-        return "image/webp"  # WebP format
-    elif data.startswith(b"\x00\x00\x01\x00"):  # ICO (Icon)
-        return "image/vnd.microsoft.icon"  # ICO format
-    elif data.startswith(b"\x49\x20\x20\x00"):  # HEIF (High Efficiency Image Format)
-        return "image/heif"  # HEIF format
-    elif data.startswith(b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"):  # TIFF (TIFF Image)
-        return "image/tiff"  # TIFF format
-    elif data.startswith(b"II*\x00") or data.startswith(b"MM\x00*"):  # TIFF (Big-endian or Little-endian)
-        return "image/tiff"  # TIFF format
+        return "image/png"
+
+    elif data.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+
+    elif data.startswith(b"BM"):
+        return "image/bmp"
+
+    elif len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return "image/webp"
+
+    elif data.startswith(b"\x00\x00\x01\x00"):
+        return "image/vnd.microsoft.icon"
+
+    elif (
+        len(data) >= 12
+        and data[4:8] == b"ftyp"
+        and data[8:12] in (
+            b"heic",
+            b"heix",
+            b"hevc",
+            b"hevx",
+            b"mif1",
+            b"msf1",
+            b"avif",
+        )
+    ):
+        return "image/avif" if data[8:12] == b"avif" else "image/heif"
+
+    elif data.startswith((b"II*\x00", b"MM\x00*")):
+        return "image/tiff"
+
+    elif b"<svg" in header:
+        return "image/svg+xml"
+
+    # Documents
     elif data.startswith(b"%PDF-"):
         return "application/pdf"
-    elif data.startswith(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"):  # DOC signature
+
+    elif data.startswith(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"):
         return "application/msword"
-    elif data.startswith(b"PK\x03\x04"):
+
+    # Archives / Compression
+    elif data.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")):
         return "application/zip"
-    elif data.startswith(b"PK\x05\x06") or data.startswith(b"PK\x07\x08"):
-        return "application/zip"
+
     elif data.startswith(b"\x1F\x8B"):
         return "application/gzip"
-    elif any(tag in data[:500] for tag in html_tags):
-        return "text/html"
-    elif data.startswith(b"{") and data.rstrip().endswith(b"}"):
-        return "application/json"
-    elif data.startswith(b"<"):
-        return "application/xml"
+
+    elif data.startswith(b"BZh"):
+        return "application/x-bzip2"
+
+    elif data.startswith(b"\xFD7zXZ\x00"):
+        return "application/x-xz"
+
+    elif data.startswith(b"7z\xBC\xAF\x27\x1C"):
+        return "application/x-7z-compressed"
+
+    elif data.startswith(b"Rar!\x1A\x07"):
+        return "application/vnd.rar"
+
+    # Audio
     elif data.startswith(b"OggS"):
         return "application/ogg"
-    elif data.startswith(b"\x00\x00\x00\x18ftyp"):
-        return "video/mp4"
-    elif data.startswith(b"\x52\x49\x46\x46") and data[8:12] == b"AVI ":
-        return "video/x-msvideo"
+
+    elif data.startswith(b"fLaC"):
+        return "audio/flac"
+
+    elif data.startswith(b"RIFF") and data[8:12] == b"WAVE":
+        return "audio/wav"
+
     elif data.startswith(b"MThd"):
         return "audio/midi"
-    elif data.startswith(b"ID3") or data[0:2] == b"\xff\xfb":
+
+    elif data.startswith(b"ID3") or data[:2] == b"\xFF\xFB":
         return "audio/mpeg"
-    elif data.startswith(b"/*") or data.startswith(b"@charset") or b"{\n" in data[:500] or b"{\r\n" in data[:500]:
+
+    # Video
+    elif len(data) >= 12 and data[4:8] == b"ftyp":
+        return "video/mp4"
+
+    elif len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"AVI ":
+        return "video/x-msvideo"
+
+    elif data.startswith(b"\x1A\x45\xDF\xA3"):
+        return "video/webm"
+
+    # Text
+    elif any(tag in header for tag in html_tags):
+        return "text/html"
+
+    elif header.lstrip().startswith(b"{") and data.rstrip().endswith(b"}"):
+        return "application/json"
+
+    elif header.lstrip().startswith(b"<"):
+        return "application/xml"
+
+    elif (
+        header.startswith(b"/*")
+        or header.startswith(b"@charset")
+        or b"{\n" in header
+        or b"{\r\n" in header
+    ):
         return "text/css"
-    elif data.startswith(b"//") or data.startswith(b"/*") or b"function " in data[:500] or b"var " in data[:500] or b"let " in data[:500] or b"const " in data[:500]:
+
+    elif (
+        header.startswith(b"//")
+        or header.startswith(b"/*")
+        or b"function " in header
+        or b"var " in header
+        or b"let " in header
+        or b"const " in header
+        or b"=>" in header
+    ):
         return "application/javascript"
+
     elif all(32 <= byte <= 126 or byte in (9, 10, 13) for byte in data):
         return "text/plain"
-    else:
-        return "application/octet-stream"
+
+    return "application/octet-stream"
