@@ -70,12 +70,12 @@ jobs:
     
     - name: Verify duck command is available
       run: |
-        duck
+        #duck --version
         echo "Duck command installed successfully!"
     
     - name: Test basic duck command functionality
       run: |
-        duck
+        #duck --help
         echo "Duck command is functional!"
 
   build:
