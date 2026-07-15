@@ -76,6 +76,28 @@ def read_metadata_from_init(init_path):
     return metadata
 
 
+def sitemap_sort_key(url: str) -> tuple[int, str]:
+    """
+    Sort sitemap URLs so that top-level pages appear before nested pages.
+
+    Args:
+        url: Absolute documentation URL.
+
+    Returns:
+        A tuple used for sorting.
+    """
+    relative = url.removeprefix(f"{DUCK_DOCS_MAIN_URL}/")
+
+    # Root page always comes first.
+    if relative == DUCK_DOCS_MAIN_URL or url == DUCK_DOCS_MAIN_URL:
+        return (0, "")
+
+    # Pages without subdirectories come before nested pages.
+    depth = relative.count("/")
+
+    return (0 if depth == 0 else 1, relative)
+    
+
 def generate_sitemap(outdir: str) -> None:
     """
     Generate a sitemap from the built HTML documentation.
@@ -136,7 +158,7 @@ def generate_sitemap(outdir: str) -> None:
         server_url=DUCK_DOCS_MAIN_URL,
         save_to_file=True,
         filepath=sitemap_filepath,
-        extra_urls=sorted(urls),
+        extra_urls=sorted(urls, key=sitemap_sort_key),
     )
 
     # Generate and save the sitemap.
