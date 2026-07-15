@@ -44,7 +44,7 @@ def on_build_finished(app, exception):
         app: The Sphinx application object.
         exception: Exception raised during build, if any.
     """
-    generate_sitemap(str(pathlib.Path(app.outdir).parent))
+    generate_sitemap(app.outdir)
 
 
 def read_metadata_from_init(init_path):
@@ -76,72 +76,78 @@ def read_metadata_from_init(init_path):
     return metadata
 
 
-def generate_sitemap(outdir):
+def generate_sitemap(outdir: str) -> None:
     """
-    This must be called after sphinx build.
-    
-    The sitemap.xml is placed in `build/html`.
+    Generate a sitemap from the built HTML documentation.
+
+    This function scans the generated HTML output instead of the source files,
+    ensuring that only pages actually published by Sphinx are included. It
+    automatically supports nested directories and future documentation
+    structure changes without requiring updates.
+
+    Args:
+        outdir: Path to the generated HTML output directory (typically `app.outdir`).
     """
-    from duck.logging import console
     from duck.contrib.sitemap import SitemapBuilder
+    from duck.logging import console
     from duck.utils.path import joinpaths
-    
+
+    # Initialize the output directory and URL collection.
+    outdir = pathlib.Path(outdir)
     urls = set()
-    
-    for source_dir in DOCS_SOURCE_DIRS:
-        try:
-            abs_dir = DOCS_DIR / source_dir
-            for entry in os.scandir(abs_dir):
-                if entry.is_file():
-                    filename = entry.name
-                    docname = None
-                    
-                    if filename == "index.rst":
-                        docname = ""
-                        
-                    elif filename.endswith(".md"):
-                        docname = filename.replace(".md", "")
-                        
-                    elif filename.endswith(".html"):
-                        docname = filename.replace(".html", "")
-                   
-                    elif filename.endswith(".rst"):
-                        docname = filename.replace(".rst", "")
-                        
-                    if source_dir == "source":
-                        # This is the root source directory for main docs.
-                        # Check if docname is set.
-                        if docname is not None:
-                            urls.add(f"{DUCK_DOCS_MAIN_URL}/{docname}")
-                    
-                    elif source_dir == "source/api":
-                        # This is the source directory for API docs.
-                        # This directory contains only html files.
-                        # Check if docname is set.
-                        if docname is not None:
-                            urls.add(f"{DUCK_DOCS_MAIN_URL}/api/{docname}")
-                    
-                    else:
-                        raise ValueError(f"Unknown source directory '{source_dir}', expected 'source' or 'source/api'.")
+
+    # Scan all generated HTML files.
+    for html_file in outdir.rglob("*.html"):
+        relative = html_file.relative_to(outdir)
+
+        # Ignore Sphinx-generated support directories.
+        if any(part.startswith("_") for part in relative.parts):
+            continue
+
+        # Resolve the documentation URL.
+        if relative == pathlib.Path("index.html"):
+            # Root documentation page.
+            url = DUCK_DOCS_MAIN_URL
+
+        elif relative.name == "index.html":
+            # Directory index page.
+            url = "/".join([
+                DUCK_DOCS_MAIN_URL,
+                relative.parent.as_posix(),
+            ])
+
+        else:
+            # Regular documentation page.
+            url = "/".join([
+                DUCK_DOCS_MAIN_URL,
+                relative.with_suffix("").as_posix(),
+            ])
+
         
-        except FileNotFoundError as e:
-                console.log(f"Caught an error whilst scanning source dirs: {e}", level=console.WARNING)                
-        
+        # Add URL to list.
+        urls.add(url)
+
     # Build the sitemap.
+    build_html_dir = outdir.parent
     sitemap_filepath = joinpaths(outdir, "sitemap.xml")
-    
-    # Initialize the builder.
+
+    # Initialize the sitemap builder.
     builder = SitemapBuilder(
-        server_url=DUCK_DOCS_MAIN_URL, # Parsing None will automatically resolve server URL; this might cause an error.
+        server_url=DUCK_DOCS_MAIN_URL,
         save_to_file=True,
         filepath=sitemap_filepath,
-        extra_urls=urls,
+        extra_urls=sorted(urls),
     )
-    
-    # Generate the sitemap and save it accordingly.
+
+    # Generate and save the sitemap.
     builder.build()
-    console.log(f"Sitemap has been saved at {sitemap_filepath}", level=console.DEBUG)
-    console.log("Current dir %s"%pathlib.Path('.').resolve())
+    
+    # Show a debug message.
+    console.log(
+        f"Sitemap has been saved at {sitemap_filepath}",
+        level=console.DEBUG,
+    )
+
 
 # Project information
 
