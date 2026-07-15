@@ -277,13 +277,15 @@ class DOMObserver {
    */
   showWarningToUser(mutation, reason) {
     // Visual warning (toast, modal, etc.)
-    alert(
-      "⚠️ Warning: Untracked DOM change detected!\n" +
-      (reason ? reason + "\n" : "") +
-      "Changes to lively-managed elements may be lost or cause display issues. " +
-      "Please use the Lively API for all modifications."
-    );
-  
+    if (window.LIVELY_APPLICATION.DEBUG) {
+      alert(
+        "⚠️ Warning: Untracked DOM change detected!\n" +
+        (reason ? reason + "\n" : "") +
+        "Changes to lively-managed elements may be lost or cause display issues. " +
+        "Please use the Lively API for all modifications."
+      );
+    }
+    
     // Developer log (for debugging)
     console.warn(
       "[Lively] Untracked DOM mutation detected:",

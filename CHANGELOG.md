@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Fixed several issues related to snackbar state synchronization and dynamic updates.
 - Fixed and refined the `response_finalizer` module.
+- Fixed Lively DOM Mutation warning showing in non DEBUG mode.
 
 ---
 
