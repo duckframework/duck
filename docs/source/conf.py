@@ -129,7 +129,7 @@ def generate_sitemap(outdir: str) -> None:
 
     # Build the sitemap.
     build_html_dir = outdir.parent
-    sitemap_filepath = joinpaths(outdir, "sitemap.xml")
+    sitemap_filepath = joinpaths(build_html_dir, "sitemap.xml")
 
     # Initialize the sitemap builder.
     builder = SitemapBuilder(
