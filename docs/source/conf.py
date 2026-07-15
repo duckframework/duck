@@ -44,7 +44,7 @@ def on_build_finished(app, exception):
         app: The Sphinx application object.
         exception: Exception raised during build, if any.
     """
-    generate_sitemap()
+    generate_sitemap(app.outdir)
 
 
 def read_metadata_from_init(init_path):
@@ -76,7 +76,7 @@ def read_metadata_from_init(init_path):
     return metadata
 
 
-def generate_sitemap():
+def generate_sitemap(outdir):
     """
     This must be called after sphinx build.
     
@@ -84,6 +84,7 @@ def generate_sitemap():
     """
     from duck.logging import console
     from duck.contrib.sitemap import SitemapBuilder
+    from duck.utils.path import joinpaths
     
     urls = set()
     
@@ -127,7 +128,7 @@ def generate_sitemap():
                 console.log(f"Caught an error whilst scanning source dirs: {e}", level=console.WARNING)                
         
     # Build the sitemap.
-    sitemap_filepath = str(DOCS_DIR / "build/html/sitemap.xml")
+    sitemap_filepath = joinpaths(outdir, "sitemap.xml")
     
     # Initialize the builder.
     builder = SitemapBuilder(
@@ -140,7 +141,7 @@ def generate_sitemap():
     # Generate the sitemap and save it accordingly.
     builder.build()
     console.log(f"Sitemap has been saved at {sitemap_filepath}", level=console.DEBUG)
-    
+    console.log("Current dir %s"%pathlib.Path('.').resolve())
 
 # Project information
 
