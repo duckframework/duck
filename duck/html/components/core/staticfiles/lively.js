@@ -10,7 +10,7 @@
  * - When using Lively, make sure DOM changes are done within the system as any DOM mutation outside Lively will be detected and an error will be shown.  
  *
  * @author Brian Musakwa <digreatbrian@gmail.com>
- * @version 1.0.0
+ * @version 2.2.0
  */
 
 /**

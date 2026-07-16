@@ -536,13 +536,6 @@ class MCPView(View):
         ```
         """
         return AuthResult()
-
-    async def authorize(self, scopes: list) -> bool:
-        """
-        """
-        if scopes and not self.granted_scopes:
-            return False
-        return set(scopes) <= self.granted_scopes
         
     async def authorize(self, scopes: list) -> bool:
         """
@@ -697,7 +690,7 @@ class MCPView(View):
             await self.run_hooks("on_session_delete", self.session_id)
             
         # Return the final response.
-        return HttpResponse(status_code=204)
+        return HttpResponse(status_code=200)
     
     async def handle_streamable_http(self, raw_body: str) -> JsonResponse:
         """
