@@ -829,7 +829,7 @@ class MCPView(View):
                 
             # Generate error response
             response = self.error_response(
-                error, MCPErrorCode.INVALID_REQUEST,
+                rpc_id, MCPErrorCode.INVALID_REQUEST, error, 
                 status=400,
             )
             
