@@ -210,7 +210,12 @@ class MCPView(View):
         """
         if not self._mcp_registry:
             for attr_name in self.attrs:
-                member = getattr(self, attr_name, None)
+                try:
+                    member = getattr(self, attr_name, None)
+                except MCPError:
+                    # Attribute not fetchable - maybe we got this error: To use the persistent_state, session_id must be assigned.
+                    continue
+                    
                 kind = getattr(member, "mcp_kind", None)
                 
                 if kind is not None:

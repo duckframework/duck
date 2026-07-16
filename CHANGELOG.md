@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Fixed some MCP bug resulting in generating mcp registry.
+
 ---
 
 ## [2.2.0] - July 15, 2026
