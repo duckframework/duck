@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.duckframework/duckframework-ai",
+  "title": "Duck Framework AI",
+  "description": "The official Duck Framework MCP server for AI-assisted development. Search documentation, understand Duck architecture, retrieve AI guides, scaffold projects and blueprints, inspect component APIs, plan features, and validate generated code.",
+  "version": "1.0.0",
+  "websiteUrl": "https://duckframework.com",
+  "repository": {
+    "url": "https://github.com/duckframework/duck",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://duckframework.com/mcp"
+    }
+  ]
+}
