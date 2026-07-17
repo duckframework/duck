@@ -178,7 +178,10 @@ but it's only available on `Page` component instances.
 
 ```py
 # views.py
+from duck.contrib.sync import ensure_async
 from duck.html.components.page import Page
+
+from web.services.some_module import fetch_db_items
 
 def home(request):
     page = Page(request)
@@ -188,6 +191,9 @@ def home(request):
     
     def on_page_load(page, *_):
         print(f"Page loaded, {page}")
+        
+        # Fetch DB items or paginated items and use them if applicable.
+        items = await ensure_async(fetch_db_items)() # Convert sync to async
         
     # Bind to the document.    
     page.document_bind("DuckNavigated", on_navigation, update_self=False)
@@ -233,7 +239,7 @@ Include the built-in counter **blueprint** to test:
 
 ```py
 BLUEPRINTS = [
-    "duck.etc.apps.counterapp.blueprint.CounterApp",
+    "duck.etc.blueprints.counterapp.blueprint.CounterApp",
 ]
 ```
 
@@ -351,7 +357,9 @@ def on_btn_click(btn, *_):
 
     
 def home(request):
-    btn = Button(text="Click me", id="btn")
+    # Add a javascript callback to click event.
+    # This always gets called first before Duck event callback.'
+    btn = Button(text="Click me", id="btn", props={"onclick": "btnClick()"})
     
     # Add some Javascript
     script = Script(
@@ -365,10 +373,6 @@ def home(request):
     
     # Add script to button
     btn.add_child(script)
-    
-    # Add a javascript callback to click event.
-    # This always gets called first before Duck event callback.'
-    btn.props["onclick"] = "btnClick()"
     
     # Bind click event to python callable.
     btn.bind("click", on_btn_click, update_self=False)
@@ -394,7 +398,7 @@ This means Lively will **merge updates**, not replace the entire prop/style obje
 btn = Button(text="Click")
 
 # Later in Python (event handler) — this WILL sync
-btn.style["background-color"] = "red"
+btn.style.update({"background-color": "red"})
 ```
 
 ```javascript
@@ -405,7 +409,7 @@ element.style.border = "1px solid blue"
 Even after future updates from Python:
 
 ```python
-btn.style["background-color"] = "green"
+btn.style.update({"background-color": "green"})
 ```
 
 The `border` style will remain untouched because Lively never tracked it.
