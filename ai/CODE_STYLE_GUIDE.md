@@ -12,7 +12,7 @@ Avoid unnecessary complexity. Do not introduce abstractions, files, classes, fun
 
 ---
 
-# Strict Rules
+## Strict Rules
 
 - Always check for and reuse existing components, utilities, helpers, or patterns before creating new ones. Never duplicate existing functionality.
 - Never introduce invisible, non-standard, or unexpected characters into files.
@@ -56,7 +56,7 @@ class Theme:
 
 ---
 
-# Naming
+## Naming
 
 Use predictable naming conventions.
 
@@ -78,7 +78,7 @@ class ProductCard:
         ...
 
 
-# Avoid
+### Avoid
 
 CARD_RADIUS = "10px"
 
@@ -90,7 +90,7 @@ class ProductCard:
 
 ---
 
-# Formatting
+## Formatting
 
 - Follow Black-compatible formatting.
 - Maximum line length: 88 characters.
@@ -125,9 +125,163 @@ class Theme:
     surface       = "#111111"
 ```
 
+### Module Variables and Constants
+
+- Keep module-level constants and configuration values at the top of the file after imports.
+- Group related constants together before classes and functions.
+- Use uppercase `SCREAMING_SNAKE_CASE` names for constants.
+- Do not hide important configuration values inside functions or classes unless they are class-specific.
+- Avoid unnecessary global variables. Only define values globally when they are reused, configurable, or represent a constant.
+- Keep global state immutable where possible.
+
+Example:
+
+```python
+import os
+
+
+# API configuration
+API_TIMEOUT = 8.0
+API_VERSION = "v1"
+
+
+# External service URLs
+GUIDE_SOURCES = {
+    "project": "https://example.com/project.md",
+    "components": "https://example.com/components.md",
+}
+
+
+def fetch_guide(name: str) -> dict:
+    """
+    Fetches a guide by name.
+
+    Args:
+        name: Guide identifier.
+
+    Returns:
+        Guide data.
+    """
+    ...
+
 ---
 
-# Docstrings
+## Code Organization and Readability
+
+Code must be arranged to be clean, beautiful, and easy to understand. Prioritize readability, clear flow, and maintainability.
+
+Organize files in this order:
+
+1. Imports
+2. Module-level constants/configuration
+3. Classes
+4. Class constants
+5. Initialization methods
+6. Public methods
+7. Helper methods
+
+Example:
+
+```python
+import os
+
+
+# Guide configuration
+GUIDE_TIMEOUT = 8.0
+
+
+class GuideManager:
+    """
+    Handles loading and retrieving guide documentation.
+    """
+
+    # Cache settings
+    CACHE_PREFIX = "guide"
+
+    def __init__(self):
+        """
+        Initializes the guide manager.
+        """
+        self.cache = {}
+
+    def get_guide(self, name: str) -> str:
+        """
+        Returns guide content by name.
+
+        Args:
+            name: Guide identifier.
+
+        Returns:
+            Guide content.
+        """
+        # Return cached content when available
+        if name in self.cache:
+            return self.cache[name]
+
+        # Load and cache guide content
+        content = self.load_guide(name)
+        self.cache[name] = content
+
+        return content
+```
+
+### Logical Sections
+
+Use short comments to separate meaningful sections of code. Comments should improve navigation and explain intent.
+
+Good:
+
+```python
+# Validate incoming data
+data = validate(data)
+
+# Save processed result
+save(data)
+```
+
+Avoid comments that only describe obvious syntax.
+
+### Visual Flow
+
+Keep related code together and arrange methods in a logical order.
+
+Example:
+
+```python
+class UserService:
+    """
+    Handles user operations.
+    """
+
+    # User retrieval operations
+    def get_user(self):
+        ...
+
+    def get_users(self):
+        ...
+
+    # User mutation operations
+    def create_user(self):
+        ...
+
+    def update_user(self):
+        ...
+```
+
+Avoid randomly ordered methods or compressed code.
+
+### Spacing
+
+- Use spacing to create readable sections.
+- Two blank lines between top-level definitions.
+- One blank line between logical blocks inside functions.
+- Avoid unnecessary whitespace or compressed formatting.
+
+Code should be written like documentation: clear structure, meaningful grouping, and an obvious flow.
+
+---
+
+## Docstrings
 
 Every module, class, and non-trivial function must have a docstring.
 
@@ -189,7 +343,7 @@ Required:
 
 ---
 
-# Comments
+## Comments
 
 Comments should explain intent, not syntax.
 
@@ -228,7 +382,7 @@ users = UserService.get_cached_users()
 
 ---
 
-# Functions and Methods
+## Functions and Methods
 
 - Keep functions focused on one responsibility.
 - Avoid functions that are too large.
@@ -252,7 +406,7 @@ def calculate_order_total():
 
 ---
 
-# Variables
+## Variables
 
 - Avoid unnecessary temporary variables.
 - Create variables only when they improve readability.
@@ -273,7 +427,7 @@ return calculate_total()
 
 ---
 
-# Classes
+## Classes
 
 - Classes should represent a clear responsibility.
 - Avoid creating classes that only wrap one function.
@@ -293,7 +447,7 @@ class Button:
 
 ---
 
-# Imports
+## Imports
 
 Use clean and predictable imports.
 
@@ -329,7 +483,7 @@ from web.ui.components.button import Button
 
 ---
 
-# Components and UI Code
+## Components and UI Code
 
 - Reuse existing components before creating new ones.
 - Components should receive prepared data instead of directly querying databases.
@@ -357,7 +511,7 @@ UserCard(
 
 ---
 
-# Final Checklist
+## Final Checklist
 
 Before completing code:
 

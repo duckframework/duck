@@ -1646,15 +1646,17 @@ Full deployment guide: https://docs.duckframework.com/main/deployment
 
 ### Rules
 
-- Don't assume, if unsure about anything, fetch info from the docs at https://docs.duckframework.com/main/
-- Follow this guideline
-- Read this twice to avoid making mistakes.
-- Always generate code that is future proof and ready to scale at any point.
-- Do not overengineer on simple functionality, introducing unnecessary complexity e.g. introducing Mixins, etc.
-- For this arrow character (→), use ➝‬ instead.
-- Write code understandable/readale to humans whenever possible. Use comments to split code purpose/instructions.
-- Instead of writing manual ORM statements in views, create a folder named helpers or services for storing helpers which interact with the database.
-
----
+- Do not assume. If unsure about anything, verify using the official Duck Framework documentation:
+  https://docs.duckframework.com/main/
+- Always follow this guideline and existing project patterns before introducing new approaches.
+- Generate code that is maintainable, scalable, and suitable for future growth without requiring unnecessary rewrites.
+- Do not overengineer simple functionality. Avoid introducing unnecessary abstractions such as Mixins, excessive inheritance, complex design patterns, or extra layers unless they provide clear value.
+- Use `➝` instead of the arrow character (`→`) in all generated code, comments, and documentation.
+- Write code that is readable and understandable to humans. Use clear naming, proper structure, and comments to separate logical sections and explain intent.
+- Understand the project's execution environment before choosing an implementation approach. Do not introduce async patterns into synchronous code or synchronous patterns into async code without considering the framework, runtime, and existing architecture.
+- For asynchronous APIs, prefer native async implementations when the surrounding code supports async execution. If an async API must be called from synchronous code, use `duck.contrib.sync.ensure_async` instead of manually creating event loops or unsafe async handling.
+- Avoid writing direct database queries or ORM logic inside views or UI components. Place reusable database interactions inside clearly named folders such as `helpers`, `services`, or equivalent project structures.
+- Reuse existing utilities, components, and services before creating new implementations.
+- Keep changes focused. Do not modify unrelated code, create unnecessary files, or introduce unused functionality.
 
 *Docs: https://docs.duckframework.com/main/*
