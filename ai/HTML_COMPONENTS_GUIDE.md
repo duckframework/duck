@@ -932,122 +932,549 @@ Always create a base page class. Every page in your project extends it.
 This is the single most impactful structural decision you can make.
 
 ```python
-# web/ui/pages/base.py
+"""
+Base page pattern for modular pages.
+
+This module defines the shared page shell: metadata, scripts, styles,
+navigation, hero, content container, footer, and global snackbar behaviour.
+"""
+from typing import Dict
+
 from duck.shortcuts import static, resolve
 from duck.utils.urlcrack import URL
+from duck.utils.string import to_spaced_camel_case
+
+from duck.html.components import to_component
 from duck.html.components.page import Page
+from duck.html.components.link import Link
+from duck.html.components.script import Script
+from duck.html.components.section import Section
 
-from web.ui.components.theme import ThemedPageMixin
-from web.ui.components.nav import SiteNav
-from web.ui.components.footer import SiteFooter
+from web.meta import SOME_META
+from web.ui.components.theme import Theme
 from web.ui.components.cookie_consent import CookieConsentBanner, has_cookie_consent
-from web.ui.components.onboarding import VisitorOnboardingModal, has_seen_onboarding
-
-SITE_NAME = "My Site"
+from web.ui.components.footer import Footer
 
 
-class BasePage(ThemedPageMixin, Page):
+BASE_SCRIPT = """ """
+
+
+class BasePage(Page):
     """
-    Base page for all site pages.
-
-    Handles theme injection, nav, footer, SEO defaults, cookie consent,
-    and visitor onboarding. Subclasses only override what they need.
+    Base page shared by all page components.
     """
-    OG_IMAGE = static("images/opengraph/og-image.png")
-    
-    # Override in subclasses for page-specific SEO
-    page_title = SITE_NAME
-    page_description = "Default site description."
-    page_url = None
-     
-    def on_create(self):
-        super().on_create()
-        
-        # Resolve the page url from home url
-        self.home_url = resolve("home", absolute=True)
-        self.page_url = URL(self.home_url).join(self.request.path).to_str()
-        
-        # Theme — injects CSS vars, fonts, toggle script
-        self.set_theme(DuckThemePack)
+    PAGE_KEYWORDS = []
+    GOOGLE_ANALYTICS_ID = "G-ABCDEFGHI"
 
-        # SEO defaults — subclasses override page_title etc.
-        self.set_title(self.page_title)
-        self.set_description(self.page_description)
-        self.set_canonical(self.page_url)
-        self.set_opengraph(
-            title=self.page_title,
-            description=self.page_description,
-            url=self.page_url,
-            image=self.OG_IMAGE,
-            type="website",
-            site_name=SITE_NAME,
-        )
-        self.set_twitter_card(
-            card="summary_large_image",
-            title=self.page_title,
-        )
-        self.set_favicon("/static/favicon.ico")
-        self.set_accessibility(lang="en")
-
-        # Shared layout
-        self.add_to_body(SiteNav())
-        self.build_page()              # subclass fills body here
-        self.add_to_body(SiteFooter())
-
-        # Cookie consent banner — shown if analytics consent not given
-        if not has_cookie_consent(self.request, category="analytics"):
-            self.add_to_body(CookieConsentBanner())
-
-        # Visitor onboarding — homepage only, tracked via cookie
-        if self.should_show_onboarding():
-            self.add_to_body(VisitorOnboardingModal())
-
-    def build_page(self):
+    def on_create(self) -> None:
         """
-        Override in subclasses to add page-specific body content.
+        Initialize global page assets, metadata, and body shell.
+        """
+        super().on_create()
+
+        # Event bindings
+        self.bind_navigation_events()
+
+        # Consent and analytics
+        self.add_cookie_consent_banner()
+        self.add_analytics_if_allowed()
+
+        # Global assets
+        self.add_global_scripts()
+        self.add_global_styles()
+
+        # Page structure
+        self.add_page_metadata()
+        self.add_body_components()
+
+    # Event bindings
+
+    def bind_navigation_events(self) -> None:
+        """
+        Bind global document events used by every page.
+        """
+        self.document_bind(
+            "DuckNavigated",
+            self.async_close_navbar_on_navigation,
+            update_self=False,
+        )
+
+    async def async_close_navbar_on_navigation(self, _, __, ___, ws) -> None:
+        """
+        Close the mobile navbar after Duck fast navigation.
+
+        Args:
+            _: Event argument ignored by this handler.
+            __: Event argument ignored by this handler.
+            ___: Event argument ignored by this handler.
+            ws: Active Lively websocket connection.
+        """
+        try:
+            # Make sure the navbar is closed after navigation.
+            await ws.execute_js("closeNavbar();")
+            
+        except Exception:
+            pass
+
+    # Consent and analytics
+
+    def add_cookie_consent_banner(self) -> None:
+        """
+        Add the cookie consent banner when essentials are not accepted.
+        """
+        if self.kwargs.get("no_cookie_consent", False):
+            return
+
+        if not has_cookie_consent(self.request, "essentials"):
+            self.add_to_body(CookieConsentBanner(open_on_ready=True))
+
+    def add_analytics_if_allowed(self) -> None:
+        """
+        Add Google Analytics only after analytics consent is granted.
+        """
+        if has_cookie_consent(self.request, "analytics"):
+            self.add_google_analytics(self.GOOGLE_ANALYTICS_ID)
+
+    # Global assets
+
+    def add_global_scripts(self) -> None:
+        """
+        Add scripts shared by every page.
+        """
+        self.add_script(inline=BASE_SCRIPT)
+        self.add_script(src=static("js/jquery-3.7.1.min.js"))
+        self.add_script(src=static("js/prism.js"), defer=True)
+        self.add_script(src=static("js/bootstrap.min.js"), defer=True)
+        
+        # Special case script. Needs to be added to body, otherwise this script is not being run because of some Lively issues.
+        self.add_to_body(Script(inner_html=SCROLL_REVEAL_SCRIPT))
+        
+    def add_global_styles(self) -> None:
+        """
+        Add stylesheets and shared animation styles.
+        """
+        self.add_to_head(SiteAnimations())
+        self.add_stylesheet(
+            href=static("css/base.css"),
+            rel="preload",
+            as_="style",
+            onload="this.onload=null;this.rel='stylesheet'",
+        )
+        self.add_stylesheet(
+            href=static("css/base.css"),
+            rel="stylesheet",
+            add_to_noscript=True,
+        )
+        self.add_stylesheet(href=static("css/prism.css"))
+        self.add_stylesheet(href=static("css/bootstrap.min.css"))
+        self.add_stylesheet(href=static("css/bootstrap-icons.min.css"))
+
+    # Metadata
+
+    def add_page_metadata(self) -> None:
+        """
+        Add SEO, Open Graph, Twitter Card, favicon, and JSON-LD metadata.
+        """
+        self.setup_metadata_context()
+        self.setup_page_title()
+        self.setup_opengraph_image()
+        self.setup_standard_metadata()
+        self.setup_social_metadata()
+        self.setup_structured_metadata()
+
+    def setup_metadata_context(self) -> None:
+        """
+        Prepare metadata values reused by metadata builders.
+        """
+        self._name = "Duck Framework"
+        self._path = getattr(self.request, "path", None)
+        self._home_url = resolve("home", absolute=True)
+        self._home_url_obj = URL(self._home_url)
+        self._site_domain = self._home_url_obj.host
+        self._website_request_url = resolve("website-request", fallback_url="#")
+        self._opengraph_image_url = static("images/opengraph/og-image.jpg")
+        self._description = self.get_description()
+
+    def setup_page_title(self) -> None:
+        """
+        Set the page title based on the current page class.
+        """
+        self.set_title(self.get_title())
+        
+    def setup_opengraph_image(self) -> None:
+        """
+        Choose an Open Graph image for the current page path.
+        """
+        opengraph_images = {
+            "/services/website-request": static("images/opengraph/og-website-request.jpg"),
+            "/services/consultation": static("images/opengraph/og-consultation.jpg"),
+            "/contribute": static("images/opengraph/og-contribute.jpg"),
+            "/blog": static("images/opengraph/og-blog.jpg"),
+        }
+        
+        # Set opengraph image URL
+        self._opengraph_image_url = opengraph_images.get(
+            self._path,
+            self._opengraph_image_url,
+        )
+
+    def setup_standard_metadata(self) -> None:
+        """
+        Configure standard HTML metadata and favicons.
+        """
+        self.set_lang("en")
+        self.set_author("Brian Musakwa (Duck Framework)")
+        self.set_description(self._description)
+        self.set_robots("index, follow")
+        self.set_keywords([self._name, *self.PAGE_KEYWORDS])
+        self.set_favicons(self.get_favicons())
+        
+    def setup_social_metadata(self) -> None:
+        """
+        Configure Open Graph and Twitter Card metadata.
+        """
+        self.set_opengraph(**self.get_opengraph())
+        self.set_twitter_card(**self.get_twitter_card())
+
+    def setup_structured_metadata(self) -> None:
+        """
+        Configure JSON-LD and canonical metadata.
+        """
+        self.set_json_ld(self.get_json_ld())
+
+        if self._path:
+            self.set_canonical(self._home_url_obj.join(self._path).to_str())
+
+    def get_current_absolute_url(self) -> str:
+        """
+        Return the absolute URL for the current request path.
+
+        Returns:
+            Current page absolute URL.
+        """
+        if self._path == "/":
+            return self._home_url
+
+        return URL(self._home_url).join(self._path).to_str()
+
+    def get_favicons(self) -> list[dict[str, str]]:
+        """
+        Return favicon metadata.
+
+        Returns:
+            Favicon dictionaries passed to ``set_favicons``.
+        """
+        return [
+            {
+                "rel": "icon",
+                "type": "image/png",
+                "href": static("images/favicon/favicon-96x96.png"),
+                "sizes": "96x96",
+            },
+            {
+                "rel": "icon",
+                "type": "image/svg+xml",
+                "href": static("images/favicon/favicon.svg"),
+            },
+            {
+                "rel": "shortcut icon",
+                "href": static("images/favicon/favicon.ico"),
+            },
+            {
+                "rel": "apple-touch-icon",
+                "href": static("images/favicon/apple-touch-icon.png"),
+                "sizes": "180x180",
+            },
+            {
+                "rel": "manifest",
+                "href": static("images/favicon/site.webmanifest"),
+            },
+        ]
+
+    # Body shell
+
+    def add_body_components(self) -> None:
+        """
+        Add the shared page shell and body components.
+        """
+        self.main = self.build_main_shell()
+        self.sticky_nav = self.build_sticky_nav()
+        self.header = self.build_header()
+        self.content_section = self.build_content_section()
+        self.footer = self.get_footer()
+    
+        # Body composition — sticky nav sits outside the header so it
+        # can scroll-pin independently while the hero flows beneath.
+        self.add_to_body(self.main)
+        self.main.add_children([
+            self.sticky_nav,
+            self.header,
+            self.content_section,
+            self.footer,
+        ])
+    
+        # Status UI
+        self.configure_page_progress_bar()
+        
+    def build_main_shell(self):
+        """
+        Build the root main element.
+
+        Returns:
+            A configured main component.
+        """
+        return to_component(
+            "",
+            "main",
+            id="root",
+            klass="d-flex min-vh-100",
+            style={"flex-direction": "column"},
+        )
+        
+    def build_header(self):
+        """
+        Build the page hero area below the sticky nav.
+    
+        The header no longer contains the navbar — only the top ad and
+        the hero component (when present).
+    
+        Returns:
+            Header element holding the ad strip and optional hero.
+        """
+        return to_component(
+            "",
+            tag="header",
+            klass="page-header",
+            style={"height": "auto"},
+            children=self.get_header_content(),
+        )
+
+    def build_content_section(self) -> Section:
+        """
+        Build the page-specific content container.
+
+        Returns:
+            Container where subclasses add page content.
+        """
+        return Section(
+            id="page-content",
+            style={
+                "padding": "20px",
+                "display": "flex",
+                "flex-direction": "column",
+                "flex": "1",
+            },
+            children=self.get_page_content(),
+        )
+
+    # Header and hero
+
+    def build_sticky_nav(self):
+        """
+        Build the sticky navbar wrapper that pins to the top of the viewport.
+    
+        The wrapper carries the glassmorphism backdrop; the inner Navbar
+        component handles links and brand.
+    
+        Returns:
+            Sticky nav wrapper with the Navbar inside.
         """
         pass
+        
+    # Page customization hooks
+    
+    def get_title(self) -> str:
+        """
+        Return the page title.
 
-    def should_show_onboarding(self) -> bool:
+        Returns:
+            Page title. Keep this at or below 60 characters when possible.
         """
-        Returns True if onboarding modal should be shown.
-        Override in non-homepage pages to return False.
+        title = "Duck Framework · Reactive Python Web Framework"
+
+        if self._path != "/":
+            title = self.__class__.__name__.split("Page")[0]
+            title = f"Duck Framework · {to_spaced_camel_case(title)}"
+        
+        # Return the final title.
+        return title
+        
+    def get_description(self) -> str:
         """
-        return False
+        Return the page description.
+
+        Returns:
+            SEO description. Keep this at or below 160 characters when possible.
+        """
+        return (
+            "Build real-time, reactive web apps with pure Python. Duck Framework "
+            "replaces JavaScript frontends with a WebSocket-driven UI engine — "
+            "no JS needed."
+        )
+
+    def get_json_ld(self) -> Dict[str, str]:
+        """
+        Return JSON-LD structured data for this page.
+
+        Returns:
+            JSON-LD dictionary. Override in subclasses for page-specific data.
+        """
+        return {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication" if self._path == "/" else "WebPage",
+            "name": self._name,
+            "description": self._description,
+            "author": {
+                "@type": "organization",
+                "name": self._name,
+            },
+            "applicationCategory": "Web Development Framework",
+            "operatingSystem": "Cross-platform",
+            "image": self._opengraph_image_url,
+        }
+
+    def get_opengraph(self) -> Dict[str, str]:
+        """
+        Return opengraph structured data for this page.
+
+        Returns:
+            OpenGraph dictionary. Override in subclasses for page-specific data.
+        """
+        return {
+            "title": self.title.text,
+            "description": self._description,
+            "url": self.get_current_absolute_url(),
+            "image": self._opengraph_image_url,
+            "type": "website",
+            "site_name": self._name,
+        }
+        
+    def get_twitter_card(self) -> Dict[str, str]:
+        """
+        Return Twitter/X structured data for this page.
+
+        Returns:
+            Twitter Card dictionary. Override in subclasses for page-specific data.
+        """
+        return {
+            "card": "summary_large_image",
+            "title": self.title.text,
+            "description": self._description,
+            "site": "@duckframework",
+            "creator": "@duckframework",
+            "image": self._opengraph_image_url,
+        }
+        
+    def get_header_content(self) -> list:
+        """
+        Return header content — components that belong inside the header section.
+    
+        The navbar has been moved to the sticky wrapper; only the ad and
+        hero remain here.
+        """
+        defaults = []
+        
+        # Try fetching the hero.
+        hero = self.get_hero()
+        
+        if hero is not None:
+            defaults.append(hero)
+    
+        return defaults
+        
+    def get_hero(self):
+        """
+        Returns the page hero - if it has any else None.
+        """
+        pass
+        
+    def get_page_content(self) -> list:
+        """
+        Return the main page components displayed between the navbar/hero section
+        and the footer.
+        """
+        return []
+
+    def get_footer(self):
+        """
+        Return the page footer.
+        """
+        return Footer()
 ```
 
 ### Subclass pattern
 
 ```python
-# web/ui/pages/home.py
+# web/ui/pages/blog.py
+"""
+Blog article page.
+
+Uses dynamic metadata generated from the article object.
+"""
+
 from web.ui.pages.base import BasePage
-from web.ui.components.hero import HeroSection
-from web.ui.components.features import FeaturesGrid
 
-class HomePage(BasePage):
+
+class BlogPostPage(BasePage):
     """
-    Homepage — public landing page.
+    Blog article page.
     """
-    page_title = "Duck Framework — Build Web Apps in Pure Python"
-    page_description = "Duck is a Python web framework with no JavaScript required."
-    page_url = "https://duckframework.com"
 
-    def build_page(self):
-        self.add_to_body(HeroSection())
-        self.add_to_body(FeaturesGrid())
+    def get_title(self) -> str:
+        """
+        Return article title.
 
-    def should_show_onboarding(self):
-        from web.ui.components.onboarding import has_seen_onboarding
-        return not has_seen_onboarding(self.request)
+        Returns:
+            Article SEO title.
+        """
+        return f"{self.post.title} · Duck Framework"
+
+    def get_description(self) -> str:
+        """
+        Return article summary.
+
+        Returns:
+            Article description.
+        """
+        return self.post.excerpt
+
+    def get_opengraph_image(self) -> str:
+        """
+        Return article cover image.
+
+        Returns:
+            Cover image URL.
+        """
+        return self.post.cover_image.url
+
+    def get_opengraph(self) -> dict:
+        """
+        Return article Open Graph metadata.
+
+        Returns:
+            Open Graph metadata.
+        """
+        metadata = super().get_opengraph()
+        
+        # Update the default metadata
+        return {**metadata, "type": "article"}
+
+    def get_page_content(self) -> list:
+        """
+        Return article content.
+
+        Returns:
+            Article components.
+        """
+        return [
+            self.build_article(),
+        ]
 ```
 
 ```python
 # views.py
-def home(request):
-    return HomePage(request=request)
-
-def about(request):
-    return AboutPage(request=request)
+def blogpost(request, post_id: int):
+    return BlogPostPage(request, post_id=post_id)
 ```
 
 ---
