@@ -45,9 +45,14 @@ myproject/ # Root Project
 
 ```
 
-``` {note}
+```{note}
 From the above project structure, this includes the files and directories of the full project version but for the other
 project versions, some files or directories will be ommitted.
+```
+
+
+``` {note}
+It is recommended to put all Python files in the `web` directory.
 ```
 
 ---

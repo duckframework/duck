@@ -1239,6 +1239,38 @@ Before writing code that uses a Duck component you're unsure about:
 - Accessing or interacting with the `root` component from a child or grandchild MUST be performed within the `on_root_finalized` lifecycle method.
 - Components MUST NOT attempt to access or rely on the root component before `on_root_finalized` has been executed, as the hierarchy may not yet be fully established.
 - Components that will be used in event handlers or other relatable methods must be attached to self.
+- HTML components should receive plain view data instead of ORM models. Pass lightweight dictionaries or typed view models containing only the fields required for rendering. Keep components independent from the database layer to improve reuse, caching, and testing:
+
+```python
+Example:
+
+# Bad: passing ORM models directly
+EventCard(event=event_model)
+
+# Good: passing prepared view data
+EventCard(
+    event={
+        "title": event.title,
+        "slug": event.slug,
+        "cover_image_url": event.cover_image_url,
+        "venue_name": event.venue.name,
+        "category_name": event.category.name,
+        "price_summary": event.price_summary,
+    }
+)
+
+# Better: use a typed view model when possible
+@dataclass(slots=True)
+class EventCardData:
+    title: str
+    slug: str
+    cover_image_url: str
+    venue_name: str
+    category_name: str
+    price_summary: str
+
+EventCard(event=EventCardData(...))
+```
 
 ### Strict Rule: No Reinventing Existing Components
 

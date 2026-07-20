@@ -5,6 +5,9 @@ Guidelines for AI coding agents (Claude Code, Cursor, etc.) working with Duck Fr
 
 .. toctree::
    :maxdepth: 1
-
+   
+   agents
+   code-style-guide
    duck-project-guide
    html-components-guide
+   security-guide
