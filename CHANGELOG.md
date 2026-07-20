@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- If no `description` is provided in MCP decorators (e.g. `@tool()`), a short summary is automatically extracted from the function's docstring and used as the tool description.
+
 ### Changed
 
 ### Fixed
