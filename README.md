@@ -97,7 +97,8 @@ Build high-performance, scalable, server-side reactive web applications — with
 6. **DuckSight hot reload** — hot reload for the DuckSight Reloader instead of a full reload on file changes, for faster, more efficient dev cycles
 7. **Internal updates** — securely list and apply updates using cryptographic code signing (e.g. TUF) to verify GitHub-sourced updates, protecting against rollbacks and man-in-the-middle attacks
 8. **Complete reverse proxy server** — Duck currently proxies only Django; the goal is a full-fledged reverse proxy server with optional sticky sessions
-9. **...and more** — [request a feature](./feature_request.md)
+9. Implement Duck AI Agent system with reusable agents, MCP tool integration, task execution, and long-running worker support.
+10. **...and more** — [request a feature](./feature_request.md)
 
 ---
 
