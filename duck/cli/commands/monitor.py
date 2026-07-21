@@ -380,6 +380,23 @@ class MonitorCommand:
         Returns:
             None: This method runs indefinitely until interrupted by the user.
         """
+        
+        def format_number(value: object, precision: str = ".1f") -> str:
+            """
+            Format numeric values while leaving strings unchanged.
+        
+            Args:
+                value: Value to format.
+                precision: Numeric format precision.
+        
+            Returns:
+                Formatted string representation.
+            """
+            if isinstance(value, (int, float)):
+                return f"{value:{precision}}"
+            return str(value)
+        
+        # Set prev_time
         prev_time = time.time()
         
         try:
@@ -424,9 +441,24 @@ class MonitorCommand:
                     # Failed to get disk
                     disk_used = disk_total = 'N/A'
                 
-                ram_str = f"[{ram_style}]{ram_percent:.1f}% ({ram_used} MB / {ram_total} MB)[/{ram_style}]"
-                disk_str = f"{disk_percent:.1f}% ({disk_used:.1f} GB / {disk_total:.1f} GB)\nRead: {read_speed:.2f} MB/s \nWrite: {write_speed:.2f} MB/s"
-                net_str = f"Up: {net_up:.2f} MB/s \nDown: {net_down:.2f} MB/s"
+                # Build strings
+                ram_str = (
+                    f"[{ram_style}]{format_number(ram_percent)}% "
+                    f"({format_number(ram_used)} MB / {format_number(ram_total)} MB)"
+                    f"[/{ram_style}]"
+                )
+                
+                disk_str = (
+                    f"{format_number(disk_percent)}% "
+                    f"({format_number(disk_used)} GB / {format_number(disk_total)} GB)\n"
+                    f"Read: {format_number(read_speed, '.2f')} MB/s\n"
+                    f"Write: {format_number(write_speed, '.2f')} MB/s"
+                )
+                
+                net_str = (
+                    f"Up: {format_number(net_up, '.2f')} MB/s\n"
+                    f"Down: {format_number(net_down, '.2f')} MB/s"
+                )
                 
                 # System table
                 sys_table = cls.make_system_table(cpu_per_core, ram_str, disk_str, net_str)

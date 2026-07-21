@@ -291,6 +291,7 @@ Rules:
 
 - Always use Google-style docstrings.
 - Triple quotes must always be on their own lines.
+- Docstrings must be readable and sections must be easy to identify.
 - Never use inline docstrings.
 
 Bad:

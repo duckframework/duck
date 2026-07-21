@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Fixed some MCP bug resulting in generating mcp registry.
+- Command `duck monitor` not formatting output data correctly causing ValueError.
 
 ---
 
