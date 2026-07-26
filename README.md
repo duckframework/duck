@@ -45,6 +45,7 @@ Build high-performance, scalable, server-side reactive web applications — with
 6. [**Builtin Dashboard**](https://docs.duckframework.com/main/dashboard) — tailor interfaces to your workflow and preferences
 7. [Official MCP Server](https://duckframework.com/blog/official-duck-framework-mcp-server-now-available) at https://duckframework.com/mcp
 
+
 ### ⚡ Reactive & High Performance
 
 1. [**Lively Component System**](https://docs.duckframework.com/main/lively-components) with `VDom diffing` for fast UI updates
@@ -77,8 +78,9 @@ Build high-performance, scalable, server-side reactive web applications — with
 2. [Log management](https://docs.duckframework.com/main/logging) via `duck logs`, with file-based logging by default
 3. Real-time [system monitoring](https://docs.duckframework.com/main/monitoring) for CPU, RAM, disk usage, and I/O activity via `duck monitor`
 4. Built-in [dashboard](https://docs.duckframework.com/main/dashboard) for monitoring requests, latency, and system metrics
-5. Instant sitemap generation via [`duck sitemap`](https://docs.duckframework.com/main/sitemap), or the built-in [`duck.etc.blueprints.essentials.blueprint.Sitemap`](https://docs.duckframework.com/main/sitemap) blueprint for dynamic, cached sitemap serving
-6. **Auto-reload** in debug mode for rapid development
+5. **Dependency synchronization** with [`duck sync`](https://docs.duckframework.com/main/cli/sync) — manage project dependencies from a `duck.toml` manifest, automatically detecting the environment and installing missing Python and system packages
+6. Instant sitemap generation via [`duck sitemap`](https://docs.duckframework.com/main/sitemap), or the built-in [`duck.etc.blueprints.essentials.blueprint.Sitemap`](https://docs.duckframework.com/main/sitemap) blueprint for dynamic, cached sitemap serving
+7. **Auto-reload** in debug mode for rapid development
 
 ### 🏗️ Scalable Architecture
 
