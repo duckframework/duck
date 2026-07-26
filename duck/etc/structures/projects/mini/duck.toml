@@ -1,0 +1,46 @@
+# duck.toml — project dependency manifest
+# Run `duck sync` to install project dependencies.
+# Run `duck sync --dev` to install development dependencies only.
+# Run `duck sync --with-dev` to install both project and development dependencies.
+
+[dependencies]
+# Python packages (installed via pip/uv)
+python = []
+
+# System packages (installed via apt, brew, pacman, etc.)
+# Use generic names — Duck Sync resolves them per platform.
+# See: https://docs.duckframework.com/main/cli/sync
+system = []
+
+# Optional: path to a requirements.txt (installed alongside python list above)
+# requirements = "requirements.txt"
+
+# Optional: extra args appended to every pip/uv install in this group
+# python_args = ["--no-cache-dir"]
+
+# Optional: extra args appended to every system install in this group
+# system_args = ["--no-install-recommends"]
+
+
+[development]
+# Dependencies only needed locally (linting, testing, etc.)
+python = []
+system = []
+
+
+[sync]
+# Uncomment to pin sudo behaviour instead of auto-detecting.
+# true  = always prefix system installs with sudo
+# false = never prefix (e.g. running as root inside a container)
+# use_sudo = true
+
+
+[overrides]
+# Override the system package name for a specific backend.
+# Useful when the generic name in [dependencies] differs from what
+# a particular package manager actually calls it.
+#
+# [overrides.mypackage]
+# apt    = "libmypackage-dev"
+# brew   = "mypackage"
+# pacman = "mypackage"

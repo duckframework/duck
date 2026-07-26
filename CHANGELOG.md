@@ -12,7 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Added `duck sync`, a dependency synchronization system that reads project dependencies from `duck.toml`, detects the current environment, resolves the appropriate package manager, and installs missing Python and system dependencies automatically.
 - If no `description` is provided in MCP decorators (e.g. `@tool()`), a short summary is automatically extracted from the function's docstring and used as the tool description.
+- Added `@cache` and `@async_cache` decorators to `duck.utils.caching.CacheBase`.
 
 ### Changed
 

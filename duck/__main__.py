@@ -23,6 +23,7 @@ from duck.cli.commands.integration import DjangoAddCommand
 from duck.cli.commands.logs import LogsCommand
 from duck.cli.commands.monitor import MonitorCommand
 from duck.cli.commands.sitemap import SitemapCommand
+from duck.cli.commands.sync import SyncCommand
 
 
 EXAMPLES = f"""
@@ -176,22 +177,6 @@ def django_add(source, appname, dest):
     DjangoAddCommand.main(source, appname, dest)
     
 
-@cli.group()
-def service():
-    """
-    Create and manage Duck background service for linux-based systems using systemd.
-    
-    CUSTOMIZE the service in settings.py.
-    """
-
-@cli.group()
-def logs():
-    """
-    Manage Duck project logs.
-    """
-    pass
-
-
 @cli.command(help="Real-time system monitor for Duck processes")
 @click.option('--interval', default=1.0, help="Refresh interval in seconds")
 @click.option('--duck-process', default="duck*", help="Partial name of Duck processes to monitor (wildcards supported)")
@@ -216,6 +201,95 @@ def monitor(interval, duck_process, pid, cpu_warning, ram_warning):
     )
 
 
+ 
+@cli.command(help="Install every dependency declared in duck.toml.")
+@click.option(
+    "--with-dev",
+    is_flag=True,
+    default=False,
+    help="Install [dependencies] and [development] groups.",
+)
+@click.option(
+    "-d", "--dev",
+    is_flag=True,
+    default=False,
+    help="Install [development] group only.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Print planned installs without changing the system.",
+)
+@click.option(
+    "-c", "--config",
+    type=str,
+    default="",
+    help="Path to duck.toml, auto discovered by default.",
+)
+@click.option(
+    "--pip-args",
+    type=str,
+    default="",
+    help='Extra args for every pip/uv install, e.g. "--no-cache-dir".',
+)
+@click.option(
+    "--system-args",
+    type=str,
+    default="",
+    help='Extra args for every system install, e.g. "--no-install-recommends".',
+)
+@click.option(
+    "--sudo/--no-sudo",
+    default=None,
+    help=(
+        "Force sudo on or off for system installs. Defaults to "
+        "duck.toml's [sync] setting, then auto-detect."
+    ),
+)
+@click.option(
+    "-b", "--backend",
+    type=str,
+    default="",
+    help=(
+        "Override the auto-detected system package manager. "
+        "Accepts a known name (apt, brew, dnf, pacman, choco, termux) "
+        'or a raw install command, e.g. --backend "some_command -i".'
+    ),
+)
+def sync(with_dev, dev, dry_run, config, pip_args, system_args, sudo, backend):
+    """
+    Run a full dependency sync using duck.toml.
+    """
+    SyncCommand.main(
+        include_dev=with_dev,
+        dev_only=dev,
+        dry_run=dry_run,
+        config=config,
+        pip_args=pip_args,
+        system_args=system_args,
+        sudo=sudo,
+        backend=backend,
+    )
+
+
+@cli.group()
+def service():
+    """
+    Create and manage Duck background service for linux-based systems using systemd.
+    
+    CUSTOMIZE the service in settings.py.
+    """
+
+
+@cli.group()
+def logs():
+    """
+    Manage Duck project logs.
+    """
+    pass
+
+
 @cli.group()
 def sitemap():
     """
@@ -223,7 +297,7 @@ def sitemap():
     """
     pass
 
- 
+
 # Register subcommands the duck commands.
 ServiceCommand.register_subcommands(main_command=service)
 LogsCommand.register_subcommands(main_command=logs)

@@ -17,7 +17,8 @@ import asyncio
 import datetime
 import threading
 
-from typing import Any
+from typing import Any, Callable
+from functools import wraps
 from pathlib import Path
 from collections import OrderedDict, deque
 from functools import lru_cache
@@ -46,7 +47,197 @@ class CacheBase:
         """
         Optional persistence hook. No-op unless overridden.
         """
+        pass
+        
+    def cache(
+        self,
+        expiry: int | float | None = None,
+        key_prefix: str | None = None,
+    ):
+        """
+        Decorate a synchronous function with in-memory caching.
+    
+        Args:
+            expiry: Cache expiry time in seconds.
+            key_prefix: Optional namespace prefix for generated cache keys.
+    
+        Returns:
+            Decorator for synchronous functions.
+    
+        Example:
+        
+        ```python
+        cache = InMemoryCache()
 
+        @cache.cache(expiry=3600)
+        def get_city_choices():
+            return list(City.objects.all())
+        ```
+        """
+        def decorator(func: Callable):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                key = (
+                    f"{key_prefix or func.__module__}."
+                    f"{func.__qualname__}:"
+                    f"{args}:"
+                    f"{sorted(kwargs.items())}"
+                )
+    
+                # Get the cached value
+                cached = self.get(key)
+    
+                if cached is not None:
+                    return cached
+    
+                # Compute result
+                result = func(*args, **kwargs)
+                
+                # Set the result
+                self.set(
+                    key,
+                    result,
+                    expiry=ttl,
+                )
+    
+                # Return the final result
+                return result
+                
+            # Return wrapper
+            return wrapper
+    
+        # Return the decorator
+        return decorator
+        
+    def cache(
+        self,
+        expiry: int | float | None = None,
+        key_prefix: str | None = None,
+    ):
+        """
+        Decorate a synchronous function with in-memory caching.
+    
+        Args:
+            expiry: Cache expiry time in seconds.
+            key_prefix: Optional namespace prefix for generated cache keys.
+    
+        Returns:
+            Decorator for synchronous functions.
+    
+        Example:
+        
+        ```python
+        cache = InMemoryCache()
+
+        @cache.cache(expiry=3600)
+        def get_city_choices():
+            return list(City.objects.all())
+        ```
+        """
+        def decorator(func: Callable):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                key = (
+                    f"{key_prefix or func.__module__}."
+                    f"{func.__qualname__}:"
+                    f"{args}:"
+                    f"{sorted(kwargs.items())}"
+                )
+    
+                # Get the cached value
+                cached = self.get(key)
+    
+                if cached is not None:
+                    return cached
+    
+                # Compute result
+                result = func(*args, **kwargs)
+                
+                # Set the result
+                self.set(
+                    key,
+                    result,
+                    expiry=expiry,
+                )
+    
+                # Return the final result
+                return result
+                
+            # Return wrapper
+            return wrapper
+    
+        # Return the decorator
+        return decorator
+        
+    def async_cache(
+        self,
+        expiry: int | float | None = None,
+        key_prefix: str | None = None,
+    ):
+        """
+        Decorate an asynchronous function with in-memory caching.
+    
+        Args:
+            expiry: Cache expiry time in seconds.
+            key_prefix: Optional namespace prefix for generated cache keys.
+    
+        Returns:
+            Decorator for asynchronous functions.
+    
+        Example:
+    
+        ```python
+        cache = InMemoryCache()
+    
+        @cache.async_cache(expiry=3600)
+        async def async_get_city_choices():
+            return await City.objects.all()
+        ```
+        """
+        locks: dict[str, asyncio.Lock] = {}
+    
+        def decorator(func: Callable):
+            @wraps(func)
+            async def wrapper(*args, **kwargs):
+                key = (
+                    f"{key_prefix or func.__module__}."
+                    f"{func.__qualname__}:"
+                    f"{args}:"
+                    f"{sorted(kwargs.items())}"
+                )
+    
+                # Get or create a per-key lock.
+                lock = locks.setdefault(
+                    key,
+                    asyncio.Lock(),
+                )
+    
+                async with lock:
+                    # Get the cached value.
+                    cached = await self.async_get(key)
+    
+                    if cached is not None:
+                        return cached
+    
+                    # Compute result.
+                    result = await func(*args, **kwargs)
+    
+                    # Set the result.
+                    await self.async_set(
+                        key,
+                        result,
+                        expiry=expiry,
+                    )
+    
+                    # Return the final result.
+                    return result
+    
+            # Return wrapper.
+            return wrapper
+    
+        # Return the decorator.
+        return decorator
+    
     def set(self, key: str, value: Any, expiry: int | float | None = None) -> None:
         """
         Store a value under key with an optional TTL in seconds.

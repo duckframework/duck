@@ -44,6 +44,12 @@ Contents
 
 .. toctree::
    :maxdepth: 2
+   :caption: Command Line Interface
+
+   cli/index
+
+.. toctree::
+   :maxdepth: 2
    :caption: Core Concepts
 
    templates
