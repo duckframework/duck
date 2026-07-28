@@ -46,7 +46,7 @@ Contents
    :maxdepth: 2
    :caption: Command Line Interface
 
-   cli/index
+   cli/sync
 
 .. toctree::
    :maxdepth: 2

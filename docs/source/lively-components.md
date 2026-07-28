@@ -499,6 +499,36 @@ to handle file uploads. You need to manually call internal api's or views for fi
 if complete. One case you can do this is that you may execute JS for doing an `AJAX` request and update
 the UI once the response is received.
 
+---
+
+## Custom Events
+
+You can create custom `Lively` events with `window.LIVELY_APPLICATION.createDuckEvent`, dispatch them like any other DOM event, and bind them on the Python side.
+
+```javascript
+// Create a custom event
+const event = lively.createDuckEvent("ReportBounds", detail, false, true);
+
+// Fire event at root level
+document.dispatchEvent(event);
+```
+
+`createDuckEvent(eventName, detailOverrides, addToDuckEvents = true, raw = true)`:
+
+- **`eventName`** — name of the event (e.g. `"ReportBounds"`).
+- **`detailOverrides`** — data to attach to the event's `detail`.
+- **`addToDuckEvents`** — whether to add the event to Duck's tracked event list.
+- **`raw`** — when `true`, Duck skips its default per-field processing (e.g. extracting `value` from a `button`) and passes `detail` through directly.
+
+On the Python side, bind the event by name:
+
+```python
+page.document_bind("ReportBounds", on_report_bounds, force_bind=True)
+```
+
+`on_report_bounds` receives the event just like any other bound handler — no special handling needed for it being custom.
+
+---
 
 ## Component Lifecycle
 

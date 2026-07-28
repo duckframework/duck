@@ -1348,7 +1348,8 @@ class DOMPatcher {
   extractValue(e) {
     // Handle custom DuckNavigated event
     if (e.type === "DuckNavigated") return e.detail?.fullpath || null;
-  
+    if (e.__send_raw_detail) return e.detail;
+    
     const t = e.target;
   
     // Handle form elements
@@ -2294,9 +2295,10 @@ class LivelyApp {
    * @param {string} eventName - The name of the event to create (e.g., 'DuckNavigated').
    * @param {Object} [detailOverrides] - Optional: properties to override or add to the event's detail object.
    * @param {boolean} [addToDuckEvents=true] Whether to add the created event to event list.
+   * @param {boolean} [raw=true] Whether to just try to serialize data directly using msgpack for sending without scanning whats most relevant to event.
    * @returns {CustomEvent} The prepared CustomEvent instance.
    */
-  createDuckEvent(eventName, detailOverrides = {}, addToDuckEvents = true) {
+  createDuckEvent(eventName, detailOverrides = {}, addToDuckEvents = true, raw = false) {
     // Gather common details
     let defaultDetails = {};
     
@@ -2315,7 +2317,13 @@ class LivelyApp {
       detail,
     });
     
+    // Whether to send raw detail without processing.
+    if (raw) newEvent.__send_raw_detail = raw;
+    
+    // Add to for fast lookup
     if (addToDuckEvents) this.duckEvents[eventName] = newEvent;
+    
+    // Return final event
     return newEvent;
   }
   

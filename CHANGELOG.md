@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `window.LIVELY_APPLICATION.createDuckEvent` now supports a `raw` argument. When `true`, Duck skips its default event processing (e.g. extracting `value` from a `button`) and passes the `detail` argument directly to Python event handler instead.
+
 ### Fixed
 
 - Fixed some MCP bug resulting in generating mcp registry.
