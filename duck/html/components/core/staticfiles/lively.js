@@ -1187,7 +1187,7 @@ class DOMPatcher {
     * @param {string} pageUid - The current page UID. If null, it will be resolved from window.LIVELY_APPLICATION.PAGE_UID;
     * @throws LivelyError - If the pageUid is not provided and could not be resolved automatically.
     */
-  autobindDocumentEvents(pageUid, dispatchDOMContentLoadedHandler = false) {
+  autobindDocumentEvents(pageUid) {
     if (!pageUid) {
       pageUid = window?.LIVELY_APPLICATION?.PAGE_UID || null;
     }
@@ -2452,7 +2452,7 @@ function overrideWindowOpen() {
   * Reinitialize the page by refiring DomContentLoaded event.
   * @param {boolean} [fireDuckNavigatedEvent=true] Whether to fire a DuckNavigated event to flag that a navigation was successful.
   */
-function reinitializePage(fireDuckNavigatedEvent=true) {
+function reinitializePage(fireDuckNavigatedEvent=true, backNavigation=false) {
   const livelyApp = window.LIVELY_APPLICATION;
   
   if (livelyApp) {
@@ -2466,7 +2466,7 @@ function reinitializePage(fireDuckNavigatedEvent=true) {
   if (fireDuckNavigatedEvent) {
     const duckNavigatedEvent = livelyApp.duckEvents["DuckNavigated"];
     document.dispatchEvent(duckNavigatedEvent);
-  } 
+  }
 }
 
 if (!window.LIVELY_APPLICATION) {

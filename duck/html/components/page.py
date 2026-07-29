@@ -336,9 +336,11 @@ class Page(InnerComponent):
         Notes:
         - If `update_self` is False and no `update_targets` are provided, no DOM patch will be sent to the client.
         - This method requires the Lively Component System to be active (i.e., running within a WebSocket context).
-        - On navigating to a new page, the following events will be fired:
+        - On navigating to a page, the following events will be fired:
           - `DOMContentLoaded`
           - `DuckNavigated`  
+          - `DuckBackNavigated`
+          
           You can bind listeners to these events to perform cleanup actions, such as closing open components (dropdowns, modals, etc.).
         
         - Unbinding document event handlers using `document_unbind` **only works** if  no navigation occurs.
@@ -352,7 +354,7 @@ class Page(InnerComponent):
         )
     
         known_events = {
-            "DOMContentLoaded", "DuckNavigated"
+            "DOMContentLoaded", "DuckNavigated", "DuckBackNavigated"
         }
         
         event_already_bound = event in self._document_event_bindings

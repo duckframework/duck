@@ -183,22 +183,37 @@ from duck.html.components.page import Page
 
 from web.services.some_module import fetch_db_items
 
+
 def home(request):
     page = Page(request)
-    
-    def on_navigation(page, *_):
+
+    def on_navigation(page, event, path, websocket):
+        # Called whenever the browser navigates to a page.
         print(f"Navigated to page {page}")
-    
-    def on_page_load(page, *_):
-        print(f"Page loaded, {page}")
-        
-        # Fetch DB items or paginated items and use them if applicable.
-        items = await ensure_async(fetch_db_items)() # Convert sync to async
-        
-    # Bind to the document.    
+
+    def on_back_navigation(page, event, path, websocket):
+        # Called when the user returns to a page using browser history
+        # (for example, the Back button).
+        print(f"Back navigated to page {page}")
+
+    async def on_page_load(page, event, _, websocket):
+        # Called only when a page is loaded for the first time.
+        # Not called when returning to a page via browser history.
+        print(f"Page loaded: {page}")
+
+        # Fetch data that should only be loaded on the initial page load.
+        items = await ensure_async(fetch_db_items)()
+
+    # Listen for document navigation events.
     page.document_bind("DuckNavigated", on_navigation, update_self=False)
+    page.document_bind("DuckBackNavigated", on_back_navigation, update_self=False)
+
+    # Listen for the initial page load event.
     page.document_bind("DOMContentLoaded", on_page_load, update_self=False)
+    
+    # Return page.
     return page
+
 ```
 
 ---

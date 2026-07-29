@@ -433,12 +433,23 @@ class EventHandler:
         
         # Don't repeat calling DOMContentLoaded if called, must only be called once
         # Useful on back navigation where a previous component can be revisited, so if DOMContentLoaded is already executed,
-        # then there is no need to call it again
+        # then there is no need to call it again - just assume its a Back Navigation.
         if is_document_event and event_name == "DOMContentLoaded" and getattr(component, "_domcontentloaded_event_called", False):
-            return
+            event_name = "DuckBackNavigated"
+            
+            # Just assume its back navigation.
+            info = component.get_document_event_info(event_name)
+            
+            if not info:
+                # Don't continue no available event handler is available for this event on component.
+                return
             
         # Initialize before event handlers in cases the component itself get removed from component tree.
         root_request = component.get_raw_root().request
+        
+        # Set value if DuckBackNavigated
+        if event_name == "DuckBackNavigated":
+            value = root_request.fullpath
         
         # Execute event and send patches/updates
         event_handler: Union[Callable, EventHandlerChain]
