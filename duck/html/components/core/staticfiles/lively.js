@@ -1590,17 +1590,30 @@ class NavigationHandler {
      * @param {HTMLElement|Window} [container=window] - The scrollable container,
      * or the window.
      */
-    static scrollToTop(smooth = false, container = window) {
-      const scrollTop = container === window ? window.scrollY : container.scrollTop;
+    static scrollToTop(smooth = false, root = document.body) {
+      const behavior = smooth ? "smooth" : "auto";
       
-      // If scroll to zero or less, just return
-      if (scrollTop <= 0) return;
+      // Scroll to top first.
+      window.scrollTo({ top: 0, behavior });
       
-      // Perform actual scroll
-      container.scrollTo({
-        top: 0,
-        behavior: smooth ? "smooth" : "auto",
-      });
+      // Scroll to top for candidates as well.
+      const candidates = root.querySelectorAll("[data-scroll-container]");
+    
+      for (const el of candidates) {
+        if (el.scrollTop > 0) {
+          el.scrollTo({ top: 0, behavior });
+        }
+      }
+    
+      // Fallback: if no tagged containers found, scan all descendants
+      if (candidates.length === 0) {
+        const all = root.querySelectorAll("*");
+        for (const el of all) {
+          if (el.scrollTop > 0) {
+            el.scrollTo({ top: 0, behavior });
+          }
+        }
+      }
     }
   
   /**
@@ -1771,7 +1784,7 @@ class NavigationHandler {
         
         if (!hasHash) {
           requestAnimationFrame(() => {
-            this.scrollToTop(false, document.querySelector('#root') || window);
+            this.scrollToTop(true);
           });
         }
 
