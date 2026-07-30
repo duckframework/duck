@@ -218,6 +218,40 @@ def home(request):
 
 ---
 
+## Automatic Event Binding
+
+You can now bind events directly when creating components using the `event_handlers` argument:
+
+```python
+Button(
+    event_handlers=[
+        {
+            "click": self.on_click,
+            "update_self": False,
+            "update_targets": [self],
+            **extra_kwargs,
+        }
+    ]
+)
+```
+
+For document-level events such as `DOMContentLoaded`, use `document_event_handlers` on `Page`:
+
+```python
+Page(
+    document_event_handlers=[
+        {
+            "DOMContentLoaded": self.on_loaded,
+            **extra_kwargs,
+        }
+    ]
+)
+```
+
+Both `event_handlers` and `document_event_handlers` accept additional keyword arguments that are forwarded to their respective bind methods.
+
+---
+
 ## Fast Navigation
 
 - URL paths returning **Component responses** allow vdom-diffing for minimal DOM updates.

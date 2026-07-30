@@ -6,7 +6,6 @@ handling requests, managing timeouts, and logging.
 """
 import re
 import ssl
-import time
 import select
 import socket
 import asyncio
@@ -407,18 +406,11 @@ class BaseServer:
                 server = self.sock
                 
                 # Wait until the server socket is ready (timeout = 1s)
-                start_time = time.time()
                 ready, _, _ = select.select([server], [], [], SETTINGS['SERVER_POLL'])
                 
                 if server in ready:
                     sock = self.accept_and_handle()
                 
-                # Calculate if total time taken is equal to SERVER_POLL
-                time_taken = time.time() - start_time
-                if time_taken < SETTINGS['SERVER_POLL']:
-                    # Sleep to make total time be equal to server poll
-                    time.sleep(SETTINGS['SERVER_POLL'] - time_taken)
-                                  
             except (ConnectionResetError, BlockingIOError):
                 pass
         
@@ -530,6 +522,7 @@ class BaseServer:
             except ssl.SSLError as e:
                 # Wrong protocol used e.g., https on http or vice versa
                 logged_error = False
+                
                 if not self.no_logs and SETTINGS["VERBOSE_LOGGING"] and SETTINGS["DEBUG"]:
                     if "HTTP_REQUEST" in str(e):
                         logger.log(f"Client may be trying to connect with HTTPS on HTTP server or vice-versa: {e}\n", level=logger.WARNING)

@@ -120,7 +120,7 @@ class RequestsLimitMiddleware(BaseMiddleware):
 
         Includes additional debugging information.
         """
-        from duck.contrib.response import make_response
+        from duck.contrib.responses import make_response
         
         body = (
             "<h4>Too Many Requests!</h4>"

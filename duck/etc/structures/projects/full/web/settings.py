@@ -363,7 +363,7 @@ SERVER_BUFFER: int = 65535
 
 
 # Server Poll Interval
-SERVER_POLL: int | float = 0.5
+SERVER_POLL: int | float = 0.01
 
 
 # Mode for connection

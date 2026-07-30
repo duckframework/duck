@@ -37,6 +37,7 @@ from duck.html.components.core.opcodes import EventOpCode, PatchCode
 from duck.html.components.core.exceptions import (
     JavascriptExecutionError,
     JavascriptExecutionTimedOut,
+    UnknownEventError,
 )
 
 
@@ -438,9 +439,9 @@ class EventHandler:
             event_name = "DuckBackNavigated"
             
             # Just assume its back navigation.
-            info = component.get_document_event_info(event_name)
-            
-            if not info:
+            try:
+                _ = component.get_document_event_info(event_name)
+            except UnknownEventError:
                 # Don't continue no available event handler is available for this event on component.
                 return
             

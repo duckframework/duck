@@ -62,7 +62,7 @@ class RequestHandlingExecutor:
                 
             if SETTINGS['DEBUG']:
                 logger.log_exception(e)
-
+                
     def execute(self, task: Union[Callable, Coroutine]):
         """
         Public interface to execute a task. It routes the task to either
@@ -81,6 +81,7 @@ class RequestHandlingExecutor:
                     "Expected a synchronous callable."
                 )
             
+            @async_exec_time
             async def request_handler_wrapper(task):
                 create_task(task)
                 

@@ -237,6 +237,7 @@ class Page(InnerComponent):
         request,
         disable_lively: bool = False,
         lazy: bool = True,
+        document_event_handlers: Optional[list[Dict[str, Any]]] = None,
         *args,
         **kwargs
     ):
@@ -248,6 +249,8 @@ class Page(InnerComponent):
             disable_lively (bool): This disables `Lively` components for the page. Defaults to False.
             lazy (bool): This makes the page not aggressively load the page tree on initialization but let the 
                 system decide the right time to load the page. Defaults to True.
+            document_event_handlers (Optional[list[Dict[str, Any]]]): Document-level events to automatically bind. Each dictionary maps an event name to its handler and may include additional keyword arguments forwarded to `document_bind()`, 
+                e.g. `document_event_handlers=[{"DOMContentLoaded": on_dom_loaded, **extra_kwargs}]`.
         """
         self._request = request
         self._document_event_bindings: Dict[Union[Callable, EventHandlerChain], Set[HtmlComponent]] = {}
@@ -259,7 +262,22 @@ class Page(InnerComponent):
         
         # Super initialization
         super().__init__(*args, disable_lively=disable_lively, lazy=lazy, **kwargs)
-
+        
+        # Bind any provided document-specific events.
+        if document_event_handlers:
+            for event_info in document_event_handlers:
+                # Copy so we don't mutate the caller's dictionary.
+                event_info = event_info.copy()
+        
+                # Fetch event name and handler.
+                name, handler = next(iter(event_info.items()))
+                
+                # Delete reference to name: handler
+                del event_info[name]
+        
+                # Bind event.
+                self.document_bind(name, handler, **event_info)
+                
     @property
     def request(self) -> "HttpRequest":
         """
@@ -1011,7 +1029,7 @@ class Page(InnerComponent):
             List[Script]: Script for the google tag manager and the other is the Google Analytics script.
         
         Notes:
-            Make sure you include `https://googletagmanager.com` in CSP script-src if you are using Content Security Policy. 
+            Make sure you include `https://www.googletagmanager.com` in CSP script-src if you are using Content Security Policy. 
         Example:
         
         ```py

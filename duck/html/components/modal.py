@@ -275,14 +275,19 @@ class Modal(FlexContainer):
             return
 
         # Wrap body content in a padded container
-        body_wrap = FlexContainer()
-        body_wrap.style.update({
-            "flex-direction": "column",
-            "padding": "20px",
-            "gap": "12px",
-            "flex": "1",
-        })
+        body_wrap = FlexContainer(
+            style={
+                "flex-direction": "column",
+                "padding": "20px",
+                "gap": "12px",
+                "flex": "1",
+            },
+        )
+        
+        # Add child to body wrap.
         body_wrap.add_child(child)
+        
+        # Add body wrap to modal content.
         self.modal_content.add_child(body_wrap)
 
     def open_modal(self):
@@ -291,6 +296,18 @@ class Modal(FlexContainer):
         """
         self.style["display"] = "flex"
 
+    def open(self):
+        """
+        Opens the modal.
+        """
+        self.open_modal()
+        
+    def dismiss(self):
+        """
+        Closes the modal.
+        """
+        self.style.update({'display': "none"})
+        
     def set_content(self, content: Component):
         """
         Replaces the modal body content while keeping the header row
@@ -303,8 +320,10 @@ class Modal(FlexContainer):
             if child is self.modal_header or child is self.modal_script:
                 preserved.append(child)
 
+        # Clear all children.
         self.modal_content.clear_children()
-
+        
+        # Add all preserved children.
         for child in preserved:
             self.modal_content.add_child(child)
 

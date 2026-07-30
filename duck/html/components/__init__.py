@@ -271,6 +271,7 @@ class HtmlComponent:
         properties: Optional[Dict[str, str]] = None,
         props: Optional[Dict[str, str]] = None,
         style: Optional[Dict[str, str]] = None,
+        event_handlers: Optional[list[Dict[str, Any]]] = None,
         **kwargs,
     ):
         """
@@ -283,6 +284,8 @@ class HtmlComponent:
             properties (dict, optional): Dictionary for properties to initialize the component with.
             props (dict, optional): Just same as properties argument (added for simplicity).
             style (dict, optional): Dictionary for style to initialize the component with.
+            event_handlers (Optional[list[Dict[str, Any]]]): Events to automatically bind. Each dictionary maps an event name to its handler and may include additional keyword arguments forwarded to `bind()`, 
+                e.g. `event_handlers=[{"click": on_button_click, **extra_kwargs}]`.
             **kwargs: Extra keyword arguments
         
         Raises:
@@ -423,7 +426,22 @@ class HtmlComponent:
             
             if not isinstance(self, Page):
                 raise ComponentError("Lazy loading is set to True on non-page component. Lazy option is only limited to Page components.")
-            
+        
+        # Bind any provided events.
+        if event_handlers:
+            for event_info in event_handlers:
+                # Copy so we don't mutate the caller's dictionary.
+                event_info = event_info.copy()
+        
+                # Fetch event name and handler.
+                name, handler = next(iter(event_info.items()))
+                
+                # Delete reference to name: handler
+                del event_info[name]
+        
+                # Bind event.
+                self.bind(name, handler, **event_info)
+                    
     @property
     def properties(self):
         """
