@@ -81,7 +81,6 @@ class RequestHandlingExecutor:
                     "Expected a synchronous callable."
                 )
             
-            @async_exec_time
             async def request_handler_wrapper(task):
                 create_task(task)
                 
