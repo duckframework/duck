@@ -331,14 +331,13 @@ class SocketIO:
             # Try to extract Content-Length using a regex (fast, direct)
             length_match = CONTENT_LENGTH_PATTERN.search(data)
             
+            # Requests without a body delimiter end after their headers.
             if length_match:
                 try:
                     content_length = int(length_match.group(1))
                     receive_content_using_content_length(data, content_length)
-                except ValueError:               
+                except ValueError:
                     receive_content_using_streaming_method(data)
-            else:
-                receive_content_using_streaming_method(data)
             
         # Return the total received data
         return bytes(data)
@@ -616,14 +615,13 @@ class SocketIO:
             # Try to extract Content-Length using a regex (fast, direct)
             length_match = CONTENT_LENGTH_PATTERN.search(data)
             
+            # Requests without a body delimiter end after their headers.
             if length_match:
                 try:
                     content_length = int(length_match.group(1))
                     await receive_content_using_content_length(data, content_length)
-                except ValueError:               
+                except ValueError:
                     await receive_content_using_streaming_method(data)
-            else:
-                await receive_content_using_streaming_method(data)
             
         # Return the total received data
         return bytes(data)
