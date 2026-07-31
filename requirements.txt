@@ -14,3 +14,4 @@ click
 setproctitle
 pyJWT
 pynacl
+tomli>=2.4.1

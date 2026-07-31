@@ -10,7 +10,7 @@ This module provides the core application class, `App`, for setting up and runni
 - **Port Management**: Ensures that application ports are available.
 - **Signal Handling**: Gracefully handles termination signals (e.g., `Ctrl+C`) for clean shutdown.
 """
-
+import re
 import os
 import sys
 import json
@@ -40,6 +40,7 @@ from duck.http.core.httpd.servers import HTTPServer
 from duck.logging import logger
 from duck.meta import Meta
 from duck.csp import csp_nonce_flag
+from duck.env import get_project_name
 from duck.version import version
 from duck.utils.lazy import Lazy
 from duck.utils.asyncio.eventloop import get_or_create_loop_manager
@@ -186,7 +187,8 @@ class App(BaseApp):
         self.start_bg_eventloop_if_wsgi = start_bg_eventloop_if_wsgi
         
         # Process configuration
-        self.process_name = process_name or "duck-server"
+        self.project_name = self.normalize_process_name(get_project_name())
+        self.process_name = process_name or f"duck-server[{self.project_name}]"
         
         # Django configuration
         self.use_django = SETTINGS["USE_DJANGO"]
@@ -500,6 +502,34 @@ class App(BaseApp):
         if self.enable_https:
             self.check_ssl_credentials()
             
+    def normalize_process_name(self, name: str, max_length: int = 32) -> str:
+        """
+        Normalize a process name so it is safe to use in OS process titles.
+    
+        The returned name:
+        - Is stripped of leading/trailing whitespace.
+        - Is converted to lowercase.
+        - Replaces whitespace with hyphens.
+        - Replaces unsupported characters with hyphens.
+        - Collapses consecutive hyphens.
+        - Removes leading/trailing hyphens.
+        - Is truncated to ``max_length`` characters.
+    
+        Args:
+            name: Raw project or process name.
+            max_length: Maximum length of the normalized name.
+    
+        Returns:
+            A normalized process name.
+        """
+        name = name.strip().lower()
+        name = re.sub(r"\s+", "-", name)
+        name = re.sub(r"[^a-z0-9._-]", "-", name)
+        name = re.sub(r"-{2,}", "-", name)
+        name = name.strip("-")
+    
+        return name[:max_length]
+    
     def set_process_name(self):
         """
         Set the whole process name.
@@ -1222,6 +1252,7 @@ class App(BaseApp):
             logger.Logger.redirect_console_output()
     
         # Log the active settings module
+        logger.log_raw(f'{bold_start}PROJECT{bold_end} "{self.project_name}" \n')
         logger.log_raw(f'{bold_start}USING SETTINGS{bold_end} "{settings_mod}" \n')
         
         # Log warnings and start event loop.
