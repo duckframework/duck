@@ -292,6 +292,47 @@ def logout(request: Any, backend: str | None = None) -> None:
     )
 
 
+def get_user(request: Any, backend: str | None = None) -> Any | None:
+    """
+    Resolve the currently authenticated user.
+
+    The user identity is read from the selected authentication backend and
+    resolved against the configured Django User model.
+
+    Args:
+        request: The Duck request object.
+        backend: Authentication backend to use. Supported values are
+            ``"session"`` and ``"jwt"``. Defaults to ``DEFAULT_AUTH_BACKEND``.
+
+    Returns:
+        The authenticated User instance if a valid identity exists, otherwise
+        ``None``.
+
+    Raises:
+        ValueError: If an unsupported backend name is provided.
+
+    Example:
+        ```py
+        user = get_user(request)
+
+        if user:
+            print(f"Logged in as {user}")
+        ```
+    """
+    resolved = backend or DEFAULT_AUTH_BACKEND
+
+    if resolved == "session":
+        return get_user_from_session(request)
+
+    if resolved == "jwt":
+        return get_user_from_jwt(request)
+
+    raise ValueError(
+        f"Unknown auth backend: {resolved!r}. "
+        f"Supported backends are: {', '.join(SUPPORTED_BACKENDS)}."
+    )
+
+
 def get_user_from_session(request: Any) -> Any | None:
     """
     Resolve the currently logged-in user from the session.
@@ -448,6 +489,37 @@ async def async_logout(request: Any, backend: str | None = None) -> None:
     """
     await ensure_async(logout)(request, backend)
 
+
+async def async_get_user(request: Any, backend: str | None = None) -> Any | None:
+    """
+    Async version of ``get_user``.
+
+    Resolves the currently authenticated user using the selected
+    authentication backend without blocking the event loop.
+
+    Args:
+        request: The Duck request object.
+        backend: Authentication backend to use. Supported values are
+            ``"session"`` and ``"jwt"``. Defaults to ``DEFAULT_AUTH_BACKEND``.
+
+    Returns:
+        The authenticated User instance if a valid identity exists, otherwise
+        ``None``.
+
+    Raises:
+        ValueError: Propagated from ``get_user`` if an unsupported backend
+            name is provided.
+
+    Example:
+        ```py
+        user = await async_get_user(request)
+
+        if user:
+            print(f"Logged in as {user}")
+        ```
+    """
+    return await ensure_async(get_user)(request, backend)
+    
 
 async def async_get_user_from_session(request: Any) -> Any | None:
     """

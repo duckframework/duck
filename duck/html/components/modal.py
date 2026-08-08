@@ -240,6 +240,7 @@ class Modal(FlexContainer):
                 "height": "100vh",
                 "width": "100%",
                 "padding": "10px",
+                "align-items": "center",
             },
             id="modal-content-container",
         )

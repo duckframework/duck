@@ -226,23 +226,40 @@ def validate_base64(text: str) -> bool:
         return False
 
 
-def validate_password_strength(password: str) -> bool:
+def validate_password_strength(password: str) -> tuple[str | None, bool]:
     """
-    Validates the strength of a password. The password must:
+    Validates the strength of a password.
+
+    The password must:
     - Be at least 8 characters long.
     - Contain at least one lowercase letter.
     - Contain at least one uppercase letter.
     - Contain at least one number.
-    - Contain at least one special character (e.g., !, @, #, $, etc.).
-    
+    - Contain at least one special character.
+
     Args:
-        password (str): The password to validate.
-    
+        password: The password to validate.
+
     Returns:
-        bool: True if the password meets the strength requirements, False otherwise.
+        A tuple containing the validation error, if any, and whether the
+        password is valid. The error is None when the password is valid.
     """
-    password_pattern = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+])[A-Za-z\d!@#$%^&*()_+]{8,}$'
-    return bool(re.match(password_pattern, password))
+    if len(password) < 8:
+        return "Password must be at least 8 characters long.", False
+
+    if not re.search(r"[a-z]", password):
+        return "Password must contain at least one lowercase letter.", False
+
+    if not re.search(r"[A-Z]", password):
+        return "Password must contain at least one uppercase letter.", False
+
+    if not re.search(r"\d", password):
+        return "Password must contain at least one number.", False
+
+    if not re.search(r"[!@#$%^&*()_+]", password):
+        return "Password must contain at least one special character.", False
+
+    return None, True
 
 
 def validate_time(time_str: str) -> bool:

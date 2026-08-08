@@ -19,7 +19,7 @@ async def dashboard(request: HttpRequest):
     """
     Renders the live server dashboard if the request carries a valid JWT.
 
-    Calls async_get_user_from_jwt to extract and verify the token from
+    Calls get_user_id to extract and verify the token from
     the request (cookie or Authorization header). Unauthenticated requests
     receive the LoginPage; authenticated requests receive the DashboardPage.
 

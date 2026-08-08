@@ -197,6 +197,7 @@ from duck.html.components.core.exceptions import (
     ComponentCopyError,
     ComponentNotLoadedError,
     FrozenComponentError,
+    ComponentContentConflictError,
 )
 
 
@@ -586,6 +587,13 @@ class HtmlComponent:
         if not isinstance(inner_html, (str, int, float)):
             raise ComponentError("The inner_html should be an instance of string, integer or a float.")
         
+        if inner_html not in (None, "") and getattr(self, "children", None):
+            raise ComponentContentConflictError(
+                "Cannot use 'inner_html' when 'children' are provided. "
+                "A component must use either 'children' or 'inner_html', not both, "
+                "as this can cause inconsistent UI state during Lively updates."
+            )
+        
         # Convert data to right format
         inner_html = str(inner_html) if not isinstance(inner_html, str) else inner_html
         
@@ -669,7 +677,7 @@ class HtmlComponent:
         queue.append((root_component, root_component.uid))
         
         # The max nesting level for component with event bindings
-        max_nesting_level = 9
+        max_nesting_level = 15
         
         while queue:
             component, uid = queue.popleft()

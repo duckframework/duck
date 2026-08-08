@@ -21,6 +21,7 @@ from duck.logging import logger
 from duck.http.request import HttpRequest
 from duck.http.response import HttpResponse
 from duck.http.core.handler import ResponseHandler
+from duck.utils.asyncio import create_task
 from duck.contrib.sync import convert_to_async_if_needed
 from duck.contrib.websockets import (
     WebSocketView,
@@ -32,6 +33,7 @@ from duck.html.components.core.force_update import (
     ForceUpdateError,
     check_force_updates,
     update_now,
+    track_update_now_force_updates,
 )
 from duck.html.components.core.opcodes import EventOpCode, PatchCode
 from duck.html.components.core.exceptions import (
@@ -80,14 +82,14 @@ class LivelyWebSocketView(WebSocketView):
         """
         return msgpack.unpackb(data, raw=False)
 
-    async def update_now(self, component, updates: List[str]):
+    async def update_now(self, component, updates: List[str], *args, **kwargs):
         """
         Sync current updates to the client immediately.
         
         Notes:
             This uses `ForceUpdate` logic.
         """
-        return await update_now(component, updates, self)
+        return await update_now(component, updates, self, *args, **kwargs)
         
     async def send_data(self, data: Any):
         """
@@ -465,15 +467,61 @@ class EventHandler:
         force_updates_patchlist = [] # List of force updates patches already sent to client.
         is_event_handler_chain = isinstance(event_handler, EventHandlerChain)
         
-        if not is_event_handler_chain:
-            # Execute event handler
-            # Convert handler to async (if handler is synchronous) in case it is doing long tasks to avoid blocking event loop
-            event_handler_coro = convert_to_async_if_needed(event_handler)(component, event_name, value, self.ws_view)
-            event_handler_execution_results[event_handler] = await event_handler_coro
-        else:
-            event_handler_chain = event_handler
-            event_handler_execution_results = await event_handler_chain.async_execute((component, event_name, value, self.ws_view), restart=False)
+        with track_update_now_force_updates() as update_now_force_updates:
+            # Track every ws.update_now calls in sync_updates.
+            if not is_event_handler_chain:
+                # Execute event handler
+                # Convert handler to async (if handler is synchronous) in case it is doing long tasks to avoid blocking event loop
+                event_handler_coro = convert_to_async_if_needed(event_handler)(component, event_name, value, self.ws_view)
+                event_handler_execution_results[event_handler] = await event_handler_coro
+            else:
+                event_handler_chain = event_handler
+                event_handler_execution_results = await event_handler_chain.async_execute((component, event_name, value, self.ws_view), restart=False)
             
+        # Rerun all ws.update_now() calls after restoring the state. A restoration
+        # can return a component to the exact state it had before the event handler,
+        # causing the normal VDOM diff to produce no patch even though the client
+        # still needs to be synchronized.
+        #
+        # Example:
+        #
+        # VDOM generation before event handler
+        #   btn.bg_color = "red"
+        #
+        # Event handler updates state
+        #   btn.bg_color = "green"
+        #
+        # Immediate client synchronization
+        #   ws.update_now(btn, ["style"])
+        #
+        # State restoration
+        #   btn.bg_color = "red"
+        #
+        # A normal VDOM diff now sees:
+        #   "red" -> "red"
+        #
+        # Therefore, no patch is generated. Rerunning update_now() forces the
+        # restored state through the update pipeline so that any required client
+        # synchronization is performed.
+        #
+        # Run as a separate task to allow any pending immediate updates to complete
+        # before processing the restored state.
+        
+        async def rerun_update_now_restoration():
+            """
+            Restore state to client UI if user forgots to call `ws.update_now` upon state restoration.
+            """
+            for target in update_now_force_updates:
+                await self.ws_view.update_now(
+                    target.component,
+                    target.updates,
+                    track_update=False,
+                )
+        
+        # Schedule the restoration task.
+        create_task(rerun_update_now_restoration())
+        
+        # Continue
         async def on_force_update_patch(patch):
             """
             Action called when new patch found as a result of a force update.

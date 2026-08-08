@@ -31,10 +31,29 @@ def myview(request):
 """
 
 from typing import List
+from contextvars import ContextVar
+from contextlib import contextmanager
 
 from duck.contrib.sync import iscoroutinefunction
 from duck.html.components.core.opcodes import PatchCode
 from duck.html.components.core.exceptions import ForceUpdateError, RedundantForceUpdate
+
+
+_executed_update_now_force_updates = ContextVar("executed_update_now_force_updates", default=None)
+
+
+@contextmanager
+def track_update_now_force_updates():
+    """
+    Track ForceUpdate objects that actually execute through `updated_now` function.
+    """
+    updates = set()
+    token = _executed_update_now_force_updates.set(updates)
+
+    try:
+        yield updates
+    finally:
+        _executed_update_now_force_updates.reset(token)
 
 
 def check_force_updates(updates: List["ForceUpdate"]):
@@ -42,14 +61,20 @@ def check_force_updates(updates: List["ForceUpdate"]):
     Check if force updates in list are of correct type.
     """
     updates = updates or []
+    
     for update in updates:
         if not isinstance(update, ForceUpdate):
             raise ForceUpdateError(f"Unknown update '{update}', must be an instance of `ForceUpdate` not {type(update)}.")
     
 
-async def update_now(component: "Component", updates: List[str], ws_view):
+async def update_now(component: "Component", updates: List[str], ws_view, track_update: bool = True):
     """
     Sync current updates to the client immediately.
+    
+    Args:
+        component: Single component to target.
+        updates: List of updates to target e.g. text, inner_html, props, style, all.
+        track_update: Whether to track executed updates for `track_force_updates` context manager.
     """
     from duck.html.components import Component
     
@@ -67,7 +92,14 @@ async def update_now(component: "Component", updates: List[str], ws_view):
             # Finally send patches
             patches = [patch]
             await ws_view.send_patches(patches)
-    
+            
+            if track_update:
+                # Set executed force updates to current context.
+                tracked = _executed_update_now_force_updates.get()
+                
+                if tracked is not None:
+                    tracked.add(force_update)
+                
     # Create a force update and send patches immediately.
     force_update = ForceUpdate(component, updates=updates)
     await force_update.generate_patch_and_act(action=on_force_update_patch)

@@ -67,6 +67,7 @@ class ChildrenList(EventList):
             Component,
             InnerComponent,
             ComponentError,
+            ComponentContentConflictError,
         )
         
         if not isinstance(child, Component):
@@ -87,6 +88,13 @@ class ChildrenList(EventList):
                 f"This might mean that this is a lazy component."
             )
             
+        if self.parent.inner_html:
+            raise ComponentContentConflictError(
+                f"Cannot add a child to {self.parent} when 'inner_html' is set. "
+                "A component must use either 'children' or 'inner_html', not both, "
+                "as this can cause inconsistent UI state during Lively updates."
+            )
+        
         # Reset UID so root can assign it later
         child.uid = None
         

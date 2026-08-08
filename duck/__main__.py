@@ -178,12 +178,12 @@ def django_add(source, appname, dest):
     
 
 @cli.command(help="Real-time system monitor for Duck processes")
-@click.option('--interval', default=1.0, help="Refresh interval in seconds")
-@click.option('--duck-process', default="duck*", help="Partial name of Duck processes to monitor (wildcards supported)")
-@click.option('--pid', type=int, multiple=True, help="Specific Duck process IDs to monitor instead of name")
-@click.option('--cpu-warning', default=80.0, help="CPU usage threshold for warning highlight")
-@click.option('--ram-warning', default=80.0, help="RAM usage threshold for warning highlight")
-def monitor(interval, duck_process, pid, cpu_warning, ram_warning):
+@click.option('-i', '--interval', default=1.0, help="Refresh interval in seconds")
+@click.option('-p', '--process', default="duck*", help="Partial name of Duck processes to monitor (wildcards supported)")
+@click.option('-id', '--pid', type=int, multiple=True, help="Specific Duck process IDs to monitor instead of name")
+@click.option('-cw', '--cpu-warning', default=80.0, help="CPU usage threshold for warning highlight")
+@click.option('-rw', '--ram-warning', default=80.0, help="RAM usage threshold for warning highlight")
+def monitor(interval, process, pid, cpu_warning, ram_warning):
     """
     Monitor Duck system metrics in real-time.
 
@@ -194,7 +194,7 @@ def monitor(interval, duck_process, pid, cpu_warning, ram_warning):
     """
     MonitorCommand.main(
         interval=interval,
-        duck_process_name=duck_process,
+        duck_process_name=process,
         duck_pids=list(pid) if pid else None,
         cpu_warning=cpu_warning,
         ram_warning=ram_warning

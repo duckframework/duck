@@ -109,3 +109,9 @@ class ComponentAttributeProtection(HtmlComponentError):
     """
     Raised If protected component attribute is being modified.
     """
+
+
+class ComponentContentConflictError(HtmlComponentError):
+    """
+    Raised when mutually exclusive component content is provided.
+    """

@@ -3,7 +3,6 @@ Style HTML Component.
 
 This module defines a reusable `Style` component for embedding CSS styles within an HTML document.
 """
-
 from duck.html.components import InnerComponent
 from duck.csp import csp_nonce, csp_nonce_flag
 
@@ -57,14 +56,17 @@ class Style(InnerComponent):
     @property
     def properties(self):
         from duck.settings import SETTINGS
+        
+        # Get original props
         props = super().properties
+        
         # Set CSP configuration.
         if SETTINGS['ENABLE_HEADERS_SECURITY_POLICY']:
             current_nonce = props.get("nonce")
             if not current_nonce:
                 self.set_csp_nonce()
         return props
-          
+        
     def set_csp_nonce(self):
         """
         This tries to retrieve current request nonce.
@@ -83,6 +85,7 @@ class Style(InnerComponent):
                  
         # Set CSP configuration
         csp_directives = SETTINGS['CSP_TRUSTED_SOURCES']
+        
         if csp_directives and request:
             style_src = set(csp_directives.get("style-src"))
             if csp_nonce_flag in style_src:

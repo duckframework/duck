@@ -1252,7 +1252,7 @@ class App(BaseApp):
             logger.Logger.redirect_console_output()
     
         # Log the active settings module
-        logger.log_raw(f'{bold_start}PROJECT{bold_end} "{self.project_name}" \n')
+        logger.log_raw(f'{bold_start}PROJECT{bold_end} "{self.project_name}"')
         logger.log_raw(f'{bold_start}USING SETTINGS{bold_end} "{settings_mod}" \n')
         
         # Log warnings and start event loop.
