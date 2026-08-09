@@ -6,7 +6,7 @@ import sys
 
 
 # Package version
-version_info = (2, 2, 0)
+version_info = (2, 3, 0)
 version = ".".join(map(str, version_info))
 
 # Server identification string

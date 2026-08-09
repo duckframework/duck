@@ -9,6 +9,8 @@ Developers can subclass `View` to define custom request handling logic by
 overriding the `run()` method. This abstraction allows separation of business
 logic from routing and middleware.
 """
+import inspect
+
 from functools import wraps
 from typing import (
     Callable,
@@ -25,8 +27,8 @@ from duck.http.response import HttpResponse, ComponentResponse
 from duck.html.components import Component
 from duck.contrib.sync import (
     iscoroutinefunction,
-    convert_to_async_if_needed,
-    convert_to_sync_if_needed,
+    ensure_async,
+    ensure_sync,
 )
 from duck.logging import logger
 from duck.utils.caching import InMemoryCache
@@ -74,7 +76,7 @@ def csrf_exempt(view_func):
             ...
     """
     if iscoroutinefunction(view_func):
-        #@wraps(view_func)
+        @wraps(view_func)
         async def wrapped_view(request, *args, **kwargs):
             return await view_func(request, *args, **kwargs)
     else:
@@ -85,7 +87,6 @@ def csrf_exempt(view_func):
     # Set csrf exempt flag
     wrapped_view.csrf_exempt = True
     return wrapped_view
-
 
 def cached_view(
     targets: Union[Dict[Union[str, Callable], Dict[str, Any]], List[str]],
@@ -100,73 +101,73 @@ def cached_view(
     """
     Decorator for caching view outputs based on selected request attributes
     or computed callable results.
-    
+
     This decorator supports:
      - Direct request attribute extraction.
      - Callable attributes on the request (with dynamic args/kwargs).
      - External Python callables used as cache-key producers.
-     - Sync and async view handlers.
+     - Sync and async view handlers, including View.run methods.
      - Sync/async cache backends with automatic compatibility conversion.
-    
+
     The caching system guarantees stable, deterministic cache keys by
     converting all target values into a normalized (and hashable) structure.
-    
+
     Args:
         targets (Union[Dict[Union[str, Callable], Dict[str, Any]], List[str]]):
             Defines which request attributes or computed callable results should
             contribute to the cache key.
-    
+
             - List[str]:
                 Direct request attribute lookups.
                 Example:
                     ["path", "method"]
-    
+
             - Dict[str or Callable, Dict[str, Any]]:
                 Complex targets supporting:
                     { "<request_attr_or_callable>": {"args": (...), "kwargs": {...}} }
                     { my_function: {"args": (...), "kwargs": {...}} }
-    
+
                 Dynamic formatting is supported:
-                    "{request.path}" → replaced at runtime.
-    
+                    "{request.path}" ➝ replaced at runtime.
+
         expiry (Optional[float]):
             TTL/expiry in seconds. If None, backend default TTL is used.
-    
+
         cache_backend (Optional[Any]):
             A cache backend implementing:
                 get(key)
                 set(key, value, ttl)
             Async backends or sync backends are both supported.
-        
-        namespace (Optional[Union[str, Callable]]: Optional string or callable returning a namespace prefix for keys. 
-            Use `namespace` for grouping and easy bulky cache invalidation.  
-            
+
+        namespace (Optional[Union[str, Callable]]): Optional string or callable returning a namespace prefix for keys.
+            Use `namespace` for grouping and easy bulk cache invalidation.
+
             Example:
             ```py
-            
             @cached_view(targets=['path'], namespace=lambda request: request.COOKIES.get('user_id'))
             def handler(request):
                 # Caches based on USER ID instead of global caching.
                 return HttpResponse("OK")
-            ```    
-            
-        skip_cache_attr (str): Optional request attribute to skip caching (for debugging). This defaults to `skip_cache`, meaning,
-            if `request.skip_cache=True` then, cache is skipped for that request.
-        
-        on_cache_result (Optional[Callable]): This is a callable that can be executed upon receiving a result from cache. If some 
-            data needs to be reinitialized, you can do this here.
-            
-        returns_static_response (bool): By default, If user tries to cache a view which returns either a component or component response whilst 
-            `LivelyComponentSystem` is active and is not disabled on the target component. This may lead to `ViewCachingWarning` being raised. This 
-            tells the system that the component is a static component and cannot be altered directly by users. So setting this to True avoids `ViewCachingWarning` being 
-            logged on safe static components. In the future, this will apply to any dynamic responses.
-        
-        freeze_if_component_response (bool): Whether to freeze target component if the result is a component/component response. This boosts performance by `>=50%` and 
-            it only applies if `returns_static_component=True`.
-        
+            ```
+
+        skip_cache_attr (str): Optional request attribute to skip caching (for debugging). Defaults to
+            `skip_cache`, meaning if `request.skip_cache=True` then caching is skipped for that request.
+
+        on_cache_result (Optional[Callable]): Callable executed upon receiving a result from cache. Use this
+            if some data needs to be reinitialized.
+
+        returns_static_response (bool): By default, caching a view that returns a component or component
+            response while `LivelyComponentSystem` is active and not disabled on the target component may
+            raise `ViewCachingWarning`. Setting this to True tells the system the component is static and
+            safe from direct user-specific alteration, avoiding the warning.
+
+        freeze_if_component_response (bool): Whether to freeze the target component if the result is a
+            component/component response. Boosts performance by >=50%, and only applies if
+            `returns_static_response=True`.
+
     Returns:
         Callable: Wrapped view function with caching behavior.
-    
+
     Raises:
         ViewCachingError:
             Malformed target configuration, formatting errors,
@@ -176,143 +177,132 @@ def cached_view(
     ```py
     from duck.views import View
     from duck.utils.performance import exec_time
-    
+
     @cached_view(targets=["path"])
     def handler(request):
-        # View that will be cached based on request's path only.'
+        # View that will be cached based on request's path only.
         return HttpResponse("OK")
-        
-    class myView(View):
+
+    class MyView(View):
         @cached_view(targets=["fullpath", "method"])
-        async def run(self):
+        async def run(self, request, **kwargs):
             # View that will be cached based on request's path plus method.
             return HttpResponse("OK")
-            
-    exec(handler)() # Slow for the first time, prints more time 
+
+    exec(handler)() # Slow for the first time, prints more time
     exec_time(handler)() # Fast, prints less time.
-    
+
     # Complex caching
     @cached_view(targets={"callable_request_attribute": {'args': "{request.path}"})
     def handler_2(request):
         # View is cached based on request callable attribute.
         return HttpResponse("OK")
-    
+
     @cached_view(targets={my_custom_function: {'args': "{request.path}"})
     def handler_3(request):
         # View cached based on custom external function.
         return HttpResponse("OK")
     ```
-    
+
     Notes:
     - Dynamic formatting ("{request.path}") is supported everywhere.
     - Cache keys use stable frozenset+tuple structures for high hashing performance.
     - Custom callables receive: (request, *view_args, *resolved_args, **view_kwargs, **resolved_kwargs)
-    - Works transparently on both synchronous and asynchronous views.
+    - Works transparently on both synchronous and asynchronous views, and on View.run methods.
     - Sync cache backends are auto-wrapped for async views; async backends are auto-wrapped for sync views.
     - Callable targets may raise errors at runtime; these are wrapped into ViewCachingError.
     - When Lively Component System is active, caching Component or ComponentResponse
       will issue a safety warning to avoid state leakage across users.
-    - targets=[] is not allowed — caching requires at least one dimension of variation.
+    - targets=[] is not allowed ➝ caching requires at least one dimension of variation.
     - Namespace allows per-user, per-tenant, or per-feature cache isolation.
     - Setting `request.skip_cache = True` will bypass caching.
-    - For callable targets, if caching can nolonger be possible e.g. some data you might wanna use is unavailable, exception `SkipViewCaching` 
-          can be raised to tell the caching system that caching is not possible because of some data invalidity.
+    - For callable targets, if caching can no longer proceed, e.g. some data is unavailable, raise
+      `SkipViewCaching` to tell the caching system that caching is not possible for this request.
     """
-    # Now supports logic for using custom function as a target so a to compute dynamic args/kwargs.
-    # E.g.: {<my_function>: {'args': ..., 'kwargs': ...}}
-    
+    # Fall back to the shared default cache if none was provided
     cache_backend = cache_backend or DEFAULT_VIEW_CACHE
-    
+
+    # Validate the cache backend implements the required interface
     try:
         if not callable(cache_backend.get):
             raise ViewCachingError(f"The provided cache backend {cache_backend} attribute `get` must be a callable or method.")
-    except AttributeError as e:
+    except AttributeError:
         raise ViewCachingError(f"The provided cache backend {cache_backend} must implement method `get`.")
-        
+
     try:
         if not callable(cache_backend.set):
             raise ViewCachingError(f"The provided cache backend {cache_backend} attribute `set` must be a callable or method.")
-    except AttributeError as e:
+    except AttributeError:
         raise ViewCachingError(f"The provided cache backend {cache_backend} must implement method `set`.")
-       
+
+    # Validate targets shape upfront
     if not isinstance(targets, (list, dict)):
-        raise ViewCachingError(
-            f"Targets must be list or dict, not {type(targets)}"
-        )
+        raise ViewCachingError(f"Targets must be list or dict, not {type(targets)}")
 
     if not targets:
         raise ViewCachingError("Targets cannot be empty.")
 
-    # NEW: Execute an external/custom function target
     def compute_custom_callable(fn: Callable, request: HttpRequest, spec: Dict[str, Any], *view_args, **view_kwargs) -> Any:
         """
-        Execute a user-supplied callable target.
+        Executes a user-supplied callable target.
 
         Args:
-            fn (Callable): Custom function (not an attribute on the request)
-            request (HttpRequest): The request
-            spec (dict): args, kwargs — dynamic formatting supported.
-            *view_args: These are positional arguments that belong to the view/handler.
-            **view_kwargs: These are keyword arguments that belong to the view/handler.
-            
+            fn: Custom function (not an attribute on the request).
+            request: The request.
+            spec: args/kwargs spec, with dynamic formatting supported.
+            *view_args: Positional arguments belonging to the view/handler.
+            **view_kwargs: Keyword arguments belonging to the view/handler.
+
         Returns:
-            Any
-        
+            Any: The callable's return value.
+
         Notes:
-        - We always parse request as the first argument.
-        - View arguments are always parsed first before resolved arguments.
+        - Request is always passed as the first argument.
+        - View arguments are always passed before resolved arguments.
         """
         args = spec.get("args") or ()
         kwargs = spec.get("kwargs") or {}
 
         if not isinstance(args, Iterable):
-            raise ViewCachingError(
-                f"Args for target '{fn}' must be iterable, not {type(args)}"
-            )
+            raise ViewCachingError(f"Args for target '{fn}' must be iterable, not {type(args)}")
+        
         if not isinstance(kwargs, dict):
-            raise ViewCachingError(
-                f"Kwargs for target '{fn}' must be a dict, not {type(kwargs)}"
-            )
+            raise ViewCachingError(f"Kwargs for target '{fn}' must be a dict, not {type(kwargs)}")
 
-        # Resolve arguments 
+        # Resolve dynamic args
         resolved_args = []
+        
         for arg in args:
             try:
-                resolved_args.append(
-                    arg.format(request=request) if isinstance(arg, str) else arg
-                )
+                resolved_args.append(arg.format(request=request) if isinstance(arg, str) else arg)
             except Exception as exc:
                 raise ViewCachingError(f"Failed formatting arg '{arg}' for custom callable target: {fn}.") from exc
 
+        # Resolve dynamic kwargs
         resolved_kwargs = {}
+        
         for key, val in kwargs.items():
             try:
-                resolved_kwargs[key] = (
-                    val.format(request=request) if isinstance(val, str) else val
-                )
+                resolved_kwargs[key] = val.format(request=request) if isinstance(val, str) else val
             except Exception as exc:
-                raise ViewCachingError(
-                    f"Failed formatting kwarg '{key}={val}' for custom callable target: {fn}."
-                ) from exc
+                raise ViewCachingError(f"Failed formatting kwarg '{key}={val}' for custom callable target: {fn}.") from exc
 
-        # Return computed value
+        # Call the custom callable with request, view args, then resolved args
         try:
             return fn(request, *view_args, *resolved_args, **view_kwargs, **resolved_kwargs)
-        
-        except SkipViewCaching as e:
-            raise e # Reraise exception
-            
+        except SkipViewCaching:
+            raise
         except Exception as e:
-             raise ViewCachingError(f"Error computing result for the callable target '{fn}': {e}.") from e
-             
+            raise ViewCachingError(f"Error computing result for the callable target '{fn}': {e}.") from e
+
     def compute_callable_value(request: HttpRequest, name: str, spec: Dict[str, Any]) -> Any:
         """
-        Execute a callable attribute on the request with optional dynamic args.
+        Executes a callable attribute on the request with optional dynamic args.
 
         Args:
-            request (HttpRequest): Request object.
-            name (str): Attribute name.
-            spec (Dict[str, Any]): Arguments/kwargs specification.
+            request: Request object.
+            name: Attribute name.
+            spec: Arguments/kwargs specification.
 
         Returns:
             Any: The callable's return value.
@@ -323,71 +313,58 @@ def cached_view(
         value = getattr(request, name)
 
         if not callable(value):
-            raise ViewCachingError(
-                f"Target '{name}' expected to be callable but isn't."
-            )
+            raise ViewCachingError(f"Target '{name}' expected to be callable but isn't.")
 
-        # Don't use spec.get('args', ()) because args can be None
+        # Avoid spec.get('args', ()) since args can explicitly be None
         args = spec.get("args") or ()
         kwargs = spec.get("kwargs") or ()
 
         if not isinstance(args, Iterable):
-            raise ViewCachingError(
-                f"Args for target '{name}' must be iterable, not {type(args)}"
-            )
+            raise ViewCachingError(f"Args for target '{name}' must be iterable, not {type(args)}")
+        
         if not isinstance(kwargs, dict):
-            raise ViewCachingError(
-                f"Kwargs for target '{name}' must be a dict, not {type(kwargs)}"
-            )
+            raise ViewCachingError(f"Kwargs for target '{name}' must be a dict, not {type(kwargs)}")
 
-        # Dynamic args
+        # Resolve dynamic args
         resolved_args = []
+        
         for arg in args:
             try:
-                resolved_args.append(
-                    arg.format(request=request) if isinstance(arg, str) else arg
-                )
+                resolved_args.append(arg.format(request=request) if isinstance(arg, str) else arg)
             except Exception as exc:
-                raise ViewCachingError(
-                    f"Failed formatting arg '{arg}' for '{name}'."
-                ) from exc
+                raise ViewCachingError(f"Failed formatting arg '{arg}' for '{name}'.") from exc
 
-        # Dynamic kwargs
+        # Resolve dynamic kwargs
         resolved_kwargs = {}
+        
         for key, val in kwargs.items():
             try:
-                resolved_kwargs[key] = (
-                    val.format(request=request) if isinstance(val, str) else val
-                )
+                resolved_kwargs[key] = val.format(request=request) if isinstance(val, str) else val
             except Exception as exc:
-                raise ViewCachingError(
-                    f"Failed formatting kwarg '{key}={val}' for '{name}'."
-                ) from exc
+                raise ViewCachingError(f"Failed formatting kwarg '{key}={val}' for '{name}'.") from exc
 
-        # Return computed value
+        # Call the resolved attribute with the resolved args/kwargs
         try:
             return value(*resolved_args, **resolved_kwargs)
-        
-        except SkipViewCaching as e:
-            raise e # Reraise exception
-            
+        except SkipViewCaching:
+            raise
         except Exception as e:
-             raise ViewCachingError(f"Error computing result for the resolved callable target '{value}': {e}.") from e
-        
+            raise ViewCachingError(f"Error computing result for the resolved callable target '{value}': {e}.") from e
+
     def resolve_targets(request: HttpRequest, *view_args, **view_kwargs) -> Dict[str, Any]:
         """
-        Resolve all target values from the request.
+        Resolves all target values from the request.
 
         Args:
-            request (HttpRequest): The request object.
-            *view_args: These are arguments for the view.
-            **view_kwargs: These are keyword arguments for the view.
-            
+            request: The request object.
+            *view_args: Positional arguments for the view.
+            **view_kwargs: Keyword arguments for the view.
+
         Returns:
-            Dict[str, Any]: Mapping of target name → resolved value.
-        
+            Dict[str, Any]: Mapping of target name to resolved value.
+
         Notes:
-        - `view_args` and `view_kwargs` are only parsed to custom callable targets.
+        - view_args and view_kwargs are only passed to custom callable targets.
         """
         resolved = {}
 
@@ -397,31 +374,24 @@ def cached_view(
                 try:
                     resolved[name] = getattr(request, name)
                 except AttributeError:
-                    raise ViewCachingError(
-                        f"Target '{name}' not found on request object: {request}."
-                    )
+                    raise ViewCachingError(f"Target '{name}' not found on request object: {request}.")
         else:
-            # Callable/complex targets
+            # Callable or complex targets
             for target, spec in targets.items():
-                # Normalize spec
                 spec = spec or {}
-                
+
                 if callable(target):
-                    # This is a custom external function
-                    # use __qualname__ to ensure stable hashable representation
+                    # Custom external function, keyed by qualname for stable hashing
                     key = getattr(target, "__qualname__", repr(target))
                     resolved[key] = compute_custom_callable(target, request, spec, *view_args, **view_kwargs)
                     continue
-    
-                # Standard request attribute / callable
+
+                # Standard request attribute, possibly callable
                 try:
                     attr = getattr(request, target)
                 except AttributeError:
-                    raise ViewCachingError(
-                        f"Target '{target}' not found on request."
-                    )
+                    raise ViewCachingError(f"Target '{target}' not found on request.")
 
-                # Update resolved
                 if callable(attr):
                     resolved[target] = compute_callable_value(request, target, spec)
                 else:
@@ -430,31 +400,31 @@ def cached_view(
 
     def make_cache_key(request, resolved: dict, args, kwargs):
         """
-        Returns the cache key for request, resolved data, args and kwargs.
+        Builds the cache key from namespace, resolved targets, args and kwargs.
         """
-        # resolve namespace
-        ns = ""
+        # Resolve namespace, static or dynamic
+        namespace_value = ""
+        
         if namespace:
-            ns = namespace(request) if callable(namespace) else namespace
-        return (ns, frozenset(resolved.items()), args, frozenset(kwargs.items()))
+            namespace_value = namespace(request) if callable(namespace) else namespace
+        return (namespace_value, frozenset(resolved.items()), args, frozenset(kwargs.items()))
 
     def decorator(view_handler: Callable):
         """
-        Wrapper responsible for caching.
+        Wraps view_handler with caching behavior, sync or async.
         """
-        
+
         def maybe_warn_user(result: Union[HttpResponse, Any]):
             """
-            Function which decides whether to log a warning depending on result computed from the original view.
+            Logs a ViewCachingWarning if caching result may cause issues.
             """
             from duck.html.components.core.system import LivelyComponentSystem
-            
+
             if returns_static_response:
-                # The component being returned is a static component and its safe from 
-                # direct user-specific alteration.
+                # Static components are safe from direct user-specific alteration
                 return
-                
-            # Log a warning if components are cached while Lively component system is active
+
+            # Warn if caching a live component while Lively is active
             if LivelyComponentSystem.is_active():
                 if isinstance(result, (ComponentResponse, Component)):
                     component = result.component if isinstance(result, ComponentResponse) else result
@@ -468,252 +438,182 @@ def cached_view(
                             ViewCachingWarning,
                         )
 
-        
         @wraps(view_handler)
-        def wrapper(request: Union[HttpRequest, View], *args, **kwargs):
-            # Never try to wrap exceptions that happen in here because they 
-            # are needed by Duck to produce the correct response based on exception.
-            view_obj = None
-            
-            if isinstance(request, View):
-                # A method has been wrapped with this decorator
-                view_obj = request
-                request = view_obj.request
-                kwargs = view_obj.kwargs
-                
-            if getattr(request, skip_cache_attr, False):
-                if not view_obj:
-                    # This decorator is being used on straight function
-                    result = view_handler(request, *args, **kwargs)
-                else:
-                    # Decorator is being used on View.run method
-                    result = view_handler(view_obj) # No args/kwargs are needed on View.run.
-                
-                # Skip caching and return response immediately
-                return result
-                
-            # Resolve targets and their values.
-            try:
-                resolved = resolve_targets(request, *args, **kwargs)
-            except SkipViewCaching:
-                # This exception is raised by user if cache cannot proceed, e.g. some data is missing or cannot 
-                # be satisfied.
-                if not view_obj:
-                    # This decorator is being used on straight function
-                    result = view_handler(request, *args, **kwargs)
-                else:
-                    # Decorator is being used on View.run method
-                    result = view_handler(view_obj) # No args/kwargs are needed on View.run.
-                
-                # Skip caching and return response immediately
-                return result
-            
-            # Continue with caching.    
-            cache_key = make_cache_key(request, resolved, args, kwargs)
-            
-            # Return cached if available
-            cached = convert_to_sync_if_needed(cache_backend.get)(cache_key)
-            
-            if cached is not None:
-                if on_cache_result:
-                   on_cache_result(request, cached)
-                return cached
-                
-            if not view_obj:
-                # This decorator is being used on straight function
-                result = view_handler(request, *args, **kwargs)
+        def wrapper(first_arg, *args, **kwargs):
+            """
+            Wraps a view function or View.run method with caching.
+
+            Distinguishes a bound View.run call from a plain function call
+            by checking whether the first argument is a View instance, which
+            Python's descriptor binding supplies automatically for methods.
+            """
+            # Detect calling convention: View.run method vs plain function
+            if isinstance(first_arg, View):
+                view_obj = first_arg
+                request = args[0]
+                view_args = ()
+                view_kwargs = kwargs
+
+                def call_handler():
+                    return view_handler(view_obj, request, **view_kwargs)
             else:
-                # Decorator is being used on View.run method
-                result = view_handler(view_obj) # No args/kwargs are needed on View.run.
-            
-            # Update cache
-            convert_to_sync_if_needed(cache_backend.set)(cache_key, result, expiry)
-            
-            # May log a warning if caching the result may cause issues.
-            maybe_warn_user(result)
-            
-            if returns_static_response and freeze_if_component_response:
-                if isinstance(result, Component):
-                    result.ensure_freeze() # Freezes component right now or lazily freezes upon load() if component not yet loaded 
-                
-                elif isinstance(result, ComponentResponse):
-                    result.component.ensure_freeze() # Freezes component right now or lazily freezes upon load() if component not yet loaded 
-                    
-            # Return live computed result
-            return result
-        
-        @wraps(view_handler)
-        def method_wrapper(view: View):
-            """
-            Decorator is being used on a method.
-            """
-            if not isinstance(view, View):
-                raise ViewCachingError(
-                    f"Expected a view object, an instance of View but got {type(view)}. "
-                    "Please ensure you are using this decorator on correct View object."
-                )
-            
-            # The request and kwargs are stored on the view object.
-            request = view.request
-            return wrapper(view) # Parse the view object, wrapper knows what to do with that.
-            
-        # ASYNCHRONOUS IMPLEMENTATIONS
-        
-        @wraps(view_handler)
-        async def async_wrapper(request: Union[HttpRequest, View], *args, **kwargs):
-            # New try to wrap exceptions that happen in here because they 
-            # are needed by Duck to produce the correct response based on exception.
-            view_obj = None
-            
-            if isinstance(request, View):
-                # A method has been wrapped with this decorator
-                view_obj = request
-                request = view_obj.request
-                kwargs = view_obj.kwargs
-                
+                request = first_arg
+                view_args = args
+                view_kwargs = kwargs
+
+                def call_handler():
+                    return view_handler(request, *view_args, **view_kwargs)
+
+            # Bypass caching entirely when the request opts out
             if getattr(request, skip_cache_attr, False):
-                if not view_obj:
-                    # This decorator is being used on straight function
-                    result = await view_handler(request, *args, **kwargs)
-                else:
-                    # Decorator is being used on View.run method
-                    result = await view_handler(view_obj) # No args/kwargs are needed on View.run.
-                
-                # Skip caching and return response immediately
-                return result
-                
-            # Resolve targets and their values.
+                return call_handler()
+
+            # Resolve cache-key targets, allowing user opt-out via SkipViewCaching
             try:
-                resolved = resolve_targets(request, *args, **kwargs)
+                resolved = resolve_targets(request, *view_args, **view_kwargs)
             except SkipViewCaching:
-                # This exception is raised by user if cache cannot proceed, e.g. some data is missing or cannot 
-                # be satisfied.
-                if not view_obj:
-                    # This decorator is being used on straight function
-                    result = await view_handler(request, *args, **kwargs)
-                else:
-                    # Decorator is being used on View.run method
-                    result = await view_handler(view_obj) # No args/kwargs are needed on View.run.
-                
-                # Skip caching and return response immediately
-                return result
-                
-            # Continue with caching
-            cache_key = make_cache_key(request, resolved, args, kwargs)
-            
-            # Return cached if available
-            cached = await convert_to_async_if_needed(cache_backend.get)(cache_key)
-            
+                return call_handler()
+
+            # Look up an existing cached result
+            cache_key = make_cache_key(request, resolved, view_args, view_kwargs)
+            cached = ensure_sync(cache_backend.get)(cache_key)
+
             if cached is not None:
                 if on_cache_result:
                     on_cache_result(request, cached)
                 return cached
-                
-            if not view_obj:
-                # This decorator is being used on straight function
-                result = await view_handler(request, *args, **kwargs)
-            else:
-                # Decorator is being used on View.run method
-                result = await view_handler(view_obj) # No args/kwargs are needed on View.run.
-            
-            # Update cache
-            await convert_to_async_if_needed(cache_backend.set)(cache_key, result, expiry)
-            
-            # May log a warning if caching the result may cause issues.
+
+            # Compute and store a fresh result
+            result = call_handler()
+            ensure_sync(cache_backend.set)(cache_key, result, expiry)
             maybe_warn_user(result)
-            
-            # Freeze component (if applicable)
+
+            # Freeze static component results for faster repeated reads
             if returns_static_response and freeze_if_component_response:
                 if isinstance(result, Component):
                     result.ensure_freeze()
-                
                 elif isinstance(result, ComponentResponse):
                     result.component.ensure_freeze()
-                    
-            # Return live computed result
+
             return result
-        
+
         @wraps(view_handler)
-        async def async_method_wrapper(view: View):
+        async def async_wrapper(first_arg, *args, **kwargs):
             """
-            Decorator is being used on a method.
+            Async counterpart to wrapper, using the same calling-convention detection.
             """
-            if not isinstance(view, View):
-                raise ViewCachingError(
-                    f"Expected a view object, an instance of View but got {type(view)}. "
-                    "Please ensure you are using this decorator on correct View object."
-                )
+            # Detect calling convention: View.run method vs plain function
+            if isinstance(first_arg, View):
+                view_obj = first_arg
+                request = args[0]
+                view_args = ()
+                view_kwargs = kwargs
+                
+                async def call_handler():
+                    return await view_handler(view_obj, request, **view_kwargs)
             
-            # The request and kwargs are stored on the view object.
-            request = view.request
-            return await async_wrapper(view) # Parse the view object, wrapper knows what to do with that.
+            else:
+                request = first_arg
+                view_args = args
+                view_kwargs = kwargs
+
+                async def call_handler():
+                    return await view_handler(request, *view_args, **view_kwargs)
+
+            # Bypass caching entirely when the request opts out
+            if getattr(request, skip_cache_attr, False):
+                return await call_handler()
+
+            # Resolve cache-key targets, allowing user opt-out via SkipViewCaching
+            try:
+                resolved = resolve_targets(request, *view_args, **view_kwargs)
+            except SkipViewCaching:
+                return await call_handler()
+
+            # Look up an existing cached result
+            cache_key = make_cache_key(request, resolved, view_args, view_kwargs)
+            cached = await ensure_async(cache_backend.get)(cache_key)
+
+            if cached is not None:
+                if on_cache_result:
+                    on_cache_result(request, cached)
+                return cached
+
+            # Compute and store a fresh result
+            result = await call_handler()
             
-        # Return correct wrapper
-        async_ = iscoroutinefunction(view_handler)
-        
-        if "method" in get_callable_type(view_handler, View):
-            return method_wrapper if not async_ else async_method_wrapper
-        return wrapper if not async_ else async_wrapper
+            # Convert to async
+            await ensure_async(cache_backend.set)(cache_key, result, expiry)
+            
+            # Decide whether to warn user
+            maybe_warn_user(result)
+
+            # Freeze static component results for faster repeated reads
+            if returns_static_response and freeze_if_component_response:
+                if isinstance(result, Component):
+                    result.ensure_freeze()
+                elif isinstance(result, ComponentResponse):
+                    result.component.ensure_freeze()
+
+            return result
+
+        # Return the wrapper matching the handler's sync/async nature
+        return async_wrapper if iscoroutinefunction(view_handler) else wrapper
+
     return decorator
 
 
 class View:
     """
-    Base class for Duck views (request handlers).
+    Base class for Duck views.
 
-    A view encapsulates logic to handle an HTTP request and produce a response.
-    Views are instantiated per request and can carry state during request processing.
-
-    Subclasses should override the `run()` method to implement custom behavior.
-
-    Attributes:
-        request (HttpRequest): The incoming HTTP request object.
-        kwargs (dict): Additional parameters extracted from the route (e.g., path variables).
+    Subclasses override run(self, request, **kwargs) to handle the
+    request. The signature is fixed so views compose cleanly with
+    decorators like `login_required`.
     """
-
     def __init__(self, request: HttpRequest, **kwargs):
         """
-        Initializes the view with the incoming request and any route parameters.
+        Initialize the view.
 
         Args:
-            request (HttpRequest): The HTTP request to be handled.
-            **kwargs: Arbitrary keyword arguments passed from the URL routing, such as path variables.
+            request: The incoming HTTP request.
+            **kwargs: Parameters extracted from the matched route.
         """
         self.request = request
         self.kwargs = kwargs
 
-    def strictly_async(self) -> bool:
+    def run(self, request: HttpRequest, **kwargs) -> Optional[HttpResponse]:
         """
-        Indicates whether the view requires asynchronous execution.
+        Handle the request.
 
-        This is useful in environments like WSGI, where strictly asynchronous
-        views should be deferred to an async execution queue instead of being
-        executed synchronously.
+        Subclasses must override this method.
 
-        Override this method if your view contains non-blocking I/O or requires
-        an event loop context.
+        Args:
+            request: The incoming HTTP request.
+            **kwargs: Parameters extracted from the matched route.
 
         Returns:
-            bool: True if the view should be treated as strictly async, False otherwise.
+            Optional[HttpResponse]: The response generated by the view.
         """
-        return False
-
-    def run(self) -> Optional[HttpResponse]:
+        raise NotImplementedError(
+            "Subclasses must implement the run() method and return "
+            "the appropriate response."
+        )
+        
+    def dispatch(self) -> Any:
         """
-        Handles the request and returns an HTTP response.
-
-        This method should be overridden by subclasses to implement
-        custom request handling logic. It must return an `HttpResponse`
-        object to be sent to the client.
-
-        If no response is expected (e.g., in cases of low-level socket handling),
-        raise `duck.exceptions.all.ExpectingNoResponse` and handle the response
-        manually using `request.client_socket` and `request.client_address`.
+        Dispatch the view using its current request and route parameters.
 
         Returns:
-            Optional[HttpResponse]: The HTTP response or data that can be converted to HTTP response to be returned to the client.
-
-        Raises:
-            NotImplementedError: If the method is not overridden in a subclass.
+            Any: The value returned by run().
         """
-        raise NotImplementedError("Subclasses must implement the run() method and return the appropriate response.")
+        return ensure_sync(self.run)(self.request, **self.kwargs)
+
+    async def async_dispatch(self) -> Any:
+        """
+        Asynchronously dispatch the view using its current request and route parameters.
+
+        Returns:
+            Any: The value returned by run().
+        """
+        return await ensure_async(self.run)(self.request, **self.kwargs)

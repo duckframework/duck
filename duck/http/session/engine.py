@@ -62,18 +62,10 @@ class SessionStore(dict):
 
     @session_key.setter
     def session_key(self, key: Optional[str]):
-        # Switching identities invalidates whatever we'd loaded for the old one.
-        if key != self._session_key:
-            self._session_key = key
-            self._loaded = False
-            super().clear()
-
-    @property
-    def modified(self) -> bool:
-        """
-        Returns the state whether the session has been modified after load or creation.
-        """
-        return self._modified
+        # Do not reset `_loaded` or clear the session data here. Assigning a new
+        # session key only changes the session identity; the current in-memory
+        # session state may still be valid and should not be discarded implicitly.
+        self._session_key = key
     
     @property
     def loaded(self) -> bool:
@@ -81,6 +73,13 @@ class SessionStore(dict):
         Returns the state whether the session has been loaded.
         """
         return self._loaded
+        
+    @property
+    def modified(self) -> bool:
+        """
+        Returns the state whether the session has been modified after load or creation.
+        """
+        return self._modified
     
     @modified.setter
     def modified(self, what: bool):
@@ -93,10 +92,7 @@ class SessionStore(dict):
         """
         Returns whether the session data is worthy to be saved, this is the lazy behavior of Duck.
         """
-        if not self.loaded:
-            # If session hasn't been loaded, we consider it as not modified to avoid unnecessary saves
-            return False
-        return self.modified
+        return False if not self.loaded else self.modified
 
     @staticmethod
     def generate_session_id() -> str:
@@ -201,7 +197,9 @@ class SessionStore(dict):
             if not self.loaded and self._session_key:
                 # Load the session key
                 self.load()
-            
+            else:
+                self._loaded = True # In cases where no session key is set.
+                
             # Execute the decorated method
             return method(self, *args, **kwargs)
     
@@ -226,9 +224,6 @@ class SessionStore(dict):
             
             # Update session store with retrieved data, this will also set the modified flag if data is not empty
             super().update(session_data) # Avoids recursion error
-        
-        if not self.loaded:
-            self._modified = False # If session hasn't been loaded for the first time, set _modified to False
             
         # Update state and return session data
         self._loaded = True

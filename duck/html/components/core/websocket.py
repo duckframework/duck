@@ -22,11 +22,15 @@ from duck.http.request import HttpRequest
 from duck.http.response import HttpResponse
 from duck.http.core.handler import ResponseHandler
 from duck.utils.asyncio import create_task
-from duck.contrib.sync import convert_to_async_if_needed
+from duck.contrib.sync import ensure_async
 from duck.contrib.websockets import (
     WebSocketView,
     OpCode,
     CloseCode,
+)
+from duck.html.components.core.sync import (
+    sync_now,
+    track_sync_now_checkpoints
 )
 from duck.html.components.core.force_update import (
     ForceUpdate,
@@ -82,9 +86,16 @@ class LivelyWebSocketView(WebSocketView):
         """
         return msgpack.unpackb(data, raw=False)
 
+    async def sync_now(self, component):
+        """
+        Diff a component against its last checkpoint and push the difference
+        immediately. Scoped to component's own subtree only.
+        """
+        return await sync_now(self, component)
+        
     async def update_now(self, component, updates: List[str], *args, **kwargs):
         """
-        Sync current updates to the client immediately.
+        Syncs current updates to the client immediately regardless whether the state changed or not.
         
         Notes:
             This uses `ForceUpdate` logic.
@@ -467,12 +478,12 @@ class EventHandler:
         force_updates_patchlist = [] # List of force updates patches already sent to client.
         is_event_handler_chain = isinstance(event_handler, EventHandlerChain)
         
-        with track_update_now_force_updates() as update_now_force_updates:
-            # Track every ws.update_now calls in sync_updates.
+        with track_update_now_force_updates() as update_now_force_updates, track_sync_now_checkpoints(old_vdoms):
+            # Track every `ws.update_now` & `ws.sync_now` calls.
             if not is_event_handler_chain:
                 # Execute event handler
                 # Convert handler to async (if handler is synchronous) in case it is doing long tasks to avoid blocking event loop
-                event_handler_coro = convert_to_async_if_needed(event_handler)(component, event_name, value, self.ws_view)
+                event_handler_coro = ensure_async(event_handler)(component, event_name, value, self.ws_view)
                 event_handler_execution_results[event_handler] = await event_handler_coro
             else:
                 event_handler_chain = event_handler
@@ -770,7 +781,7 @@ class EventHandler:
                             # This is easy to diff.
                             next_component = response.component
                             if not next_component.is_loaded():
-                                await convert_to_async_if_needed(next_component.load)()
+                                await ensure_async(next_component.load)()
                            
                     # Check if next component has been set somehow e.g. from ComponentResponse
                     if next_component:

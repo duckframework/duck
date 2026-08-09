@@ -252,6 +252,32 @@ Both `event_handlers` and `document_event_handlers` accept additional keyword ar
 
 ---
 
+## WebSocket sync convention
+
+Any async method that pushes state to the client over an active
+WebSocket connection uses a ws_ prefix (e.g. ws_sync, ws_open,
+ws_dismiss). Plain methods (set_*, show_*, or any other state
+mutator) only update local component state and rely on Duck's
+end-of-handler diffing to sync automatically — no ws_ prefix,
+no async.
+
+Use ws_ methods only when the UI must update before the handler
+returns — e.g. before a slow operation, or to trigger a raw JS
+class toggle that Duck's diffing can't reach. Otherwise, prefer
+plain state mutators and let diffing handle the sync.
+
+```python
+# Prefer this when possible — no ws needed.
+component.show_error("Something went wrong")
+
+# Use ws_ only when you need immediate feedback.
+component.show_info("Uploading...")
+
+await component.ws_open(ws)
+```
+
+---
+
 ## Fast Navigation
 
 - URL paths returning **Component responses** allow vdom-diffing for minimal DOM updates.
@@ -476,17 +502,17 @@ In cases where a property's presence resolves to `true` regardless of its value 
 of `disabled` or `true`, you can just execute JavaScript (using `execute_js`) to alter the component directly.
 ```
 
+```
 ### Immediate Syncing
 
 ```{note}
 Added in version 1.1.0
 ```
 
-Method `update_now` synchronizes the current component state with the client.
-Unlike deferred updates, this applies changes immediately and can be safely called within a component event handler.
+Method `update_now` synchronizes the current component state with the client immediately, without waiting for the dispatch loop's final VDOM diff. Unlike deferred updates, this applies changes right away and can be safely called within a component event handler — useful when the client needs to reflect an intermediate state before the handler continues, restores state, or performs longer-running work.
 
 ```{note}
-This method internally performs a `ForceUpdate`, ensuring the specified updates are applied immediately.
+This method internally performs a `ForceUpdate`, sending the specified updates unconditionally — even if the resulting state is identical to what the client already has. Use this when you know a change occurred and want to guarantee it reaches the client without paying for a diff.
 ```
 
 **Example:**
@@ -501,6 +527,45 @@ async def on_click(btn, _, __, ws):
 
 btn = Button(text="Click me")
 btn.bind("click", on_click, update_self=True)
+```
+
+---
+
+### Diffed Immediate Syncing
+
+```{note}
+Added in version 2.3.0
+```
+
+Method `sync_now` also synchronizes state with the client immediately from within an event handler, but unlike `update_now`, it **diffs** the component against its own last checkpoint first and sends only the patches that actually changed — no patch is sent for a no-op update. It is scoped to the target component's own subtree, so syncing a deeply nested descendant (e.g. a button inside a page) never re-renders or re-diffs its ancestors.
+
+```{note}
+`sync_now` requires the target component to be a descendant of one of the event's `update_targets` (or an `update_target` itself). Calling it on an unrelated component raises a `ForceUpdateError`.
+```
+
+**Example:**
+
+```python
+# Diff and sync only if the state actually changed
+async def on_click(btn, _, __, ws):
+    btn.text = "Clicking..."
+    await ws.sync_now(btn)
+
+    # Continue processing after UI reflects the change, with no
+    # patch sent at all if btn.text ends up unchanged by handler's end
+
+btn = Button(text="Click me")
+btn.bind("click", on_click, update_self=True)
+```
+
+**`sync_now` vs `update_now`:**
+
+| | `update_now` | `sync_now` |
+|---|---|---|
+| Sends a patch | Always, unconditionally | Only if state actually changed |
+| Cost | Skips diffing — cheaper per call if you're certain state changed | Diffs first — avoids wasted network writes on no-ops |
+| Scope | Whatever component/updates you pass | Automatically scoped to the target's own subtree |
+| Best for | Small, definitely-changed components where a diff isn't worth the CPU | Any case with risk of a no-op, or when targeting a nested descendant without touching its ancestors |
 ```
 
 ---

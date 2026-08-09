@@ -115,13 +115,13 @@ async def async_home(request):
 
 class SomeView(View):
     # Some class-based view
-    def run(self):
+    def run(self, request, **kwargs):
         return "<h1>Hello world</h1>"
 
 
 class SomeAsyncView(View):
     # Some asynchronous class-based view
-    async def run(self):
+    async def run(self, request, **kwargs):
         return "<h1>Hello world</h1>"
 
 ```

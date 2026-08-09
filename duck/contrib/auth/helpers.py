@@ -39,6 +39,7 @@ Notes:
 from typing import Any
 
 from duck.contrib.sync import ensure_async
+from duck.contrib.jwt import JWTInvalid, JWTExpired
 from duck.contrib.auth.exceptions import AuthenticationError
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password as django_check_password
@@ -64,7 +65,11 @@ def get_user_id(request, backend: str | None = None):
     backend = backend or DEFAULT_AUTH_BACKEND
     
     if backend == "jwt":
-        return request.JWT.get(USER_ID_KEY, None)
+        try:
+            return request.JWT.get(USER_ID_KEY, None)
+        except (JWTInvalid, JWTExpiredError):
+            # JWT expired or token invalid
+            return
         
     elif backend == "session":
         return request.SESSION.get(USER_ID_KEY, None)
@@ -403,6 +408,13 @@ def get_user_from_jwt(request: Any) -> Any | None:
 
 
 # Async API
+
+async def async_get_user_id(request, backend: str | None = None):
+    """
+    Asynchronously returns the user ID from a supported backend.
+    """
+    return await ensure_async(get_user_id)(request, backend)
+
 
 async def async_authenticate(
     request: Any,

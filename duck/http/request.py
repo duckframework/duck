@@ -11,7 +11,7 @@ import socket
 import hashlib
 import random
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Any
 from urllib.parse import parse_qs
 
 from duck.exceptions.all import (
@@ -99,6 +99,7 @@ class Request:
         self.__fullpath: str = None  # full path for the request
         self.__path: str = None  # path stripped of queries if so
         self.__id: str = None  # request unique identifier
+        self.__user: Any = None
         
         # Some important attributes
         self.client_socket: xsocket = None # client socket which made this request
@@ -156,6 +157,20 @@ class Request:
             self.__id = hashlib.md5(str(random.random()).encode("utf-8")).hexdigest()[:8]
         return self.__id
     
+    @property
+    def user(self):
+        """
+        Returns the authenticated user model for the request.
+        """
+        return self.__user
+        
+    @user.setter
+    def user(self, user: Optional[Any]):
+        """
+        Sets the authenticated user model for the request.
+        """
+        self.__user = user
+        
     @property
     def content(self):
         """

@@ -57,9 +57,15 @@ class NoParentError(HtmlComponentError):
 
 class ForceUpdateError(HtmlComponentError):
     """
-    Raised when there is an issue in forcily updating a component on event"""
+    Raised when there is an issue in forcily updating a component on event
+    """
     pass
 
+
+class SyncNowError(HtmlComponentError):
+    """
+    Raised on errors related to syncing state to client UI in middle of `event_handler`.
+    """
 
 class RedundantForceUpdate(ForceUpdateError):
     """
@@ -73,7 +79,6 @@ class UnknownEventError(HtmlComponentError):
     Raised when trying to bind a component to unknown event.
     """
     pass
-
 
 
 class EventAlreadyBound(HtmlComponentError):

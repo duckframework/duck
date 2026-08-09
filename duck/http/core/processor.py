@@ -19,8 +19,8 @@ from duck.db.hooks import (
     async_view_wrapper,
 )
 from duck.contrib.sync import (
-    convert_to_async_if_needed,
-    convert_to_sync_if_needed,
+    ensure_async,
+    ensure_sync,
     iscoroutinefunction,
 )
 from duck.views import View
@@ -192,7 +192,7 @@ class RequestProcessor:
         """
         for middleware in SettingsLoaded.MIDDLEWARES:
             if issubclass(middleware, BaseMiddleware):
-                middleware_state = convert_to_sync_if_needed(middleware.process_request)(self.request)
+                middleware_state = ensure_sync(middleware.process_request)(self.request)
 
                 if middleware_state == BaseMiddleware.request_ok:
                     pass
@@ -281,7 +281,7 @@ class RequestProcessor:
                         raise TypeError("View is set to be strictly asynchronous yet entry method `run` is synchronous.")
                     
                     # Submit the coroutine to queue
-                    response_coro = async_view_wrapper(view.run)()
+                    response_coro = async_view_wrapper(view.async_dispatch)()
                     loop_manager = get_or_create_loop_manager(id="request-handling-eventloop-manager", strictly_get=True)
                     future: SyncFuture = loop_manager.submit_task(response_coro, return_sync_future=True, task_type="request-handling-task")
                     
@@ -292,13 +292,12 @@ class RequestProcessor:
                     response = future.result()
                 
                 else:
-                    # Convert the run method to sync if not.
-                    run = convert_to_sync_if_needed(view.run)
-                    response = view_wrapper(run)()
+                    # Use synchronous dispatch
+                    response = view_wrapper(view.dispatch)()
             else:
                 # Continue with request processing
-                view_callable = convert_to_sync_if_needed(view_callable)
-                response = view_wrapper(view_callable)(request=self.request, **view_kwargs)
+                view_callable = ensure_sync(view_callable)
+                response = view_wrapper(view_callable)(self.request, **view_kwargs)
             
         except Exception as e:
             logger.log_raw(
@@ -365,7 +364,7 @@ class RequestProcessor:
         """
         Returns middleware error response.
         """
-        return convert_to_sync_if_needed(middleware.get_error_response)(self.request)
+        return ensure_sync(middleware.get_error_response)(self.request)
 
     def get_response(self, request: HttpRequest) -> HttpResponse:
         """
@@ -569,7 +568,7 @@ class AsyncRequestProcessor(RequestProcessor):
         """
         for middleware in SettingsLoaded.MIDDLEWARES:
             if issubclass(middleware, BaseMiddleware):
-                middleware_state = await convert_to_async_if_needed(middleware.process_request)(self.request)
+                middleware_state = await ensure_async(middleware.process_request)(self.request)
                 if middleware_state == BaseMiddleware.request_ok:
                     pass
                 else:
@@ -624,13 +623,12 @@ class AsyncRequestProcessor(RequestProcessor):
                 view = view_callable(self.request, **view_kwargs) # initialize view
                 
                 # Continue processing
-                run = convert_to_async_if_needed(view.run)
-                response = await async_view_wrapper(run)()
+                response = await async_view_wrapper(view.async_dispatch)()
                 
             else:
                 # Continue with processing.
-                view_callable = convert_to_async_if_needed(view_callable)
-                response = await async_view_wrapper(view_callable)(request=self.request, **view_kwargs)
+                view_callable = ensure_async(view_callable)
+                response = await async_view_wrapper(view_callable)(self.request, **view_kwargs)
         
         except Exception as e:
             logger.log_raw(
@@ -698,7 +696,7 @@ class AsyncRequestProcessor(RequestProcessor):
         """
         Returns middleware error response.
         """
-        return await convert_to_async_if_needed(middleware.get_error_response)(self.request)
+        return await ensure_async(middleware.get_error_response)(self.request)
 
     async def get_response(self, request: HttpRequest) -> HttpResponse:
         """

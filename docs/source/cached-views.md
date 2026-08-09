@@ -229,7 +229,7 @@ def handler(request):
 ```py
 class MyView(View):
     @cached_view(targets=['fullpath', 'method'])
-    async def run(self):
+    async def run(self, request, **kwargs):
         return HttpResponse("OK")
 ```
 

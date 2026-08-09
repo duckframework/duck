@@ -151,8 +151,10 @@ def truncate_slug(slug: str, max_length: int, separator: str = "-") -> str:
     # Truncate the slug and ensure it doesn't cut in the middle of a word
     truncated = slug[:max_length]
     last_separator = truncated.rfind(separator)
+    
     if last_separator != -1:
         return truncated[:last_separator]
+    
     return truncated
 
 

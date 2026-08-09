@@ -12,9 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Added "backend-aware" `duck.contrib.auth` helpers `get_user` and `async_get_user`. 
-- Improved `duck.utils.validation` helpers.
-- Prevented mixing "inner_html" and child components to avoid inconsistent UI state during Lively updates.
+- Added `sync_now()`: diffs a descendant against its own checkpoint and sends only real changes, scoped to that component's subtree — unlike `update_now()`, which force-pushes a full patch unconditionally even on no-op state changes and can't target a nested component without touching its ancestor.
+- Added `@login_required` decorator to `duck.contrib.auth.decorators` module.
+- Added `@user_required` decorator to `duck.contrib.auth.decorators` module, resolving the full user model and attaching `request.user` before the view runs.
+- Added `@condition_required` decorator to `duck.contrib.auth.decorators` module, gating access on an arbitrary sync or async predicate evaluated against `request`.
+- Added `async_get_user_id` for better concurrency.
+- Added "backend-aware" `duck.contrib.auth` helpers `get_user` and `async_get_user`.
+- Improved `duck.utils.validation` helpers.- Prevented mixing "inner_html" and child components to avoid inconsistent UI state during Lively updates.
 - Improved state restoration so HTML components are now automatically synchronized with the client after their state is restored. Users no longer need to manually call `ws.update_now()` after restoring a component's state; simply restore the state on the component itself and Duck will handle the required client update automatically.
 - Added adaptive load-based scaling to `TransactionThreadPool`'s general-thread freeing, replacing the fixed-percentage strategy with an EWMA load estimate (`load_estimate`), configurable via `headroom_factor`, `idle_grace_period`, `max_free_per_cycle`, and `load_check_interval`.
 - Added `duck sync`, a dependency synchronization system that reads project dependencies from `duck.toml`, detects the current environment, resolves the appropriate package manager, and installs missing Python and system dependencies automatically.
@@ -25,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Simplified `View.run` to accept `request, **kwargs` but default to match the default function convention.
 - Changed the "duck monitor" argument from "--duck-process" to "--process" for simplicity and consistency.
 - `TransactionThreadPool`'s `general_threads_free_level` now defaults to `None`, using the new adaptive freeing strategy; set it to an int to keep the original fixed-percentage behavior.
 - `window.LIVELY_APPLICATION.createDuckEvent` now supports a `raw` argument. When `true`, Duck skips its default event processing (e.g. extracting `value` from a `button`) and passes the `detail` argument directly to Python event handler instead.

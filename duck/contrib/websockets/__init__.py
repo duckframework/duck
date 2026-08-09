@@ -193,7 +193,7 @@ class WebSocketView(View):
         sha1 = hashlib.sha1(combined.encode("utf-8")).digest()
         return base64.b64encode(sha1).decode("utf-8")
             
-    async def run(self) -> None:
+    async def run(self, *_, **__) -> None:
         """
         Entry point for executing the WebSocket view.
     
