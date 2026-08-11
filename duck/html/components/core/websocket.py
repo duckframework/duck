@@ -333,6 +333,9 @@ class EventHandler:
            EventOpCode.DISPATCH_COMPONENT_EVENT: self.dispatch_component_event,
            EventOpCode.JS_EXECUTION_RESULT: self.handle_js_execution_result,
            EventOpCode.NAVIGATE_TO: self.handle_navigation,
+           EventOpCode.FILE_UPLOAD_STARTED: self.handle_file_upload_started,
+           EventOpCode.FILE_UPLOAD_ERROR: self.handle_file_upload_error,
+           EventOpCode.FILE_UPLOAD_PROGRESS: self.handle_file_upload_progress,
        }
        self.browser_state_sync_lock = asyncio.Lock()
        
@@ -857,3 +860,39 @@ class EventHandler:
                      [], # patches
                      True, # These patches are final.
                  ])
+
+    async def handle_file_upload_started(self, data: List[Any]):
+        """
+        Handle file upload started event.
+        """
+        from duck.html.components.core.lively_utils.file_request import mark_file_upload_started
+        
+        # Recv Format: [132, [file_id]]
+        _, file_id = data
+        
+        # Mark file upload started
+        mark_file_upload_started(file_id)
+    
+    async def handle_file_upload_error(self, data: List[Any]):
+        """
+        Handle file upload error event.
+        """
+        from duck.html.components.core.lively_utils.file_request import mark_file_upload_failed
+        
+        # Recv format: [131, [file_id, reason]]
+        _, file_id, reason = data
+        
+        # Mark file upload failed
+        mark_file_upload_failed(file_id, message=reason or "")
+
+    async def handle_file_upload_progress(self, data: List[Any]):
+        """
+        Handle file upload progress event.
+        """
+        from duck.html.components.core.lively_utils.file_request import notify_file_upload_progress
+        
+        # Recv format: [133, [file_id, percent]]
+        _, file_id, progress = data
+        
+        # Notify file upload progress
+        notify_file_upload_progress(file_id, progress)

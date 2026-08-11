@@ -57,6 +57,7 @@ class LivelyComponentSystem:
         Returns the appropriate URL patterns for the whole system.
         """
         from duck.html.components.core.browser_state import sync_browser_state
+        from duck.html.components.core.lively_utils.file_request import receive_ws_file
         
         ws_view_cls = cls.get_websocket_view_cls()
         
@@ -73,6 +74,7 @@ class LivelyComponentSystem:
             path("/ws/lively/", ws_view_cls, name="lively-component-system"),
             path("/lively/static/<staticfile>", serve_staticfiles, name="lively-staticfiles"),
             path("/lively/sync", sync_browser_state, name="lively-browser-sync"),
+            path("/lively/ws-file", receive_ws_file, name="lively-receive-ws-file"),
         ])
         
     @classmethod

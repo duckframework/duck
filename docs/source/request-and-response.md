@@ -1,4 +1,4 @@
-# 🔀 Request & Response
+# Request & Response
 
 ## Requests
 

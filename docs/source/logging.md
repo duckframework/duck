@@ -1,4 +1,4 @@
-# 📝 Duck Logging System
+# Duck Logging System
 
 [![Logging](https://img.shields.io/badge/Feature-Logging-blue?style=for-the-badge)](#)  
 [![Duck Framework](https://img.shields.io/badge/Powered%20By-Duck-orange?style=for-the-badge&logo=duckframework)](#)

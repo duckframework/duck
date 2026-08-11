@@ -8,6 +8,7 @@ import os
 from typing import Optional
 
 from duck.settings import SETTINGS
+from duck.contrib.sync import ensure_async
 from duck.utils.object_mapping import map_data_to_object
 
 
@@ -17,10 +18,15 @@ class FileUploadError(Exception):
     """
 
 
-
 class FileVerificationError(FileUploadError):
     """
     Raised on verification failure for uploaded files.
+    """
+
+
+class FileTypeNotAllowedError(FileUploadError):
+    """
+    Raised when a detected data mimetype doesn't match any mime in allowed mimes list.
     """
 
 
@@ -51,7 +57,7 @@ class BaseFileUpload(io.BytesIO):
 
         # Map additional keyword arguments to instance attributes
         map_data_to_object(self, kw)
-    
+        
     def normalize_filename(self) -> str:
         """
         Normalize the filename by spaces or invalid characters.
@@ -61,7 +67,7 @@ class BaseFileUpload(io.BytesIO):
         """
         self.filename = self.filename.strip().replace(" ", "-")
         return self.filename
-
+        
     def geturl(self, absolute=True):
         """
         Get the URL for accessing the uploaded file.
@@ -93,23 +99,40 @@ class BaseFileUpload(io.BytesIO):
         from duck.http.mimes import guess_data_mimetype
         return guess_data_mimetype(self.getvalue())
         
-    def verify(self):
+    def verify(self, allowed_mimes: list[str] | None = None) -> None:
         """
-        Verifies the uploaded file if the content type matches the guessed mimetype.
-        
+        Verify the uploaded file's declared MIME type against its detected type.
+    
+        Args:
+            allowed_mimes: Optional MIME types permitted for the upload.
+    
         Raises:
-            FileVerificationError: If the specified content type doesn't match the guessed mimetype.
-        
+            FileTypeNotAllowedError: If the detected MIME type is not allowed.
+            FileVerificationError: If the declared MIME type does not match the
+                detected MIME type.
+    
         Notes:
-        - This method guesses the mimetype for the file upload using the provided bytes rather than the 
-               the filename, because it bypasses altered filenames thereby increasing security.
+            The detected MIME type should be determined from the file's content
+            (for example, using magic bytes), not from its filename or extension.
         """
-        content_type = getattr(self, "content_type", None)
-        if content_type:
-            mimetype = self.guess_mimetype()
-            if mimetype and mimetype.lower() != content_type.lower():
-                raise FileVerificationError("File upload verification failure: Received `{content_type}` as content_type yet the guessed mimetype is `{mimetype}`.")
+        normalize_mime = lambda m: m.split(";", 1)[0].strip().lower()
         
+        # Set some variables
+        declared = normalize_mime(getattr(self, "content_type", ""))
+        detected = normalize_mime(self.guess_mimetype() or "")
+        allowed_mimes = [normalize_mime(m) for m in (allowed_mimes or [])]
+        
+        if declared and detected:
+            if declared != detected:
+                raise FileVerificationError(
+                    f"File upload verification failed: received "
+                    f"`{declared}` but detected `{detected}`."
+                )
+    
+        if allowed_mimes:
+            if detected not in allowed_mimes:
+                raise DisallowedMimeError(f"Mimetype `{detected}` not allowed. Allowed mimes: {allowed_mimes}")
+                
     def save_to_file(self, filepath: str):
         """
         Save the uploaded data to a file.
@@ -132,6 +155,12 @@ class BaseFileUpload(io.BytesIO):
         """
         raise NotImplementedError("Implementation of the method 'save' is required")
 
+    async def async_save(self):
+        """
+        Asynchronously save the data - defaults to wrapped `save()` using `ensure_async`.
+        """
+        await ensure_async(self.save)()
+      
     def __repr__(self):
         r = f"<{self.__class__.__name__} {self.filename}"
         if hasattr(self, "content_type"):

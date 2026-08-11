@@ -1,4 +1,4 @@
-# 🗨️ Build a Reactive Chat App in 5 Minutes
+# Build a Reactive Chat App in 5 Minutes
 
 No heavy frontend JavaScript. No "where do I even start?" confusion.  
 You'll build a working, reactive chat UI using **Duck Lively Components** — in pure Python.

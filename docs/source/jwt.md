@@ -1,4 +1,4 @@
-# 🔑 JWT in Duck
+# JWT in Duck
 
 Duck provides first-class JWT support through:
 

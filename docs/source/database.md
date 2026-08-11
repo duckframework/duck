@@ -1,4 +1,4 @@
-# 🗄️️ Database
+# Database
 
 **Duck** uses **Django's** ORM (Object-Relational Mapper) as its core database system. The ORM simplifies database interactions by providing a high-level API for querying and managing your database, without needing to write raw SQL queries.
 

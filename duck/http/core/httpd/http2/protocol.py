@@ -26,6 +26,7 @@ from duck.http.request import HttpRequest
 from duck.http.response import (
     BaseResponse,
     HttpResponse,
+    LazyHttpResponse,
     StreamingHttpResponse,
 )
 from duck.http.core.handler import (
@@ -110,7 +111,7 @@ class H2Protocol:
         async def async_read_and_handle_data():
             """
             Receive and handle data asynchrously.
-            """          
+            """
             data = await SocketIO.async_receive(self.sock, timeout=.5)
             
             if data:
@@ -223,6 +224,7 @@ class H2Protocol:
                 "Set ASYNC_HANDLING to False or just await `async_send_response` instead."
             )
             
+        # Create coroutine
         coro = self.async_send_response(
             response,
             stream_id,
@@ -450,6 +452,10 @@ class H2Protocol:
             self.conn.send_headers(stream_id, headers)
              
             if not isinstance(response, StreamingHttpResponse):
+                if isinstance(response, LazyHttpResponse):
+                    # Load if response is lazy
+                    await response._async_load()
+                    
                 # Send response directly to client socket
                 await self.async_send_data(
                     response.content,

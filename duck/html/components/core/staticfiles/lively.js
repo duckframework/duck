@@ -10,7 +10,7 @@
  * - When using Lively, make sure DOM changes are done within the system as any DOM mutation outside Lively will be detected and an error will be shown.  
  *
  * @author Brian Musakwa <digreatbrian@gmail.com>
- * @version 2.2.0
+ * @version 2.3.0
  */
 
 /**
@@ -74,6 +74,10 @@ const EventOpCodes = {
   NAVIGATION_RESULT: 121,
   COMPONENT_UNKNOWN: 150,
   SYNC_BROWSER_STATE: 170,
+  REQUEST_FILE: 130,
+  FILE_UPLOAD_ERROR: 131,
+  FILE_UPLOAD_STARTED: 132,
+  FILE_UPLOAD_PROGRESS: 133,
 };
 
 EventOpCodes.CLIENT_EVENT_OPCODES = new Set([
@@ -82,6 +86,7 @@ EventOpCodes.CLIENT_EVENT_OPCODES = new Set([
   EventOpCodes.NAVIGATION_RESULT,
   EventOpCodes.COMPONENT_UNKNOWN,
   EventOpCodes.SYNC_BROWSER_STATE,
+  EventOpCodes.REQUEST_FILE,
 ]);
 
 /**
@@ -2077,6 +2082,15 @@ class LivelyWebSocketClient {
             }
             break;
           }
+          
+          case EventOpCodes.REQUEST_FILE: {
+            // Handle navigation response from server, whether apply patches or do a fullpage reload.
+            const [_, form_id, file_id, name, upload_url, allowed_mimes, fire_on_progress, auth_token] = data;
+            FileRequestHandler.handleRequest(this, form_id, file_id, name, upload_url, allowed_mimes, fire_on_progress, auth_token);
+            break;
+          }
+          
+          // Cases end
         }
       }
     };
@@ -2185,6 +2199,157 @@ class LivelyWebSocketClient {
     await reconnect();
   }
 }
+
+
+/**
+  * Handle file requests from the server.
+*/
+class FileRequestHandler {
+
+ /**
+   * Handle incoming file requests from server.
+   *
+   * @param {LivelyWebSocketClient} wsClient - The active websocket client.
+   * @param {string} formID - ID of the form containing the file input.
+   * @param {string} fileID - Unique ID correlating this request with its upload.
+   * @param {string} name - Name of the file input to target.
+   * @param {string} uploadURL - URL to POST the file to.
+   * @param {string[]} allowedMimes - Accepted MIME types (e.g. ["image/png"]).
+   * @param {boolean} notifyOnProgress - Whether to send upload progress over WebSocket.
+   * @param {string} authToken - CSRF token authorizing this upload.
+   */
+  static async handleRequest(wsClient, formId, fileId, name, uploadURL, allowedMimes, notifyOnProgress, authToken) {
+    const form = document.getElementById(formId);
+  
+    if (!form) {
+      this.notifyFileUploadError(wsClient, fileId, `Form '${formId}' not found.`);
+      return;
+    }
+  
+    // Get file input
+    const input = form.querySelector(`input[name="${name}"]`);
+  
+    if (!input) {
+      this.notifyFileUploadError(wsClient, fileId, `Input '${name}' not found in form '${formId}'.`);
+      return;
+    }
+  
+    // Try getting file or make user select one
+    const file = input.files[0];
+  
+    if (file) {
+      this.uploadFile(wsClient, file, fileId, uploadURL, allowedMimes, notifyOnProgress, authToken);
+    }
+    else {
+      // No file selected, raise no file chose error.
+      this.notifyFileUploadError("No file selected");
+    }
+  }
+  
+  /**
+   * Upload a file to the server via XHR and notify the server of progress and status.
+   *
+   * @param {WebSocketClient} wsClient - Active WebSocket client connection.
+   * @param {File} file - File object to upload.
+   * @param {string} fileID - Unique ID correlating this upload with its request.
+   * @param {string} uploadURL - URL to POST the file to.
+   * @param {string[]} allowedMimes - Accepted MIME types (e.g. ["image/png"]).
+   * @param {boolean} notifyOnProgress - Whether to send upload progress over WebSocket.
+   * @param {string} authToken - CSRF token authorizing this upload.
+   */
+  static async uploadFile(wsClient, file, fileID, uploadURL, allowedMimes, notifyOnProgress, authToken) {
+    // Verify mime type before uploading
+    if (allowedMimes?.length && !allowedMimes.includes(file.type)) {
+      this.notifyFileUploadError(wsClient, fileID, `File type '${file.type}' is not allowed.`);
+      return;
+    }
+    
+    // Create form data.
+    const formData = new FormData();
+    
+    // Add form data fields
+    formData.append("id", fileID);
+    formData.append("token", authToken);
+    formData.append(fileID, file);
+    
+    // Create new xhr request.
+    const xhr = new XMLHttpRequest();
+    
+    // Prepare xhr request.
+    xhr.open("POST", uploadURL);
+    
+    // XHR event handlers
+    xhr.upload.onprogress = (e) => {
+      if (!notifyOnProgress || !e.lengthComputable) return;
+      
+      // Calculate progress.
+      const progress = (e.loaded / e.total) * 100;
+      
+      // Notify server on progress
+      this.notifyFileUploadProgress(wsClient, fileID, progress);
+    };
+    
+    // On load start event.
+    xhr.onloadstart = () => {
+      this.notifyFileUploadStarted(wsClient, fileID);
+    };
+    
+    // On error event.
+    xhr.onerror = () => {
+      this.notifyFileUploadError(wsClient, fileID, "Upload failed due to a network error.");
+    };
+    
+    // On load event.
+    xhr.onload = () => {
+      if (xhr.status !== 200) {
+        this.notifyFileUploadError(wsClient, fileID, `Upload failed with status ${xhr.status}.`);
+      }
+    };
+  
+    try {
+      // Upload file.
+      xhr.send(formData);
+    }
+    catch (e) {
+      // Notify upload error.
+      this.notifyFileUploadError(wsClient, fileID, e.message);
+    }
+  }
+  
+  /**
+   * Notify the server that a file upload has encountered an error.
+   *
+   * @param {WebSocketClient} wsClient - Active WebSocket client connection.
+   * @param {string} fileID - Unique ID of the file upload.
+   * @param {string} errorMessage - Description of the error that occurred.
+   */
+  static async notifyFileUploadError(wsClient, fileID, errorMessage) {
+    wsClient.sendData([EventOpCode.FILE_UPLOAD_ERROR, [fileID, errorMessage]]);
+  }
+  
+  /**
+   * Notify the server that a file upload has started.
+   *
+   * @param {WebSocketClient} wsClient - Active WebSocket client connection.
+   * @param {string} fileID - Unique ID of the file upload.
+   */
+  static async notifyFileUploadStarted(wsClient, fileID) {
+    wsClient.sendData([EventOpCode.FILE_UPLOAD_STARTED, [fileID]]);
+  }
+  
+  /**
+   * Notify the server of a file upload's current progress.
+   *
+   * @param {WebSocketClient} wsClient - Active WebSocket client connection.
+   * @param {string} fileID - Unique ID of the file upload.
+   * @param {float} progressPercent - Upload progress as a percentage (0-100.0).
+   */
+  static async notifyFileUploadProgress(wsClient, fileID, progressPercent) {
+    wsClient.sendData([EventOpCode.FILE_UPLOAD_PROGRESS, [fileID, progressPercent]]);
+  }
+
+}
+
 
 /**
   * Main application implementation.

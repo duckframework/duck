@@ -1,4 +1,4 @@
-# ⌛ Duck Utilities
+# Duck Utilities
 
 The **Duck Utils Module** is a collection of helper submodules designed to enhance functionality within the Duck framework. These utilities simplify various tasks such as data manipulation, logging, request handling, and security operations.
 

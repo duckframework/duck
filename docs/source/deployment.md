@@ -1,4 +1,4 @@
-# 🚀 Deployment Guide  
+# Deployment Guide  
 
 ![Python Version](https://img.shields.io/badge/python-≥3.10%20|%203.12+-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux-green.svg)

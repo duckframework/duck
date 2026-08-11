@@ -21,6 +21,7 @@ from duck.etc.statuscodes import responses
 from duck.http.response import (
     BaseResponse,
     HttpResponse,
+    LazyHttpResponse,
     StreamingHttpResponse,
 )
 from duck.contrib.sync import iscoroutinefunction
@@ -145,20 +146,26 @@ def get_django_formatted_log(
     if request and not request.topheader:
         if not request.http_version:
             request.http_version = "HTTP/1.1"
+        
+        # Update request topheader
         request.topheader = f"{request.method or 'UNKNOWN_METHOD'} {request.fullpath} {request.http_version}"
+    
+    # Initialize topheader
     topheader = request.topheader if request else ""
     
     if topheader and h2_handling:
         meth, path, httpversion = topheader.split(' ', 2)
         topheader = " ".join([meth.strip(), path.strip(), "HTTP/2"])
         
+    # Build info header
     info += (
         f"[{django_short_local_date()}] {color}"
         f'"{topheader}" {response.status_code} '
         f"{response.content_obj.size}"
     )
-    return info + reset  # Restore default color
-
+    
+    # Return info plus resetted color
+    return info + reset
 
 def get_duck_formatted_log(
     response: HttpResponse,
@@ -189,18 +196,24 @@ def get_duck_formatted_log(
     if request and not request.topheader:
         if not request.http_version:
             request.http_version = "HTTP/1.1"
+        
+        # Set request topheader
         request.topheader = f"{request.method or 'UNKNOWN_METHOD'} {request.fullpath} {request.http_version}"
+    
+    # Initialize topheader
     topheader = request.topheader if request else ""
     
     if topheader and h2_handling:
         meth, path, httpversion = topheader.split(' ', 2)
         topheader = " ".join([meth.strip(), path.strip(), "HTTP/2"])
         
+    # Initialize info header
     info = (
         f'[{short_local_date()}] {color}"{topheader}" '
         f"{response.content_obj.size}"
     )
     
+    # Add more context
     info += f"\n  {reset}├── ADDR {list(addr)} "
     
     if not debug_message:
@@ -214,7 +227,7 @@ def get_duck_formatted_log(
                 if not index == len(debug_message) - 1:
                     info += f"\n  ├── {msg}"
                 else:
-                    # last debug_message in list
+                    # Last debug_message in list
                     info += f"\n  {reset}└── {msg}"
         else:
                 info += f"\n  {reset}└── {debug_message} "
@@ -335,7 +348,7 @@ class ResponseHandler:
             request (Optional[HttpRequest]): The request object associated with the response. Used for logging and debugging purposes.
             disable_logging (bool): If True, disables logging of the response. Defaults to False.
             suppress_errors (bool): If True, suppresses any errors that occur during the sending process (only sending data). Defaults to False.
-            strictly_http1 (bool): Strictly send response using `HTTP/2`, even if `HTTP/2` is enabled.
+            strictly_http1 (bool): Strictly send response using `HTTP/1`, even if `HTTP/2` is enabled.
             
         Raises:
             Exception: If there is an error during the data sending process (e.g., socket errors), unless suppressed.
@@ -348,11 +361,9 @@ class ResponseHandler:
         
         if not strictly_http1 and hasattr(sock, 'h2_protocol'):
             if request and request.request_store.get('h2_handling'):
-                pass
-            else:
                 # Set H2 handling to True
                 h2_handling = True
-        
+                
         if h2_handling:
             stream_id = request.request_store.get("stream_id") if request else None
         
@@ -466,18 +477,26 @@ class ResponseHandler:
        """
        try:
            if not isinstance(response, StreamingHttpResponse):
+                if isinstance(response, LazyHttpResponse):
+                    # Load if response is lazy
+                    response._load()
+                    
+                # Send the whole response to the client
                 SocketIO.send(
                     sock=sock,
                     data=response.raw,
                     suppress_errors=False,
-                )  # Send the whole response to the client
+                )
+                
            else:
+                # Send response.
                 SocketIO.send(
                     sock=sock,
                     data=response.payload_obj.raw + b'\r\n\r\n',
                     suppress_errors=False,
-                )  # Send the response payload
+                )
                 
+                # Initialize content length
                 content_length = 0
                 
                 for chunk in response.iter_content():
@@ -486,17 +505,19 @@ class ResponseHandler:
                      if isinstance(chunk, str):
                          chunk = bytes(chunk, "utf-8")
                      
+                     # Send the whole chunk to the client.
                      SocketIO.send(
                          sock=sock,
                          data=chunk,
                          suppress_errors=False,
-                      )  # Send the whole response to the client.
+                      )
                       
                 # Set a custom content size for streaming responses, which may not match the actual size 
                 # of the current content. This size represents the correct total size of the content 
                 # after being fully sent to the client. Setting this enables accurate logging of 
                 # the content size.
                 response.content_obj.set_fake_size(content_length)   
+       
        except Exception as e:
             if not suppress_errors:
                 raise e  # Re-raises the error if suppression is not enabled.
@@ -644,19 +665,29 @@ class ResponseHandler:
        """
        try:
            if not isinstance(response, StreamingHttpResponse):
+                if isinstance(response, LazyHttpResponse):
+                    # Load if response is lazy
+                    await response._async_load()
+                    
+                # Send the whole response to the client
                 await SocketIO.async_send(
                     sock=sock,
                     data=response.raw,
                     suppress_errors=False,
-                )  # Send the whole response to the client
+                )
+                
            else:
+                # Send the header response payload
                 await SocketIO.async_send(
                     sock=sock,
                     data=response.payload_obj.raw + b'\r\n\r\n',
                     suppress_errors=False,
-                )  # Send the response payload
+                )
                 
+                # Initialize content length
                 content_length = 0
+                
+                # Fetch content
                 content = response.async_iter_content()
                 
                 if not isasyncgen(content):
@@ -670,11 +701,13 @@ class ResponseHandler:
                          if isinstance(chunk, str):
                              chunk = bytes(chunk, "utf-8")
                          
+                         # Send the whole chunk to the client.
                          await SocketIO.async_send(
                              sock=sock,
                              data=chunk,
                              suppress_errors=False,
-                          )  # Send the whole response to the client.
+                          )
+                
                 else:
                     async for chunk in content:
                          content_length += len(chunk)

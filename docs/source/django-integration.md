@@ -1,4 +1,4 @@
-# 🐤 Django Integration with Duck
+# Django Integration
 
 [![Django](https://img.shields.io/badge/Framework-Django-green?style=for-the-badge&logo=django)](#)  
 [![Duck Framework](https://img.shields.io/badge/Powered%20By-Duck-orange?style=for-the-badge&logo=duckframework)](#)

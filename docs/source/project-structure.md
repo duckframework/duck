@@ -1,4 +1,4 @@
-# 🌀 Project structure
+# Project Structure
 
 The following includes **Duck** full project structure.
 

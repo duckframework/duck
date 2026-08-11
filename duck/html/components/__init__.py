@@ -1700,7 +1700,7 @@ class HtmlComponent:
             if not output[0].endswith('>'):
                 output.append("/>")
                 
-        output = "".join(output)
+        output = "".join(output).strip()
         self._on_render_done()
         
         # Finally return rendered output

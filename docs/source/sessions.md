@@ -1,4 +1,4 @@
-# 🔐 Sessions in Duck
+# Sessions in Duck
 
 [![Session Management](https://img.shields.io/badge/Feature-Session-blue?style=for-the-badge)](#)  
 [![Duck Framework](https://img.shields.io/badge/Powered%20By-Duck-orange?style=for-the-badge&logo=duckframework)](#)

@@ -1,4 +1,4 @@
-# 🛠 Settings Configuration
+# Settings Configuration
 
 ## Understanding `settings.py`
 

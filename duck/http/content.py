@@ -8,31 +8,19 @@ import fnmatch
 from typing import Tuple
 
 from duck.exceptions.all import ContentError
-from duck.http.mimes import (
-    guess_data_mimetype,
-    guess_file_mimetype,
-)
+from duck.http.mimes import guess_data_mimetype, guess_file_mimetype
 from duck.settings import SETTINGS
 
 
 # Set Compression Configuration
 CONTENT_COMPRESSION = SETTINGS["CONTENT_COMPRESSION"]
 
-COMPRESSION_ENCODING = CONTENT_COMPRESSION.get(
-    "encoding", "identity",
-)  # defaults to gzip
-COMPRESSION_MIN_SIZE = CONTENT_COMPRESSION.get(
-    "min_size", 1024,
-)  # defaults to files more than 1KB
-COMPRESSION_MAX_SIZE = CONTENT_COMPRESSION.get(
-    "max_size", 512 * 1024,
-)  # defaults to files not more than 512KB
-COMPRESSION_LEVEL = CONTENT_COMPRESSION.get(
-    "level", 5,
-)  # defaults to 5, optimum in most cases
-COMPRESS_STREAMING_RESPONSES = CONTENT_COMPRESSION.get(
-    "compress_streaming_responses", True,
-)  # defaults to True
+# Set compression settings.
+COMPRESSION_ENCODING = CONTENT_COMPRESSION.get("encoding", "gzip")
+COMPRESSION_MIN_SIZE = CONTENT_COMPRESSION.get("min_size", 1024)
+COMPRESSION_MAX_SIZE = CONTENT_COMPRESSION.get("max_size", 512 * 1024)
+COMPRESSION_LEVEL = CONTENT_COMPRESSION.get("level", 5)
+COMPRESS_STREAMING_RESPONSES = CONTENT_COMPRESSION.get("compress_streaming_responses", True)
 COMPRESSION_MIMETYPES = CONTENT_COMPRESSION.get(
     "mimetypes",
     [
@@ -43,8 +31,11 @@ COMPRESSION_MIMETYPES = CONTENT_COMPRESSION.get(
         "application/xhtml+xml",
         "application/rss+xml",
         "application/atom+xml",
-    ],  # avoid compressing already compressed files like images
+    ],  # Avoid compressing already compressed files like images
 )
+
+
+_sentinel = object()
 
 
 class Content:
@@ -132,6 +123,7 @@ class Content:
         """
         success = False
         
+        # Whether content type supported
         mimetype_supported = self.mimetype_supported(self.content_type)
         
         if (data and len(data) <= self.compression_max_size
@@ -157,11 +149,17 @@ class Content:
                     raise ContentError(
                         "Brotli compression requires brotli library, please install it first using `pip install brotli`"
                     ) from e
+                
+                # Compress data
                 data = brotli.compress(data, quality=self.compression_level, **kwargs)
+                
+                # Update flag
                 success = True
             
             elif encoding == "identity":
                 success = True
+        
+        # Return final flags
         return data, success
 
     def _decompress(self, data: bytes) -> Tuple[bytes, bool]:
@@ -180,14 +178,14 @@ class Content:
         """
         success = False
         
+        # Whether mimetype is supported.
         mimetype_supported = self.mimetype_supported(self.content_type)
         
         if (data and len(data) <= self.compression_max_size
                 and isinstance(data, bytes) and mimetype_supported):
             
             if not self.encoding:
-                raise ContentError(
-                    "Please set encoding first to decompress data")
+                raise ContentError("Please set encoding first to decompress data")
 
             if self.encoding == "gzip":
                 data = gzip.decompress(data)
@@ -204,11 +202,17 @@ class Content:
                     raise ContentError(
                         "Brotli decompression requires brotli library, please install it first using `pip install brotli`"
                     ) from e
+                
+                # Decompress data using br
                 data = brotli.decompress(data)
+                
+                # Update flag
                 success = True
             
             elif self.encoding == "identity":
                 success = True
+        
+        # Return final flags
         return data, success
 
     def mimetype_supported(self, mimetype: str) -> bool:
@@ -263,6 +267,7 @@ class Content:
         if not self.data:
             return self.data, False
 
+        # Compress the data
         self.data, success = self._compress(self.data, encoding, **kwargs)
 
         if success:
@@ -281,6 +286,7 @@ class Content:
             self.__encoding = "identity"
             return self.data, False
 
+        # Decompress data
         self.data, success = self._decompress(self.data)
 
         if success:
@@ -290,20 +296,33 @@ class Content:
 
     @property
     def raw(self):
+        """
+        Same as self.data, returns the raw content data.
+        """
         return self.data
 
     @property
-    def data(self):
+    def data(self) -> bytes:
+        """
+        Return the content data in bytes.
+        """
         return bytes(self.__data)
 
     @data.setter
     def data(self, data: bytes):
+        """
+        Sets the content data.
+        """
         if not isinstance(data, bytes) and not self.disable_datatype_check:
             if self.suppress_errors:
                 self.__data = b""
                 return self.__data
             raise ContentError("Bytes required as data.")
+        
+        # Set the data
         self.__data = data
+        
+        # Return data set.
         return self.__data
 
     @property
@@ -375,8 +394,10 @@ class Content:
         """
         if self._force_size is not None:
             return self._force_size
+        
         if self.__data is not None:
             return len(self.__data)
+        
         return 0
     
     def set_fake_size(self, size: int) -> None:
@@ -404,12 +425,13 @@ class Content:
                 content_type = guess_file_mimetype(self.filepath)
             
             # guess data mimetype if guessing filedata mimetype fails
-            content_type = content_type or guess_data_mimetype(
-                data=self.data or b"")
+            content_type = content_type or guess_data_mimetype(data=self.data or b"")
 
             if not content_type:
-                # guessing data and filedata mimetype fails, this is likely binary content
+                # Guessing data and filedata mimetype fails, this is likely binary content
                 content_type = "application/octet-stream"
+        
+        # Set content type
         self.content_type = content_type
 
     def force_set_data(self, data):
@@ -420,9 +442,9 @@ class Content:
         
     def set_content(
         self,
-        data: bytes = b"",
-        filepath: str = None,
-        content_type=None,
+        data: bytes | str = b"",
+        filepath: str = _sentinel,
+        content_type = None,
     ):
         """
         Set the content and data should already be encoded to bytes.
@@ -432,15 +454,20 @@ class Content:
                 try:
                     with open(filepath, "rb") as fd:
                         data = fd.read()
+                
                 except Exception as e:
                     if self.suppress_errors:
                         self.__data = b""
                         return
-                    raise ContentError(
-                        f"Could not set content from file {filepath}: {e}"
-                    ) from e
-        self.filepath = filepath
+                    raise ContentError(f"Could not set content from file {filepath}: {e}") from e
+        
+        if filepath is not _sentinel:
+            self.filepath = filepath
+        
+        # Set data
         self.data = bytes(data, "utf-8") if not isinstance(data, bytes) else data
+        
+        # Parse content type.
         self.parse_type(content_type=content_type)
         
     def __repr__(self):

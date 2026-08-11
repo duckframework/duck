@@ -1,4 +1,4 @@
-# 🌐 WebSockets in Python – Real-Time Apps with Duck
+# WebSockets Support
 
 [![Real-time Ready](https://img.shields.io/badge/Real--Time-Enabled-brightgreen?style=for-the-badge&logo=websocket)](#)  
 [![Async First](https://img.shields.io/badge/Async-First-blue?style=for-the-badge&logo=python)](#)  

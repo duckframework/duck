@@ -1,4 +1,4 @@
-# 🏷️ Template Tags & Filters
+# Template Tags & Filters
 
 [![Jinja2](https://img.shields.io/badge/Engine-Jinja2-blue?style=for-the-badge&logo=jinja)](#)  
 [![Django](https://img.shields.io/badge/Engine-Django-green?style=for-the-badge&logo=django)](#)  

@@ -1,4 +1,4 @@
-# 🌐 Duck Service Management
+# Duck Service Management
 
 The following commands allow you to create, start, stop, enable, disable, reload, and check the status of the Duck service using `systemd` on Linux-based systems. These commands help manage the service for your Duck web server.
 

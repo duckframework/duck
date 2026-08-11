@@ -1,4 +1,4 @@
-# 📊 Duck System Monitor
+# Duck System Monitor
 
 Keep track of **real-time metrics** for your Duck processes with ease.  
 Includes **per-process stats** and a **visual history table** to help you spot trends and potential bottlenecks.  

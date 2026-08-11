@@ -47,13 +47,14 @@ from duck.http.response import (
 )
 from duck.utils.ssl import is_ssl_data
 from duck.utils.xsocket import (xsocket, ssl_xsocket, create_xsocket)
-from duck.utils.xsocket.io import SocketIO 
+from duck.utils.xsocket.io import SocketIO, PayloadTooLargeError
 from duck.utils.multiprocessing.process_manager import WorkerProcessManager, HeartbeatHealthCheck
 from duck.utils.threading.thread_manager import WorkerThreadManager
 from duck.utils.threading.thread_manager import HeartbeatHealthCheck as ThreadHeartbeatHealthCheck
 
 
 KEEP_ALIVE_PATTERN = re.compile(rb"(?i)\bConnection\s*:\s*keep\s*-?\s*alive\b")
+CONNECTION_CLOSE_PATTERN = re.compile(rb"(?i)\bConnection\s*:\s*close\b")
 KEEP_ALIVE_TIMEOUT = SETTINGS["KEEP_ALIVE_TIMEOUT"]
 CONNECTION_MODE = SETTINGS["CONNECTION_MODE"]
 SSL_HANDSHAKE_TIMEOUT = 0.3 # in seconds
@@ -478,6 +479,7 @@ class BaseServer:
             except ssl.SSLError as e:
                 # Wrong protocol used e.g., https on http or vice versa
                 logged_error = False
+                
                 if not self.no_logs and SETTINGS["VERBOSE_LOGGING"] and SETTINGS["DEBUG"]:
                     if "HTTP_REQUEST" in str(e):
                         logger.log(f"Client may be trying to connect with HTTPS on HTTP server or vice-versa: {e}\n", level=logger.WARNING)
@@ -560,7 +562,8 @@ class BaseServer:
         addr: Tuple[str, int],
         flowinfo: Optional = None,
         scopeid: Optional = None,
-    ) -> None:
+        return_data_only: bool = False,
+    ) -> Optional[bytes]:
         """
         Main entry point to handle new connection (supports both ipv6 and ipv4).
 
@@ -569,7 +572,11 @@ class BaseServer:
             addr (Tuple[str, int]): Client ip address and port.
             flowinfo (Optional): Flow info if IPv6.
             scopeid (Optional): Scope id if IPv6.
+            return_data_only (bool): Whether to only return request data only.
+                This may return None if an error happend somehow.
         """
+        from duck.contrib.responses.errors import timeout_error, bad_request
+        
         sock.addr = addr
         sock.flowinfo = flowinfo
         sock.scopeid = scopeid
@@ -577,11 +584,23 @@ class BaseServer:
         try:
             # Receive the full request (in bytes)
             data = SocketIO.receive_full_request(sock)
+        
         except TimeoutError:
             # For the first request, client took too long to respond.
-            self.do_request_timeout(sock, addr)
+            # Send response and close socket.
+            response = timeout_error(timeout=SETTINGS["REQUEST_TIMEOUT"])
+            self.send_response(sock, response, close=True)
             return
         
+        except PayloadTooLargeError as e:
+            # Send response and close socket.
+            response = bad_request(e)
+            self.send_response(sock, response, close=True)
+            return
+            
+        if return_data_only:
+            return data
+            
         if not data:
             # Client sent an empty request, terminate the connection immediately
             SocketIO.close(sock)
@@ -592,7 +611,7 @@ class BaseServer:
         
         # Close client socket just in case it is not closed
         SocketIO.close(sock)
-    
+        
     def process_data(
         self,
         sock: xsocket,
@@ -604,34 +623,60 @@ class BaseServer:
         """
         # Continue with data processing.
         data = request_data.data if isinstance(request_data, RawRequestData) else request_data.content
-        
+
         if is_ssl_data(data):
             if SETTINGS['DEBUG']:
-                logger.log(
-                    "Data should be decoded at this point but it seems like it's ssl data",
-                    level=logger.WARNING,
-                )
+                logger.log("Data should be decoded at this point but it seems like it's ssl data", level=logger.WARNING)
                 logger.log(f"Client may be trying to connect with https on http server or vice-versa\n", level=logger.WARNING)
             return None
-            
+
         try:
             self.handle_request_data(sock, addr, request_data)
+        
         except Exception as e:
             # Log the error message
             logger.log_exception(e)
-        
+
         finally:
-            # Check if client wants a keep alive connection
+            # Check if client wants a keep alive connection.
             # Only handle keep alive connection if the server supports it.
-            try:
-                if KEEP_ALIVE_PATTERN.search(request_data.data.split(b"\r\n\r\n")[0]):  # target headers only
-                    if CONNECTION_MODE == "keep-alive":
-                        # Server supports keep alive
-                        self.handle_keep_alive_conn(sock, addr)
-            finally:
-                # Finally close the socket if everything is finished
-                SocketIO.close(sock)
-                    
+            if CONNECTION_MODE == "keep-alive" and self.wants_keep_alive(data):
+                self.handle_keep_alive_conn(sock, addr)
+
+            # Finally close the socket if everything is finished
+            SocketIO.close(sock)
+            
+    @staticmethod
+    def wants_keep_alive(data: bytes) -> bool:
+        """
+        Determines whether the HTTP connection should remain persistent.
+    
+        HTTP/1.1 connections are persistent by default unless the client
+        explicitly sends ``Connection: close``. HTTP/1.0 connections are
+        non-persistent by default unless ``Connection: keep-alive`` is present.
+    
+        Args:
+            data: Raw HTTP request data.
+    
+        Returns:
+            True if the connection should remain open.
+        """
+        header_end = data.find(b"\r\n\r\n")
+        headers = data if header_end == -1 else data[:header_end]
+    
+        if CONNECTION_CLOSE_PATTERN.search(headers):
+            return False
+    
+        # HTTP/1.1 uses persistent connections by default.
+        request_line_end = headers.find(b"\r\n")
+        request_line = headers if request_line_end == -1 else headers[:request_line_end]
+        
+        if request_line.endswith(b"HTTP/1.1"):
+            return True
+    
+        # HTTP/1.0 requires an explicit keep-alive request.
+        return bool(KEEP_ALIVE_PATTERN.search(headers))
+    
     def handle_keep_alive_conn(
         self,
         sock: xsocket,
@@ -640,75 +685,40 @@ class BaseServer:
         """
         Processes and handles keep alive connection.
         """
-        data: bytes = b""
-        
         # Assume the client wants keep alive to run forever until explicitly stated to end it.
         while True:
             try:
                 # Receive client request with a timeout.
                 data = SocketIO.receive_full_request(sock=sock, timeout=KEEP_ALIVE_TIMEOUT)
-                
-                if not data:
-                    # Client sent nothing or closed connection
-                    # End the keep alive data exchange immediately
-                    break
-                
-                # Process and handle the complete request using appropriate WSGI
-                self.handle_request_data(sock, addr, RawRequestData(data))
             
             except TimeoutError:
-                # Client sent nothing in expected time it was suppose to
-                # Close connection immediately
+                # Client sent nothing in the expected time. Close connection immediately.
                 break
             
             except Exception as e:
-                # Encountered an unknown exception, log that exception right away
+                # Unknown exception while waiting for the next request. Log and stop.
                 logger.log_exception(e)
-            
-            finally:
-                # After every keep alive cycle, check if client still wants to continue with
-                # the connection or terminate immediately
-                
-                if KEEP_ALIVE_PATTERN.search(data.split(b"\r\n\r\n")[0]):
-                    # client seem to like to continue with keep alive connection
-                    if CONNECTION_MODE == "keep-alive":
-                        # keep connection alive
-                        continue
-                    else:
-                        break
-                else:
-                    # Client would like to terminate keep alive connection.
-                    break
-                    
-    def do_request_timeout(
-        self,
-        sock: xsocket,
-        addr: Tuple[str, int],
-    ):
-        """
-        Sends request timeout response to client and close connection.
+                break
 
-        Args:
-            sock (xsocket): Client socket object
-            addr (Tuple[str, int]): Client ip address and port.
-        """
-        from duck.contrib.responses.errors import timeout_error
-        
-        # Send timeout error message to client.
-        timeout_response = timeout_error(timeout=SETTINGS["REQUEST_TIMEOUT"])
-        
-        SettingsLoaded.WSGI.finalize_response(timeout_response, request=None)
-        
-        # Send timeout response
-        response_handler.send_response(
-            timeout_response,
-            sock=sock,
-            disable_logging=self.no_logs,
-         )
-        
-        # Close client socket immediately
-        SocketIO.close(sock)
-        
+            if not data:
+                # Client sent nothing or closed connection.
+                break
+
+            try:
+                # Process and handle the complete request using appropriate WSGI
+                self.handle_request_data(sock, addr, RawRequestData(data))
+            
+            except Exception as e:
+                # Request handling failed; connection state is unknown, so stop.
+                logger.log_exception(e)
+                break
+
+            # Only after a clean cycle do we decide whether to keep going.
+            if CONNECTION_MODE == "keep-alive" and self.wants_keep_alive(data):
+                continue
+            
+            break
+            
     def handle_request_data(
         self,
         sock: xsocket,
@@ -725,6 +735,7 @@ class BaseServer:
         """
         handle_wsgi_request = SettingsLoaded.WSGI
         
+        # Handle request using WSGI
         handle_wsgi_request(
             self.application,
             sock,
@@ -732,6 +743,38 @@ class BaseServer:
             request_data,
         )
     
+    def send_response(
+        self,
+        sock: xsocket,
+        response,
+        request: Optional = None,
+        close: bool = False,
+        finalize: bool = True,
+    ):
+        """
+        Sends response to client at socket level and close connection.
+        
+        Args:
+            sock (xsocket): Client socket object
+            response: The HTTP response to send.
+            request: The HTTP request if any.
+            close: Whether to close connection. Defaults to False.
+            finalize: Whether to finalize response, adding security headers, etc.
+        """
+        if finalize:
+            SettingsLoaded.WSGI.finalize_response(response, request=request)
+        
+        # Send timeout response
+        response_handler.send_response(
+            response,
+            sock=sock,
+            disable_logging=self.no_logs,
+         )
+        
+        if close:
+            # Close client socket immediately
+            SocketIO.close(sock)
+        
     # ASYNCHRONOUS IMPLEMENTATIONS
     
     async def async_handle_conn(
@@ -740,35 +783,54 @@ class BaseServer:
         addr: Tuple[str, int],
         flowinfo: Optional = None,
         scopeid: Optional = None,
-    ) -> None:
+        return_data_only: bool = False,
+    ) -> Optional[bytes]:
         """
-        Main entry point to handle new connection asynchronously (supports both ipv6 and ipv4).
+        Asynchronous main entry point to handle new connection (supports both ipv6 and ipv4).
 
         Args:
             sock (xsocket): The client socket object.
             addr (Tuple[str, int]): Client ip address and port.
             flowinfo (Optional): Flow info if IPv6.
             scopeid (Optional): Scope id if IPv6.
+            return_data_only (bool): Whether to only return request data only.
+                This may return None if an error happend somehow.
+        
+        Notes:
+            If return_data_only is True and an error happens, the error is handled but the returned data is None.
         """
+        from duck.contrib.responses.errors import async_timeout_error, async_bad_request
+        
         sock.addr = addr
         sock.flowinfo = flowinfo
         sock.scopeid = scopeid
         
         try:
             # Receive the full request (in bytes)
-            data = await SocketIO.async_receive_full_request(sock=sock)
+            data = await SocketIO.async_receive_full_request(sock)
         
         except TimeoutError:
             # For the first request, client took too long to respond.
-            await self.async_do_request_timeout(sock, addr)
+            # Send response and close socket.
+            response = await async_timeout_error(timeout=SETTINGS["REQUEST_TIMEOUT"])
+            await self.async_send_response(sock, response, close=True)
             return
         
+        except PayloadTooLargeError as e:
+            # Send response and close socket.
+            response = await async_bad_request(e)
+            await self.async_send_response(sock, response, close=True)
+            return
+            
+        if return_data_only:
+            return data
+            
         if not data:
             # Client sent an empty request, terminate the connection immediately
             SocketIO.close(sock)
             return
         
-        # Process data/request 
+        # Process data/request
         await self.async_process_data(sock, addr, RawRequestData(data))
         
         # Close client socket just in case it is not closed
@@ -781,37 +843,32 @@ class BaseServer:
         request_data: RequestData,
     ) -> None:
         """
-        Process and handle the request dynamically and asynchronously.
+        Process and handle the request dynamically.
         """
         # Continue with data processing.
         data = request_data.data if isinstance(request_data, RawRequestData) else request_data.content
-        
+
         if is_ssl_data(data):
             if SETTINGS['DEBUG']:
-                logger.log(
-                    "Data should be decoded at this point but it seems like it's ssl data",
-                    level=logger.WARNING,
-                )
+                logger.log("Data should be decoded at this point but it seems like it's ssl data", level=logger.WARNING)
                 logger.log(f"Client may be trying to connect with https on http server or vice-versa\n", level=logger.WARNING)
             return None
-            
+
         try:
             await self.async_handle_request_data(sock, addr, request_data)
+        
         except Exception as e:
             # Log the error message
             logger.log_exception(e)
-        
+
         finally:
-            # Check if client wants a keep alive connection
+            # Check if client wants a keep alive connection.
             # Only handle keep alive connection if the server supports it.
-            try:
-                if KEEP_ALIVE_PATTERN.search(data.split(b"\r\n\r\n")[0]):  # target headers only
-                    if CONNECTION_MODE == "keep-alive":
-                        # Server supports keep alive
-                        await self.async_handle_keep_alive_conn(sock, addr)
-            finally:
-                # Finally close the socket if everything is finished
-                SocketIO.close(sock)
+            if CONNECTION_MODE == "keep-alive" and self.wants_keep_alive(data):
+                await self.async_handle_keep_alive_conn(sock, addr)
+
+            # Finally close the socket if everything is finished
+            SocketIO.close(sock)
             
     async def async_handle_keep_alive_conn(
         self,
@@ -819,77 +876,42 @@ class BaseServer:
         addr: Tuple[str, int],
     ) -> None:
         """
-        Processes and handles keep alive connection asynchronously.
+        Processes and handles keep alive connection.
         """
-        data: bytes = b""
-        
         # Assume the client wants keep alive to run forever until explicitly stated to end it.
         while True:
             try:
                 # Receive client request with a timeout.
                 data = await SocketIO.async_receive_full_request(sock=sock, timeout=KEEP_ALIVE_TIMEOUT)
-                
-                if not data:
-                    # Client sent nothing or closed connection
-                    # End the keep alive data exchange immediately
-                    break
-                
-                # Process and handle the complete request using appropriate WSGI
-                await self.async_handle_request_data(sock, addr, RawRequestData(data))
             
             except TimeoutError:
-                # Client sent nothing in expected time it was suppose to
-                # Close connection immediately
+                # Client sent nothing in the expected time. Close connection immediately.
                 break
             
             except Exception as e:
-                # Encountered an unknown exception, log that exception right away
+                # Unknown exception while waiting for the next request. Log and stop.
                 logger.log_exception(e)
-            
-            finally:
-                # After every keep alive cycle, check if client still wants to continue with
-                # the connection or terminate immediately
-                if KEEP_ALIVE_PATTERN.search(data.split(b"\r\n\r\n")[0]):
-                    # client seem to like to continue with keep alive connection
-                    if CONNECTION_MODE == "keep-alive":
-                        # keep connection alive
-                        continue
-                    else:
-                        break
-                else:
-                    # Client would like to terminate keep alive connection.
-                    break
-                    
-    async def async_do_request_timeout(
-        self,
-        sock: xsocket,
-        addr: Tuple[str, int]
-    ):
-        """
-        Sends request timeout response to client and close connection asynchronously.
+                break
 
-        Args:
-            sock (xsocket): Client socket object
-            addr (Tuple[str, int]): Client ip address and port.
-        """
-        from duck.settings.loaded import SettingsLoaded
-        from duck.contrib.responses.errors import timeout_error
-        
-        # Send timeout error message to client.
-        timeout_response = timeout_error(timeout=SETTINGS["REQUEST_TIMEOUT"])
-        
-        await SettingsLoaded.ASGI.finalize_response(timeout_response, request=None)
-        
-        # Send timeout response
-        await response_handler.async_send_response(
-            timeout_response,
-            sock,
-            disable_logging=self.no_logs,
-         )
-        
-        # Close client socket immediately
-        SocketIO.close(sock)
-        
+            if not data:
+                # Client sent nothing or closed connection.
+                break
+
+            try:
+                # Process and handle the complete request using appropriate WSGI
+                await self.async_handle_request_data(sock, addr, RawRequestData(data))
+            
+            except Exception as e:
+                # Request handling failed; connection state is unknown, so stop.
+                logger.log_exception(e)
+                break
+
+            # Only after a clean cycle do we decide whether to keep going.
+            if CONNECTION_MODE == "keep-alive" and self.wants_keep_alive(data):
+                continue
+            
+            break
+            
     async def async_handle_request_data(
         self,
         sock: xsocket,
@@ -912,6 +934,38 @@ class BaseServer:
             addr,
             request_data,
         )
+    
+    async def async_send_response(
+        self,
+        sock: xsocket,
+        response,
+        request: Optional = None,
+        close: bool = False,
+        finalize: bool = True,
+    ):
+        """
+        Asynchronously sends response to client at socket level and close connection.
+        
+        Args:
+            sock (xsocket): Client socket object
+            response: The HTTP response to send.
+            request: The HTTP request if any.
+            close: Whether to close connection. Defaults to False.
+            finalize: Whether to finalize response, adding security headers, etc.
+        """
+        if finalize:
+            await SettingsLoaded.ASGI.finalize_response(response, request=request)
+        
+        # Send timeout response
+        await response_handler.async_send_response(
+            response,
+            sock=sock,
+            disable_logging=self.no_logs,
+         )
+        
+        if close:
+            # Close client socket immediately
+            SocketIO.close(sock)
 
 
 class BaseMicroServer(BaseServer):
@@ -920,7 +974,7 @@ class BaseMicroServer(BaseServer):
     
     This class is the base definition of a micro application server.
     """
-
+    
     def set_microapp(self, microapp):
         """
         Sets the target micro application for this server instance.
@@ -930,7 +984,9 @@ class BaseMicroServer(BaseServer):
         if not isinstance(microapp, MicroApp):
             raise ValueError(f"MicroApp instance expected, received {type(micropp)} instead.")
         
-        self.microapp = microapp # set the micro application instance
+        # Set the micro application instance
+        self.microapp = microapp
+        self.no_logs = self.microapp.no_logs
     
     def handle_request_data(
         self,
@@ -948,6 +1004,7 @@ class BaseMicroServer(BaseServer):
         """
         from duck.shortcuts import to_response
         
+        # Obtain the request class
         request_class = SettingsLoaded.REQUEST_CLASS
 
         if not issubclass(request_class, HttpRequest):
@@ -975,7 +1032,7 @@ class BaseMicroServer(BaseServer):
             # Validate the response type.
             response = to_response(response)
             
-            # Send the http response back to client
+            # Send the HTTP response back to client (don't do finalization because it can alter some important headers)
             response_handler.send_response(
                 response,
                 sock=request.client_socket,
@@ -985,19 +1042,15 @@ class BaseMicroServer(BaseServer):
 
         except Exception as e:
             # Encountered an unknown error.
-            from duck.http.core.wsgi import get_server_error_response
+            from duck.http.core.wsgi import server_error
             
             # Send an http server error response to client.
-            response = get_server_error_response(e, request)
+            response = server_error(e, request)
            
-            # Finalize server error response
-            SettingsLoaded.WSGI.finalize_response(response, request)
-            
-            response_handler.send_response(
+            self.send_response(
                 response,
                 sock=request.client_socket,
                 request=request,
-                disable_logging=self.microapp.no_logs,
             )
             
             if not self.microapp.no_logs:
@@ -1020,6 +1073,7 @@ class BaseMicroServer(BaseServer):
         """
         from duck.shortcuts import to_response
         
+        # Get the request class
         request_class = SettingsLoaded.REQUEST_CLASS
 
         if not issubclass(request_class, HttpRequest):
@@ -1047,7 +1101,7 @@ class BaseMicroServer(BaseServer):
             # Validate the response type.
             response = to_response(response)
             
-            # Send the http response back to client
+            # Send the HTTP response back to client (don't do finalization because it can alter some important headers)
             await response_handler.async_send_response(
                 response,
                 sock=request.client_socket,
@@ -1057,19 +1111,15 @@ class BaseMicroServer(BaseServer):
 
         except Exception as e:
             # Encountered an unknown error.
-            from duck.http.core.asgi import get_server_error_response
+            from duck.http.core.asgi import async_server_error
             
             # Send an http server error response to client.
-            response = get_server_error_response(e, request)
-           
-            # Finalize server error response
-            await SettingsLoaded.ASGI.finalize_response(response, request)
+            response = await async_server_error(e, request)
             
-            await response_handler.async_send_response(
+            await self.async_send_response(
                 response,
                 sock=request.client_socket,
                 request=request,
-                disable_logging=self.microapp.no_logs,
             )
             
             if not self.microapp.no_logs:

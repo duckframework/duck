@@ -1,4 +1,4 @@
-# 🌀 Component Caching Utilities
+# Component Caching Utilities
 
 **Module:** `duck.html.components.utils.caching`
 

@@ -1,4 +1,4 @@
-# 💡Duck Shortcuts
+# Duck Shortcuts
 
 The **Duck Shortcuts Module** provides utility functions to simplify various tasks, such as rendering HTML templates, generating HTTP responses, and resolving URLs. These shortcuts streamline the process of handling requests and responses within the Duck framework.
 

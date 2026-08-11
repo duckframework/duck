@@ -1,4 +1,4 @@
-# 🔋Background Thread & Asyncio Loop Managers
+# Background Thread & Asyncio Loop Managers
 
 [![Sync Ready](https://img.shields.io/badge/Sync-Ready-brightgreen?style=for-the-badge&logo=python)](#)  
 [![Threaded](https://img.shields.io/badge/Threading-Supported-blue?style=for-the-badge&logo=windows-terminal)](#)  

@@ -1,4 +1,4 @@
-# ⚡ Asynchronous Server Gateway (ASGI)
+# Asynchronous Server Gateway (ASGI)
 
 [![Async Ready](https://img.shields.io/badge/Async-Ready-brightgreen?style=for-the-badge&logo=python)](#)  
 [![WebSocket Support](https://img.shields.io/badge/WebSocket-Supported-blue?style=for-the-badge&logo=websocket)](#)  

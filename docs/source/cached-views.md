@@ -1,4 +1,4 @@
-# 🗃 Cached Views 
+# Cached Views 
 
 *High-Performance Python Web Apps*  
 

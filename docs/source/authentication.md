@@ -1,4 +1,4 @@
-# 🔐 Authentication in Duck
+# Authentication
 
 Duck ships authentication helpers in `duck.contrib.auth` with two backends:
 

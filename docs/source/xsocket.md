@@ -1,4 +1,4 @@
-# 🔌 Socket I/O (xsocket)
+# Socket I/O (xsocket)
 
 [![Async Ready](https://img.shields.io/badge/Async-Ready-brightgreen?style=for-the-badge&logo=python)](#)  
 [![Non-Blocking](https://img.shields.io/badge/No-Blocking-blue?style=for-the-badge&logo=socketdotio)](#)  

@@ -1,4 +1,4 @@
-# 🛡️ Duck Middlewares
+# Duck Middlewares
 
 [![Middleware](https://img.shields.io/badge/Feature-Middleware-blue?style=for-the-badge)](#)  
 [![Duck Framework](https://img.shields.io/badge/Powered%20By-Duck-orange?style=for-the-badge&logo=duckframework)](#)

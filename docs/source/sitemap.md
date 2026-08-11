@@ -1,4 +1,4 @@
-# 📄 Sitemap
+# Sitemap
 
 Producing and serving a **sitemap** in Duck is straightforward. A sitemap is an XML file that lists all the pages of your website so search engines like Google can efficiently crawl your content.
 

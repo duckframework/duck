@@ -1,4 +1,4 @@
-# 🚧 HTTP/2 and HTTPS
+# HTTP/2 and HTTPS
 
 ## Leveraging HTTP/2
 

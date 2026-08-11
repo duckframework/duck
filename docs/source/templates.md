@@ -1,4 +1,4 @@
-# 📑 Templates
+# Templates
 
 *Python-Based HTML Rendering*  
 

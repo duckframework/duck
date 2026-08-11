@@ -384,26 +384,8 @@ async def async_render(
     Returns:
         TemplateResponse: Http response rendered using Django or Jinja2.
     """
-    allowed_engines = {"jinja2", "django"}
-
-    if engine not in allowed_engines:
-        raise TemplateError(
-            f"Provided engine not recognized, should be one of ['jinja2', 'django'] not '{engine}' "
-        )
-    try:
-        if engine == "jinja2":
-            return await sync_to_async(jinja2_render)(request, template, context, status_code, **kw)
-        else:
-            return await sync_to_async(django_render)(request, template, context, status_code, **kw)
-    except Exception as e:
-        _e = e
-        e = str(e)
-        if "Syntax error" in e or "syntax error" in e:
-            raise TemplateError(
-                f"Error rendering template, make sure you are using right template engine: {e}"
-            ) from _e
-        else:
-            raise _e  # reraise error
+    # TemplateResponse is now lazy so no need of using ensure_async
+    return render(request, template, context, status_code, engine, **kw)
 
 
 def redirect(location: str, permanent: bool = False, content_type="text/html", **kw):

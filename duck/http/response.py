@@ -7,8 +7,8 @@ import os
 import json
 import asyncio
 
-from http.cookies import SimpleCookie, Morsel
 from inspect import isasyncgen
+from http.cookies import SimpleCookie, Morsel
 from datetime import datetime, timedelta
 from collections.abc import (
     Iterable,
@@ -23,7 +23,7 @@ from typing import (
     Callable,
     Tuple,
     Any,
-    Awaitable,
+    Awaitable
 )
 
 from duck.settings import SETTINGS
@@ -39,7 +39,7 @@ from duck.template.environment import (
     Template,
 )
 from duck.html.components import Component
-from duck.contrib.sync import iscoroutinefunction, convert_to_async_if_needed
+from duck.contrib.sync import iscoroutinefunction, ensure_async
 from duck.exceptions.all import AsyncViolationError, FileNotFoundResponseError
 from duck.etc.statuscodes import responses
 from duck.utils.string import smart_truncate
@@ -51,12 +51,14 @@ from duck.utils.fileio import (
     to_async_fileio_stream,
 )
 
+
 StreamingType = Union[
     Callable[[], Union[bytes, str]],
     io.IOBase,
     Iterable[Union[bytes, str]]
 ]
 
+# Range configurations
 RANGE_HEADER_PATTERN = re.compile(r"bytes=(\d+)-(\d+)?")
 NEGATIVE_RANGE_PATTERN = re.compile(r"bytes=(-\d+)")
 
@@ -65,7 +67,7 @@ class BaseResponse:
     """
     Response object to represent raw response
     """
-
+    
     def __init__(
         self,
         payload_obj: HttpResponsePayload,
@@ -78,13 +80,15 @@ class BaseResponse:
             payload_obj (HttpResponsePayload): Response Header object to represent Header
             content_obj (Optional[Content]): Content object.
         """
-        assert isinstance(payload_obj, BaseResponsePayload), (
-            f"Expected payload type 'BaseResponsePayload', but got '{type(payload_obj).__name__}'"
-        )
+        assert isinstance(payload_obj, BaseResponsePayload), f"Expected payload type 'BaseResponsePayload', but got '{type(payload_obj).__name__}'"
+        
+        # Assign payload and content obj
         self.payload_obj: BaseResponsePayload = payload_obj
         self.content_obj: Content = content_obj or Content(b"")
+        
+        # Set the content type header
         self.set_content_type_header()
-    
+        
     @property
     def cookies(self) -> SimpleCookie:
         """
@@ -118,8 +122,12 @@ class BaseResponse:
             bytes: The raw byte representation of the response.
         """
         parts = [self.payload_obj.raw]
+        
+        # Add other parts
         parts.append(b"\r\n\r\n" if not parts[0].endswith(b"\r\n") else b"\r\n")
         parts.append(self.content or b"")
+        
+        # Return final raw data
         return b"".join(parts)
 
     @property
@@ -332,6 +340,15 @@ class BaseResponse:
         """
         self.payload_obj.delete_cookie(key, path, domain)
         
+    def set_content(self, content: Union[str, bytes]):
+        """
+        Set response content.
+        """
+        self.content_obj.set_content(content)
+        
+        # Reset content type headers
+        self.set_content_type_header()
+        
     def set_content_type_header(self):
         """
         Sets the 'Content-Type' header based on the current content type.
@@ -385,10 +402,16 @@ class HttpResponse(BaseResponse):
         headers: dict = {},
         content_type: Optional[str] = None,
     ):
+        # Initialize payload object.
         payload_obj = HttpResponsePayload()
+        
+        # Parse status to header payload
         payload_obj.parse_status(status_code)
-
-        payload_obj.headers.update(headers) # update payload headers
+        
+        # Update the headers
+        payload_obj.headers.update(headers)
+        
+        # Get declared content type header
         content_type_header = payload_obj.get_header("content-type")
         
         if content_type and content_type_header:
@@ -397,17 +420,137 @@ class HttpResponse(BaseResponse):
                 "Please provide it in one place only: either as an argument or in the headers."
             )
         
+        # Encode content to bytes.
         if content and isinstance(content, str):
             content = content.encode("utf-8")
         
-        # set content object
-        content_obj = Content(
-            data=content,
-            content_type=content_type or content_type_header,
-        )
+        # Create the content object
+        content_obj = Content(data=content, content_type=content_type or content_type_header)
+        
+        # Super initialize.
         super().__init__(payload_obj, content_obj)
 
-    
+
+class LazyHttpResponse(HttpResponse):
+    """
+    Base class for HTTP responses whose content is generated lazily.
+
+    A lazy response does not generate its content when it is instantiated.
+    Instead, the server loads the content when the response is ready to be
+    sent. The generated content is cached and reused for subsequent loads.
+
+    Subclasses must implement `load` to provide synchronous content
+    generation. Subclasses that support asynchronous content generation
+    should additionally override `async_load`.
+    """
+
+    _UNLOADED = object()
+
+    def __init__(
+        self,
+        status_code: int = 200,
+        headers: Optional[dict] = None,
+        content_type: Optional[str] = None,
+    ):
+        """
+        Initialize a lazy HTTP response.
+
+        Args:
+            status_code: HTTP status code of the response.
+            headers: Optional HTTP response headers.
+            content_type: Optional MIME type of the response content.
+        """
+        self._loaded_content = self._UNLOADED
+
+        super().__init__(
+            None,
+            status_code=status_code,
+            headers=headers or {},
+            content_type=content_type,
+        )
+
+    @property
+    def is_loaded(self) -> bool:
+        """
+        Determine whether the response content has been loaded.
+
+        Returns:
+            True if the response content has already been generated,
+            otherwise False.
+        """
+        return self._loaded_content is not self._UNLOADED
+
+    def _load(self) -> None:
+        """
+        Generate and cache the response content synchronously.
+
+        If the response has already been loaded, the cached content is
+        reused and the content generator is not called again.
+        """
+        if self.is_loaded:
+            return
+
+        # Set content flag
+        self._loaded_content = self.load()
+        
+        # Set the actual content.
+        self.set_content(self._loaded_content)
+        
+    async def _async_load(self) -> None:
+        """
+        Generate and cache the response content asynchronously.
+
+        If the response has already been loaded, the cached content is
+        reused and the asynchronous content generator is not called again.
+        """
+        if self.is_loaded:
+            return
+
+        # Set content flag
+        self._loaded_content = await self.async_load()
+        
+        # Set the actual content.
+        self.set_content(self._loaded_content)
+        
+    def load(self) -> Union[str, bytes]:
+        """
+        Generate the response content synchronously.
+
+        Subclasses must override this method and return the content that
+        should be sent as the HTTP response body.
+
+        Returns:
+            The generated response content.
+
+        Raises:
+            NotImplementedError: If a subclass does not provide a concrete
+                implementation of synchronous content generation.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} must implement load() to generate "
+            "its response content."
+        )
+
+    async def async_load(self) -> Union[str, bytes]:
+        """
+        Generate the response content asynchronously.
+
+        Subclasses that require asynchronous content generation should
+        override this method.
+
+        Returns:
+            The generated response content.
+
+        Raises:
+            NotImplementedError: If asynchronous loading is requested but
+                the subclass does not provide an asynchronous implementation.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support asynchronous loading. "
+            "Override async_load() to provide an asynchronous implementation."
+        )
+
+
 class StreamingHttpResponse(HttpResponse):
     """
     Class representing an HTTP streaming response.
@@ -461,7 +604,11 @@ class StreamingHttpResponse(HttpResponse):
             headers=headers,
             content_type=content_type,
         )
+        
+        # Initialize default chunk size
         default_chunk_size = 2 * 1024 * 1024
+        
+        # Set some variables
         self.chunk_size = chunk_size
         self.stream = stream
         
@@ -679,14 +826,27 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
         Initialize StreamingRangeHttpResponse class.
         
         Args:
-            stream (io.IOBase): The stream from which to read the response data. 
-                                 It can be a file-like object or an in-memory stream.
-            status_code (int): The HTTP status code to return. Defaults to 206 (Partial Content).
-            headers (Dict): Additional HTTP headers to include in the response. Defaults to an empty dict.
-            content_type (str): The MIME type of the response content. Defaults to 'application/octet-stream'.
-            chunk_size (int): The number of bytes to send in each chunk. Defaults to 2MB (2 * 1024 * 1024 bytes).
-            start_pos (int): The starting byte position for the range request. Defaults to 0, can also be a negative.
-            end_pos (int): The ending byte position for the range request. Defaults to -1, meaning the entire stream is used.
+            stream (io.IOBase):
+                The stream from which to read the response data. 
+                 It can be a file-like object or an in-memory stream.
+                 
+            status_code (int):
+                The HTTP status code to return. Defaults to 206 (Partial Content).
+            
+            headers (Dict):
+                Additional HTTP headers to include in the response. Defaults to an empty dict.
+            
+            content_type (str):
+                The MIME type of the response content. Defaults to 'application/octet-stream'.
+            
+            chunk_size (int):
+                The number of bytes to send in each chunk. Defaults to 2MB (2 * 1024 * 1024 bytes).
+            
+            start_pos (int):
+                The starting byte position for the range request. Defaults to 0, can also be a negative.
+            
+            end_pos (int):
+                The ending byte position for the range request. Defaults to -1, meaning the entire stream is used.
         """
         
         # Validate and assign the stream and content type
@@ -789,6 +949,7 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
         # Check stream compatibility
         for method_name in required_methods:
             method = getattr(stream, method_name, None)
+            
             if method is None:
                 raise ValueError(f"Missing required method `{method_name}` in stream object.")
                 
@@ -809,8 +970,13 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
         if not hasattr(self.stream, 'seek') or not hasattr(self.stream, 'tell'):
             raise ValueError("Stream must support seeking to determine start and end position. Must have `seek` and `tell` methods.")
         
-        default_offset = self.stream.tell() # get current offset
-        self.stream.seek(0, io.SEEK_END) # seek to EOF
+        # Get current offset
+        default_offset = self.stream.tell() 
+        
+        # Seek to EOF
+        self.stream.seek(0, io.SEEK_END)
+        
+        # Get stream length
         stream_length = self.stream.tell()
         
         # If end_pos is -1, calculate it based on the stream length
@@ -826,6 +992,7 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
         # Reset stream to beginning
         self.stream.seek(default_offset)
         
+        # Set start and end positions
         self.start_pos = start_pos
         self.end_pos = end_pos
         
@@ -930,16 +1097,29 @@ class FileResponse(StreamingRangeHttpResponse):
         or as a single response based on its size and ensures appropriate headers and content type are set.
     
         Args:
-            filepath (str): The path to the file to be streamed.
-            headers (Dict, optional): Additional HTTP headers to include in the response. Defaults to an empty dictionary.
-            status_code (int, optional): The HTTP status code for the response. Defaults to 200 (OK).
-            content_type (Optional[str], optional): The MIME type of the response content. If not provided, it is inferred 
-                                                    from the file's extension. Defaults to None.
-            chunk_size (int, optional): The size of chunks (in bytes) for streaming the file. Defaults to 2 MB 
-                                        (2 * 1024 * 1024 bytes). For files smaller than 5 MB, the entire file 
-                                        will be streamed at once.
-            start_pos (int): The starting byte position for the range request. Defaults to 0.
-            end_pos (int): The ending byte position for the range request. Defaults to -1, meaning the entire stream is used.
+            filepath (str):
+                The path to the file to be streamed.
+            
+            headers (Dict, optional):
+                Additional HTTP headers to include in the response. Defaults to an empty dictionary.
+            
+            status_code (int, optional):
+                The HTTP status code for the response. Defaults to 200 (OK).
+            
+            content_type (Optional[str], optional):
+                The MIME type of the response content. If not provided, it is inferred 
+                from the file's extension. Defaults to None.
+            
+            chunk_size (int, optional):
+                The size of chunks (in bytes) for streaming the file. Defaults to 2 MB 
+                 (2 * 1024 * 1024 bytes). For files smaller than 5 MB, the entire file 
+                 will be streamed at once.
+                 
+            start_pos (int):
+                The starting byte position for the range request. Defaults to 0.
+                
+            end_pos (int):
+                The ending byte position for the range request. Defaults to -1, meaning the entire stream is used.
     
         Raises:
             FileNotFoundResponseError: If the specified file does not exist.
@@ -951,14 +1131,14 @@ class FileResponse(StreamingRangeHttpResponse):
             - For files smaller than 5 MB, the file will be streamed as a single response by overriding the `chunk_size`.
     
         Example:
-            ```py
-            response = CustomFileStreamer(
-                filepath="/path/to/file.txt",
-                headers={"Content-Disposition": "attachment; filename=file.txt"},
-                content_type="text/plain",
-                chunk_size=8192,
-            )
-            ```
+        ```py
+        response = CustomFileStreamer(
+            filepath="/path/to/file.txt",
+            headers={"Content-Disposition": "attachment; filename=file.txt"},
+            content_type="text/plain",
+            chunk_size=8192,
+        )
+        ```
         """
         file_stream: Union[FileIOStream, AsyncFileIOStream]
         
@@ -986,12 +1166,18 @@ class FileResponse(StreamingRangeHttpResponse):
             end_pos=end_pos,
         )
         
+        # Set file size
         self.file_size = self.stream._file_size
         
-        if not content_type:  # content type was not provided
-            self.content_obj.filepath = filepath  # sets the content filepath
-            self.content_obj.parse_type(None)  # recalculate the content_type using the set filepath
-            self.set_content_type_header()  # resets content type header
+        if not content_type:
+            # Content type was not provided
+            self.content_obj.filepath = filepath 
+            
+            # Recalculate the content_type using the set filepath
+            self.content_obj.parse_type(None)
+            
+            # Resets content type header
+            self.set_content_type_header()
 
 
 class HttpRedirectResponse(HttpResponse):
@@ -1006,18 +1192,26 @@ class HttpRedirectResponse(HttpResponse):
         content_type: Optional[str] = None,
         permanent: bool = False,
     ):
+        
+        # Initialize new headers
         headers = {"Location": "%s" % location, **headers}
+        
+        # Set location just for reference
         self.location = location
-        status_code = 302  # temporary redirect
-
+        
+        # Temporary redirect
+        status_code = 302
+        
         if permanent:
-            status_code = 301  # permanent redirect
+            # Permanent redirect
+            status_code = 301
 
         super().__init__(
             "",
             status_code,
             headers=headers,
-            content_type=content_type)
+            content_type=content_type,
+        )
 
 
 class HttpSwitchProtocolResponse(HttpResponse):
@@ -1039,15 +1233,11 @@ class HttpSwitchProtocolResponse(HttpResponse):
             headers (Dict): Additional headers to include in the response.
             content_type (str): Content-Type header (not usually needed for 101 response).
         """
-        headers = {
-            "Connection": "Upgrade",
-            "Upgrade": upgrade_to,
-            **headers,
-        }
-
+        headers = {"Connection": "Upgrade", "Upgrade": upgrade_to, **headers}
+        
         super().__init__(
             content="",
-            status_code=101,  # 101 Switching Protocols
+            status_code=101,
             headers=headers,
             content_type=content_type,
         )  
@@ -1064,11 +1254,11 @@ class JsonResponse(HttpResponse):
         headers: Dict = {},
         content_type = "application/json",
     ):
+        # Set JSON object for reference.
         self.json_obj = content or {}
-        self.json_content = json.dumps(self.json_obj).encode('utf-8')
         
         super().__init__(
-            self.json_content,
+            json.dumps(self.json_obj).encode('utf-8'),
             status_code,
             headers=headers,
             content_type=content_type,
@@ -1100,7 +1290,7 @@ class HttpErrorRequestResponse(HttpResponse):
 
 class HttpRangeNotSatisfiableResponse(HttpErrorRequestResponse):
     """
-    Class representing an http range not satisfiable response.
+    Class representing an HTTP Range Not Satisfiable Response.
     """
 
     def __init__(
@@ -1109,11 +1299,9 @@ class HttpRangeNotSatisfiableResponse(HttpErrorRequestResponse):
         headers: Dict = {},
         content_type: Optional[str] = None,
     ):
-        status_code = 416
-
         super().__init__(
             content,
-            status_code,
+            status_code=416,
             headers=headers,
             content_type=content_type,
         )
@@ -1130,11 +1318,9 @@ class HttpBadRequestResponse(HttpErrorRequestResponse):
         headers: Dict = {},
         content_type: Optional[str] = None,
     ):
-        status_code = 400
-
         super().__init__(
             content,
-            status_code,
+            status_code=400,
             headers=headers,
             content_type=content_type,
         )
@@ -1151,11 +1337,9 @@ class HttpForbiddenRequestResponse(HttpErrorRequestResponse):
         headers: Dict = {},
         content_type: Optional[str] = None,
     ):
-        status_code = 403
-
         super().__init__(
             content,
-            status_code,
+            status_code=403,
             headers=headers,
             content_type=content_type,
         )
@@ -1172,13 +1356,12 @@ class HttpBadRequestSyntaxResponse(HttpErrorRequestResponse):
         headers: Dict = {},
         content_type: Optional[str] = None,
     ):
-        status_code = 400
-
         super().__init__(
             content,
-            status_code,
+            status_code=400,
             headers=headers,
-            content_type=content_type)
+            content_type=content_type,
+        )
 
 
 class HttpUnsupportedVersionResponse(HttpErrorRequestResponse):
@@ -1192,13 +1375,12 @@ class HttpUnsupportedVersionResponse(HttpErrorRequestResponse):
         headers: Dict = {},
         content_type: Optional[str] = None,
     ):
-        status_code = 505
-
         super().__init__(
             content,
-            status_code,
+            status_code=505,
             headers=headers,
-            content_type=content_type)
+            content_type=content_type,
+        )
 
 
 class HttpNotFoundResponse(HttpErrorRequestResponse):
@@ -1212,12 +1394,12 @@ class HttpNotFoundResponse(HttpErrorRequestResponse):
         headers: Dict = {},
         content_type: Optional[str] = None,
     ):
-        status_code = 404
-
-        super().__init__(content,
-                         status_code,
-                         headers=headers,
-                         content_type=content_type)
+        super().__init__(
+            content,
+            status_code=404,
+            headers=headers,
+            content_type=content_type,
+        )
 
 
 class HttpMethodNotAllowedResponse(HttpErrorRequestResponse):
@@ -1231,12 +1413,12 @@ class HttpMethodNotAllowedResponse(HttpErrorRequestResponse):
         headers: Dict = {},
         content_type: Optional[str] = None,
     ):
-        status_code = 405
-
-        super().__init__(content,
-                         status_code,
-                         headers=headers,
-                         content_type=content_type)
+        super().__init__(
+            content,
+            status_code=405,
+            headers=headers,
+            content_type=content_type,
+        )
 
 
 class HttpServerErrorResponse(HttpErrorRequestResponse):
@@ -1250,12 +1432,12 @@ class HttpServerErrorResponse(HttpErrorRequestResponse):
         headers: Dict = {},
         content_type: Optional[str] = None,
     ):
-        status_code = 500
-
-        super().__init__(content,
-                         status_code,
-                         headers=headers,
-                         content_type=content_type)
+        super().__init__(
+            content,
+            status_code=500,
+            headers=headers,
+           content_type=content_type,
+       )
 
 
 class HttpBadGatewayResponse(HttpErrorRequestResponse):
@@ -1269,12 +1451,12 @@ class HttpBadGatewayResponse(HttpErrorRequestResponse):
         headers: Dict = {},
         content_type: Optional[str] = None,
     ):
-        status_code = 502
-
-        super().__init__(content,
-                         status_code,
-                         headers=headers,
-                         content_type=content_type)
+        super().__init__(
+            content,
+            status_code=502,
+            headers=headers,
+            content_type=content_type,
+        )
 
 
 class HttpTooManyRequestsResponse(HttpErrorRequestResponse):
@@ -1288,12 +1470,12 @@ class HttpTooManyRequestsResponse(HttpErrorRequestResponse):
         headers: Dict = {},
         content_type: Optional[str] = None,
     ):
-        status_code = 429
-
-        super().__init__(content,
-                         status_code,
-                         headers=headers,
-                         content_type=content_type)
+        super().__init__(
+            content,
+            status_code=429,
+            headers=headers,
+            content_type=content_type,
+        )
 
 
 class HttpRequestTimeoutResponse(HttpErrorRequestResponse):
@@ -1307,19 +1489,18 @@ class HttpRequestTimeoutResponse(HttpErrorRequestResponse):
         headers: Dict = {},
         content_type: Optional[str] = None,
     ):
-        status_code = 408
-
-        super().__init__(content,
-                         status_code,
-                         headers=headers,
-                         content_type=content_type)
+        super().__init__(
+            content,
+            status_code=408,
+            headers=headers,
+            content_type=content_type,
+        )
 
 
 class TemplateResponse(HttpResponse):
     """
     TemplateResponse class representing an http  template response.
     """
-
     def __init__(
         self,
         request: HttpRequest,
@@ -1330,13 +1511,17 @@ class TemplateResponse(HttpResponse):
         content_type: str = "text/html",
         engine: Optional[Engine] = None,
     ):
+        # Set some attributes
         self.template = template
         self.request = request
         self.context = context or {}
         self.engine = engine
         
+        # Initialize rendered template
+        self._rendered = None
+        
         # Update the context
-        self.context.update({"request": request})  # add request to context
+        self.context.update({"request": request})
         
         # Create template object for rendering.
         self._template_obj = Template(
@@ -1345,19 +1530,32 @@ class TemplateResponse(HttpResponse):
             engine=engine,
         )
         
-        # Render template
-        rendered = self._template_obj.render_template()
-        
         # Initialize response object.
         super().__init__(
-            rendered,
+            None,
             status_code,
             headers=headers,
             content_type=content_type,
         )
 
+    def load(self) -> str:
+        """
+        Renders temp and returns the content.
+        """
+        if self._rendered is None:
+            self._rendered = self.template.render()
+        return self._rendered
+       
+    async def async_load(self) -> str:
+        """
+        Renders component and updates the content.
+        """
+        if self._rendered is None:
+            self._rendered = await ensure_async(self.template.render)()
+        return self._rendered
 
-class ComponentResponse(StreamingHttpResponse):
+
+class ComponentResponse(LazyHttpResponse):
     """
     HTTP response that streams the rendered output of an HTML component.
     
@@ -1382,14 +1580,13 @@ class ComponentResponse(StreamingHttpResponse):
             raise ValueError("Component is required for this response.")
 
         if not isinstance(component, Component):
-            raise TypeError(f"Component should be an instance of Component, not {type(component).__name__}.")
+            raise TypeError(f"Component must be an instance of Component, not {type(component).__name__}.")
 
+        # Set some variables
         self.component = component
-        self._rendered_component = None
         
         # Initialize response object.
         super().__init__(
-            stream=[],
             status_code=status_code,
             headers=headers or {},
             content_type=content_type,
@@ -1399,26 +1596,31 @@ class ComponentResponse(StreamingHttpResponse):
         if hasattr(component, "fullpage_reload_headers"):
             if any([h.lower() in self.headers for h in component.fullpage_reload_headers]):
                 component.fullpage_reload = True
-                
-    def iter_content(self) -> Generator[bytes, None, None]:
-        if not self._rendered_component:
-            if not self.component.is_loaded():
-                # This is a lazy component
-                if self.component.is_loading():
-                    self.wait_for_load()
-                else:
-                    self.component.load()
-            self._rendered_component = self.component.render()
-        yield self._rendered_component.encode('utf-8')
     
-    async def async_iter_content(self) -> AsyncGenerator[bytes, None]:
-        if not self._rendered_component:
-            if not self.component.is_loaded():
-                # This is a lazy component
-                if self.component.is_loading():
-                    await self.component.async_wait_for_load()
-                else:
-                    await self.component.async_load()
-            self._rendered_component = await self.component.async_render()
-        yield self._rendered_component.encode('utf-8')
-    
+    def load(self) -> str:
+        """
+        Renders component and returns the content.
+        """
+        if not self.component.is_loaded():
+            # This is a lazy component
+            if self.component.is_loading():
+                self.component.wait_for_load()
+            else:
+                self.component.load()
+        
+        # Update the content.
+        return self.component.render()
+        
+    async def async_load(self) -> str:
+        """
+        Renders component and returns the content.
+        """
+        if not self.component.is_loaded():
+            # This is a lazy component
+            if self.component.is_loading():
+                await self.component.async_wait_for_load()
+            else:
+                await self.component.async_load()
+        
+        # Update the content.
+        return await self.component.async_render()

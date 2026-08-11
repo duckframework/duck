@@ -97,8 +97,8 @@ IGNORE_NORMALIZATION_ERRORS: bool = True
 # Note: If a backend server like Django is used, then content compression will depend on that server.
 CONTENT_COMPRESSION: dict[str] = {
     "encoding": "gzip",
-    "min_size": 1024,  # files more than 1KB
-    "max_size": 512 * 1024,  # files not more than 512KB
+    "min_size": 1024,  # Files more than 1KB
+    "max_size": 512 * 1024,  # Files not more than 512KB
     "level": 5,
     "compress_streaming_responses": True, # Whether to compress streaming http responses.
     "vary_on": True,  # Whether to include Vary header in response
@@ -110,7 +110,7 @@ CONTENT_COMPRESSION: dict[str] = {
         "application/xhtml+xml",
         "application/rss+xml",
         "application/atom+xml",
-    ],  # avoid compressing already compressed files like images
+    ],  # Avoid compressing already compressed files like images
 }
 
 
@@ -368,7 +368,7 @@ SERVER_POLL: int | float = 0.01
 
 # Mode for connection
 # If keep-alive, the client requests will be handled using keep-alive if Header connection is set to the respective connection mode.
-CONNECTION_MODE: str = "close"
+CONNECTION_MODE: str = "keep-alive"
 
 
 # Keep-Alive Timeout
@@ -670,6 +670,22 @@ FILE_UPLOAD_HANDLER: str = "duck.http.fileuploads.handlers.PersistentFileUpload"
 # - Required if `PersistentFileUpload` is used as the `FILE_UPLOAD_HANDLER`.
 # - The directory will be automatically created if it doesn't already exist.
 FILE_UPLOAD_DIR: str = BASE_DIR / "assets/uploads"
+
+
+# Maximum Data Upload
+# Specifies the maximum size allowed for the entire raw request — headers and
+# body combined, in bytes. Since this covers the whole request, keep it
+# greater than or equal to FILE_UPLOAD_MAX_SIZE, otherwise uploads near that
+# limit will be rejected before FILE_UPLOAD_MAX_SIZE is ever checked.
+# Set to "None" to allow requests of any size.
+DATA_UPLOAD_MAX_SIZE: int | None = 100 * 1024 * 1024 # 100mb
+
+
+# Maximum File Upload
+# Specifies the maximum size allowed for an individual uploaded file, in bytes.
+# Uploads exceeding this limit will be rejected.
+# Set to "None" to allow files of any size.
+FILE_UPLOAD_MAX_SIZE: int | None = 100 * 1024 * 1024 # 100mb
 
 
 # LOGGING SETTINGS

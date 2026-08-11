@@ -1,4 +1,4 @@
-# 🔐 Free SSL Certificate
+# Free SSL Certificate
 
 **Duck** provides seamless support for **Let's Encrypt SSL certificates** with automatic and lifetime renewals using `certbot` in combination with **Duck automation** and **blueprints**.
 

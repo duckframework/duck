@@ -163,3 +163,54 @@ class EventOpCode(enum.IntEnum):
     Where:
         fetch_url: The unique URL to perform fetch on.
     """
+    
+    REQUEST_FILE = 130
+    """
+    int: Request the client to open a file picker and upload the selected
+    file to a receiving view. Sent from server to client.
+    
+    Format: [130, [form_id, file_id, name, upload_url, allowed_mimes, fire_on_progress, auth_token]]
+    
+    Where:
+        form_id: ID of the form containing the file input.
+        file_id: Unique ID correlating this request with its upload.
+        name: The name of file input to request file from.
+        upload_url: URL the client should POST the file to.
+        allowed_mimes: List of accepted MIME types (e.g. ["image/png", "image/jpeg"]).
+        fire_on_progress: Whether to keep make client notify us on upload progress. 
+        auth_token: CSRF token authorizing this specific upload.
+    """
+
+    FILE_UPLOAD_ERROR = 131
+    """
+    int: Notify the server that a requested file upload failed on the client
+    side, e.g. picker cancelled or upload rejected. Sent from client to server.
+
+    Format: [131, [file_id, reason]]
+
+    Where:
+        file_id: Unique ID of the failed file request.
+        reason: Short description of the failure.
+    """
+    
+    FILE_UPLOAD_STARTED = 132
+    """
+    int: Notify the server that the client has begun uploading a requested
+    file. Sent from client to server.
+
+    Format: [132, [file_id]]
+
+    Where:
+        file_id: Unique ID of the file request now in progress.
+    """
+    
+    FILE_UPLOAD_PROGRESS = 133
+    """
+    int: Notify the server on file upload progress.
+
+    Format: [133, [file_id, progress_percent]]
+
+    Where:
+        file_id: Unique ID of the file request now in progress.
+        progress_percent: The progress percentage as a float.
+    """

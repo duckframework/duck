@@ -203,7 +203,7 @@ def guess_data_mimetype(data: bytes) -> str:
     ):
         return "application/javascript"
 
-    elif all(32 <= byte <= 126 or byte in (9, 10, 13) for byte in data):
+    elif not data or all(32 <= byte <= 126 or byte in (9, 10, 13) for byte in data):
         return "text/plain"
 
     return "application/octet-stream"

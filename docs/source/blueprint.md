@@ -1,4 +1,4 @@
-# 📘 Blueprints
+# Blueprints
 
 **Blueprints** are a way to organize routes/urlpatterns for better management. 
 Blueprints let you group URL patterns under a single namespace. These are more like **Django apps** or 

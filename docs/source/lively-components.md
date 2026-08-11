@@ -1,4 +1,4 @@
-# 🖥️ Lively Component System
+# Lively UI
 
 *Reactive Python UI Without JavaScript*
 
@@ -119,7 +119,7 @@ class HomePage(Page):
 ## Guidelines
 
 When vibecoding or working with these components, refer to the guidelines directory in our GitHub repository:
-https://github.com/duckframework/duck/blob/main/ai⁠  
+https://github.com/duckframework/duck/tree/main/ai  
 
 This directory provides best practices for building scalable, maintainable components and structuring projects effectively.
 
@@ -612,6 +612,111 @@ Also, only file metadata (size, type & name) is received on `submit` event becau
 to handle file uploads. You need to manually call internal api's or views for file uploads and update the UI 
 if complete. One case you can do this is that you may execute JS for doing an `AJAX` request and update
 the UI once the response is received.
+
+---
+
+## File Uploads in Lively
+
+Lively supports requesting file uploads from the client directly inside event handlers
+via `ws_request_file`. When called, it waits for the user to select a file on the target
+input and uploads it automatically once selected, with progress and status reported back
+in real time.
+
+Basic usage:
+
+```python
+from duck.html.components.core.lively_utils.file_request import ws_request_file
+from duck.http.fileuploads import FileVerificationError, FileTypeNotAllowedError
+
+
+async def on_form_submit(..., ws):
+    file = await ws_request_file(form_id="...", name="...", ws)
+
+    # Verify file contents - only if allowed_mimes not passed to ws_request_file.
+    try:
+        file.verify()  # You can pass allowed_mimes here as well
+    except (FileVerificationError, FileTypeNotAllowedError):
+        # Do something here
+        raise
+
+    # Do whatever you want with the file here - maybe saving
+    await file.async_save()
+```
+
+Advanced usage:
+
+```python
+from duck.html.components.core.lively_utils.file_request import (
+    ws_request_file,
+    FileTypeNotAllowedError,
+    FileNotSelectedError,
+    FileUploadError,
+)
+
+async def on_form_submit(..., ws):
+    try:
+        file = await ws_request_file(form_id="...", name="...", ws, allowed_mimes=["image/png"])
+
+    except TimeoutError:
+        # Client did not upload a file in the given timeout
+        raise
+
+    except FileTypeNotAllowedError:
+        # Do something here
+        raise
+
+    except FileNotSelectedError:
+        # Do something here
+        raise
+
+    except FileUploadError:
+        # Catch-all for file upload related exceptions
+        raise
+
+    # No file.verify() needed - already called because allowed_mimes was passed
+    await file.async_save()
+```
+
+With real-time progress:
+
+```python
+from duck.html.components.core.lively_utils.file_request import (
+    ws_request_file,
+    FileTypeNotAllowedError,
+    FileNotSelectedError,
+    FileUploadError,
+)
+
+async def on_progress(progress):
+    # Maybe update UI here
+    print(progress)
+
+async def on_form_submit(..., ws):
+    try:
+        file = await ws_request_file(
+            form_id="...", name="...", ws,
+            allowed_mimes=["image/png"],
+            on_progress=on_progress,
+        )
+
+    except TimeoutError:
+        raise
+
+    except FileTypeNotAllowedError:
+        raise
+
+    except FileNotSelectedError:
+        raise
+
+    except FileUploadError:
+        raise
+
+    await file.async_save()
+```
+
+> **Note:** Exception classes from `duck.http.fileuploads` and
+> `duck.html.components.core.lively_utils.file_request` refer to the same thing.
+> Run `help(ws_request_file)` to see all available configurations.
 
 ---
 

@@ -19,16 +19,16 @@ from duck.http.content import COMPRESS_STREAMING_RESPONSES
 from duck.http.request import HttpRequest
 from duck.http.response import (
     HttpResponse,
+    LazyHttpResponse,
     ComponentResponse,
     StreamingHttpResponse,
     StreamingRangeHttpResponse,
     HttpRangeNotSatisfiableResponse,
 )
-from duck.logging.logger import (
-    handle_exception as log_failsafe,
-)
+from duck.logging.logger import handle_exception as log_failsafe
 from duck.settings import SETTINGS
 from duck.utils.dateutils import gmt_date
+from duck.csp import csp_nonce, csp_nonce_flag
 from duck.shortcuts import (
     replace_response,
     make_response,
@@ -36,7 +36,6 @@ from duck.shortcuts import (
     content_replace,
     streaming_content_replace,
 )
-from duck.csp import csp_nonce, csp_nonce_flag
 
 
 # Custom templates for predefined responses
@@ -189,23 +188,53 @@ class ResponseFinalizer:
     @log_failsafe
     def do_set_connection_mode(self, response, request) -> None:
         """
-        Sets the correct response connection mode, i.e. `keep-alive` or `close`.
+        Sets the response connection mode according to the HTTP version,
+        client request, and server connection-mode configuration.
+    
+        HTTP/1.1 uses persistent connections by default, while HTTP/1.0
+        requires an explicit ``Connection: keep-alive`` header.
+    
+        The server's configured connection mode can restrict persistent
+        connections, but cannot force a client to keep a connection open
+        when the client explicitly requests ``Connection: close``.
+    
+        Args:
+            response: HTTP response whose Connection header should be set.
+            request: HTTP request associated with the response.
         """
-        connection_mode = None
         server_mode = SETTINGS["CONNECTION_MODE"].lower()
-
+        
         if not request:
-            response.set_header_if_absent("Connection", "close")
+            response.set_header("Connection", "close")
             return
-
-        if request.connection == server_mode:
-            connection_mode = server_mode
+    
+        # Initialize some variables. 
+        request_mode = request.connection
+        http_version = request.http_version
+    
+        # The client explicitly requested that the connection be closed.
+        if request_mode == "close":
+            connection_mode = "close"
+    
+        # The server does not permit persistent connections.
+        elif server_mode == "close":
+            connection_mode = "close"
+    
+        # HTTP/1.1 connections are persistent by default.
+        elif http_version == "HTTP/1.1":
+            connection_mode = "keep-alive"
+    
+        # HTTP/1.0 requires an explicit keep-alive request.
+        elif http_version == "HTTP/1.0":
+            connection_mode = "keep-alive" if request_mode == "keep-alive" else "close"
+            
+        # Unknown HTTP versions fail closed.
         else:
             connection_mode = "close"
-        
-        # Set the header explicitly even if modified by user.
+    
+        # Explicitly override any user-supplied Connection header.
         response.set_header("Connection", connection_mode)
-
+        
     @log_failsafe
     def do_set_extra_headers(self, response, request) -> None:
         """
@@ -265,15 +294,14 @@ class ResponseFinalizer:
             response.content_obj.compression_min_size = COMPRESSION_MIN_SIZE
             response.content_obj.compression_max_size = COMPRESSION_MAX_SIZE
             response.content_obj.compression_mimetypes = COMPRESSION_MIMETYPES
+            
+            # Compress the content
             compressed = response.content_obj.compress(COMPRESSION_ENCODING)
             
             if compressed:
                 response.set_header("Content-Encoding", response.content_obj.encoding)
             else:
-                response.set_header(
-                    "Content-Encoding",
-                    response.content_obj.correct_encoding(),
-                )
+                response.set_header("Content-Encoding", response.content_obj.correct_encoding())
             
         else:
             # Streaming HTTP response here.
@@ -290,7 +318,10 @@ class ResponseFinalizer:
                     # Compression not applicable.
                     return
                     
+            # Get content type
             content_type = response.get_header("content-type", "")
+            
+            # Initialize total stream size
             total_stream_size = None
             
             if hasattr(response, "stream") and hasattr(response.stream, "tell") and hasattr(response.stream, "seek"):
@@ -489,6 +520,10 @@ class ResponseFinalizer:
         """
         Puts the final touches to the response.
         """
+        if isinstance(response, LazyHttpResponse):
+            # Load if response is lazy
+            response._load()
+            
         # All of the following method calls are failsafe meaning failure of any method
         # will not affect the execution of other methods, thus an error encountered will be
         # logged appropriately. Decorator responsible: @log_failsafe
@@ -722,6 +757,10 @@ class AsyncResponseFinalizer(ResponseFinalizer):
         """
         Puts the final touches to the response.
         """
+        if isinstance(response, LazyHttpResponse):
+            # Load if response is lazy
+            await response._async_load()
+            
         # All of the following method calls are failsafe meaning failure of any method
         # will not affect the execution of other methods, thus an error encountered will be
         # logged appropriately. Decorator responsible: @log_failsafe

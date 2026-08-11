@@ -248,7 +248,7 @@ CSP_TRUSTED_SOURCES: dict = {
 
 # Mode for connection
 # If keep-alive, the client requests will be handled using keep-alive if Header connection is set to the respective connection mode.
-CONNECTION_MODE: str = "close"
+CONNECTION_MODE: str = "keep-alive"
 
 
 # DJANGO INTEGRATION

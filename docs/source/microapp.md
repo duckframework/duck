@@ -1,4 +1,4 @@
-# ⛴️ Micro Applications
+# Micro Applications
 
 ## What is a Micro App?
 

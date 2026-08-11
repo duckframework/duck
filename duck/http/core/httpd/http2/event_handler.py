@@ -137,12 +137,12 @@ class EventHandler:
         
         if SETTINGS['ASYNC_HANDLING']:
             # We are in async context
-            coro = self.server.async_handle_request_data(
+            await self.server.async_handle_request_data(
                 self.protocol.sock,
                 self.protocol.addr,
                 request_data,
             )
-            await coro
+            
         else:
             # The server is using threads to manage the connection, so we need to dispose the processing of request
             # back to the current thread so that it will be handled synchronously rather than in async context.
@@ -175,8 +175,9 @@ class EventHandler:
             
         # Add task to queue so that will be executed synchronously.
         future = SyncFuture()
+        
+        # Add future to queue
         self.protocol.sync_queue.put((func, future))
-        await convert_to_async_if_needed(future.result)()
         
     def on_stream_reset(self, stream_id: int):
         """
@@ -198,11 +199,13 @@ class EventHandler:
             
         # Cancel flow control future if one exists
         future = self.flow_control_futures.pop(stream_id, None)
+        
         if future and not future.done():
             future.cancel()
         
         # Cancel any tasks if any
         tasks = self.async_tasks.pop(stream_id, [])
+        
         for task in tasks:
             if task and not task.done():
                 task.cancel()
@@ -239,8 +242,11 @@ class EventHandler:
             for task in tasks:
                 task.cancel()
         
+        # Reset some data
         self.flow_control_futures = {}
         self.async_tasks = {}
+        
+        # Call connection lost handler
         self.protocol.connection_lost()
         
     async def wait_for_flow_control(self, stream_id: int):
@@ -273,17 +279,26 @@ class EventHandler:
                             # StreamEnded, RequestReceived & DataReceived events
                             # This is a safety measure because using tasks is also periodically causing SSL errors.
                             task = create_task(handler(event))
+                            
                             if isinstance(event, RequestReceived):
                                 self.async_tasks[event.stream_id] = [task]
+                            
                             else:
                                 tasks = self.async_tasks.get(event.stream_id, [])
+                                
                                 if task not in tasks:
                                     tasks.append(task)
+                                
+                                # Update tasks
                                 self.async_tasks[event.stream_id] = tasks
+                        
                         else:
+                            # Execute handler
                             await handler(event)
+                    
                     else:
                         handler(event)
+            
             except Exception as e:
                 # For every event failure, just log the exception and
                 # continue with other events as not doing so may stall the connection
