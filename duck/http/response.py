@@ -1497,7 +1497,7 @@ class HttpRequestTimeoutResponse(HttpErrorRequestResponse):
         )
 
 
-class TemplateResponse(HttpResponse):
+class TemplateResponse(LazyHttpResponse):
     """
     TemplateResponse class representing an http  template response.
     """
@@ -1524,7 +1524,7 @@ class TemplateResponse(HttpResponse):
         self.context.update({"request": request})
         
         # Create template object for rendering.
-        self._template_obj = Template(
+        self._template = Template(
             name=template,
             context=self.context,
             engine=engine,
@@ -1532,8 +1532,7 @@ class TemplateResponse(HttpResponse):
         
         # Initialize response object.
         super().__init__(
-            None,
-            status_code,
+            status_code=status_code,
             headers=headers,
             content_type=content_type,
         )
@@ -1543,7 +1542,7 @@ class TemplateResponse(HttpResponse):
         Renders temp and returns the content.
         """
         if self._rendered is None:
-            self._rendered = self.template.render()
+            self._rendered = self._template.render_template()
         return self._rendered
        
     async def async_load(self) -> str:
@@ -1551,7 +1550,7 @@ class TemplateResponse(HttpResponse):
         Renders component and updates the content.
         """
         if self._rendered is None:
-            self._rendered = await ensure_async(self.template.render)()
+            self._rendered = await ensure_async(self._template.render_template)()
         return self._rendered
 
 
