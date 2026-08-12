@@ -296,14 +296,32 @@ class ASGI:
             # Do nothing at this point.
             return
             
-        # Send response to client
-        await self.send_response(
-            response,
-            request.client_socket,
-            request,
-            disable_logging=False,
-        )
-        
+        try:
+            # Send response to client
+            await self.send_response(
+                response,
+                request.client_socket,
+                request,
+                disable_logging=False,
+            )
+        except Exception as e:
+            # Internal server error
+            response = await async_server_error(e, request)
+            
+            # Finalize and return response
+            await self.finalize_response(response, request)
+            
+            # Send response immediately
+            await self.send_response(
+                response,
+                request.client_socket,
+                request=request,
+                disable_logging=False,
+            )
+            
+            # Reraise error so that it will be logged
+            raise
+            
         # Check if another protocol is in use and the request is target on Django endpoint
         if isinstance(response, HttpProxyResponse):
             # If HttpProxyResponse, this mean this response is from Django remote server. 

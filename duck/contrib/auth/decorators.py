@@ -131,12 +131,16 @@ def login_required(
 
                 # Lightweight check, only reads session/JWT, not the DB
                 user_id = await async_get_user_id(request)
+                
                 if not user_id:
                     return redirect(resolve_redirect_url(request))
 
                 if view_obj is not None:
                     return await fn(view_obj, request, **kwargs)
+                
                 return await fn(request, *args, **kwargs)
+            
+            # Return sync wrapper
             return async_wrapper
 
         @functools.wraps(fn)
@@ -154,17 +158,23 @@ def login_required(
 
             # Lightweight check, only reads session/JWT, not the DB
             user_id = get_user_id(request)
+            
             if not user_id:
                 return redirect(resolve_redirect_url(request))
 
             if view_obj is not None:
                 return fn(view_obj, request, **kwargs)
+            
             return fn(request, *args, **kwargs)
+        
+        # Return sync wrapper
         return sync_wrapper
 
     # Support both @login_required and @login_required(login_url=...)
     if view is not None:
         return decorator(view)
+    
+    # Return final decorator
     return decorator
 
 

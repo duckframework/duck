@@ -291,13 +291,31 @@ class WSGI:
             # Nothing to do at this point.
             return
             
-        # Send response to client
-        self.send_response(
-            response,
-            request.client_socket,
-            request,
-            disable_logging=False,
-        )
+        try:
+            # Send response to client
+            self.send_response(
+                response,
+                request.client_socket,
+                request,
+                disable_logging=False,
+            )
+        except Exception as e:
+            # Internal server error
+            response = server_error(e, request)
+            
+            # Finalize and return response
+            self.finalize_response(response, request)
+            
+            # Send response immediately
+            self.send_response(
+                response,
+                request.client_socket,
+                request=request,
+                disable_logging=False,
+            )
+            
+            # Reraise error so that it will be logged
+            raise
         
         # Check if another protocol is in use and the request is target on Django endpoint
         if isinstance(response, HttpProxyResponse):
