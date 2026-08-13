@@ -53,6 +53,7 @@ DEFAULT_EXCLUDES = [
 
     # 2. Dynamic paths
     r"^/sitemap.xml$", # Exclude the sitemap itself.
+     r"^/lively.*",             # anything starting with /lively
     r"^/ws/lively.*",       # anything starting with /ws/lively
     r"^/admin/.*",          # any subpath under /admin/
     r"^/admin$",            # strictly /admin itself

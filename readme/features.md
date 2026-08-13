@@ -1,5 +1,20 @@
 # Duck Framework Features
 
+[![Open Issues](https://img.shields.io/github/issues/duckframework/duck)](https://github.com/duckframework/duck/issues)
+[![Contributors](https://img.shields.io/github/contributors/duckframework/duck)](https://github.com/duckframework/duck/graphs/contributors)
+[![HTTPS](https://img.shields.io/badge/HTTPS-supported-brightgreen.svg)](#)
+[![HTTP/2](https://img.shields.io/badge/HTTP--2-supported-brightgreen.svg)](#)
+[![WebSocket](https://img.shields.io/badge/WebSocket-supported-brightgreen.svg)](#)
+[![Async Views](https://img.shields.io/badge/Async-WSGI%2FASGI-blue.svg)](#)
+[![Task Automation](https://img.shields.io/badge/Task-Automation-blueviolet.svg)](#)
+[![Content Compression](https://img.shields.io/badge/Compression-gzip%2C%20brotli%2C%20deflate-blue.svg)](#)
+[![SSL Auto-Renewal](https://img.shields.io/badge/SSL-Auto%20Renewal-brightgreen.svg)](#)
+[![Resumable Downloads](https://img.shields.io/badge/Downloads-Resumable-orange.svg)](#)
+[![Security](https://img.shields.io/badge/Security-DoS%2C%20SQLi%2C%20CmdInj-red.svg)](#)
+[![Auto Reload](https://img.shields.io/badge/AutoReload-DuckSight-yellow.svg)](#)
+[![Django Integration](https://img.shields.io/badge/Django-Integration-blue.svg)](#)
+[![Monitoring](https://img.shields.io/badge/Monitoring-CPU%2FRAM%2FDisk%2FI%2FO-brightgreen.svg)](#)
+
 ## 🚀 Build Faster, Ship Sooner
 
 1. Dynamic project generation with `makeproject` (`mini`, `normal`, or `full`)
@@ -50,3 +65,17 @@
 
 1. Independent [microapps](https://docs.duckframework.com/main/microapp) that run on their own servers, for microservices support
 2. Highly **customizable** to fit any use case
+
+## 🔮 Upcoming Features
+
+1. **HTTP/3 with QUIC** — faster, modern transport for improved performance
+2. **QUIC WebTransport** — a next-gen alternative to WebSockets for real-time communication
+3. **Component pre-rendering system** — preload components on a background thread to reduce initial load times of component trees
+4. **MQTT (Message Queuing Telemetry Transport) integration** — run your own broker and manage IoT devices with ease
+5. **Duck WebApp ➝ APK** — easily convert a Duck web application to an APK
+6. **DuckSight hot reload** — hot reload for the DuckSight Reloader instead of a full reload on file changes, for faster, more efficient dev cycles
+7. **Internal updates** — securely list and apply updates using cryptographic code signing (e.g. TUF) to verify GitHub-sourced updates, protecting against rollbacks and man-in-the-middle attacks
+8. **Complete reverse proxy server** — Duck currently proxies only Django; the goal is a full-fledged reverse proxy server with optional sticky sessions
+9. Implement Duck AI Agent system with reusable agents, MCP tool integration, task execution, and long-running worker support.
+10. Need to add analytics like web visits, etc to DASHBOARD.
+11. **...and more** — [request a feature](../feature_request.md)
