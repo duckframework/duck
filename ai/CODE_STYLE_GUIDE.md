@@ -222,6 +222,7 @@ class GuideManager:
         content = self.load_guide(name)
         self.cache[name] = content
 
+        # Return the freshly loaded content
         return content
 ```
 
@@ -328,6 +329,8 @@ def get_greeting(username: str, fallback: str = "Guest") -> str:
         Greeting message.
     """
     name = username or fallback
+
+    # Return the formatted greeting
     return f"Hello, {name}!"
 ```
 
@@ -423,6 +426,7 @@ return result
 Good:
 
 ```python
+# Return the calculated total
 return calculate_total()
 ```
 
