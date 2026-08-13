@@ -349,16 +349,24 @@ Required:
 
 ## Comments
 
-Comments should explain intent, not syntax.
+Comments should explain intent and provide visual structure. They are part of
+the code's readability and should make the flow and hierarchy of operations
+immediately apparent.
 
-Comments are used as logical section markers inside code.
+Comments are used as logical section markers inside code.  
 
+Comments serve two purposes:
+
+1. Explain the intent of meaningful operations.
+2. Visually separate distinct operations when multiple operations appear in
+   the same logical block.
+   
 Rules:
 
 - Every meaningful logical block should have a short comment.
 - Comments must be written as action phrases.
 - Avoid obvious comments.
-- Separator comments are forbidden.
+- Stylish separator comments are forbidden.
 
 Bad:
 
@@ -383,6 +391,146 @@ Comments should explain why:
 # Cache the result to avoid repeated database queries
 users = UserService.get_cached_users()
 ```
+
+### Logical Section Comments
+
+Use short comments to introduce meaningful logical sections of code.
+
+Good:
+
+```python
+# Validate incoming data
+data = validate(data)
+
+# Save the processed result
+save(data)
+```
+
+Comments should describe what the code is accomplishing as a logical unit,
+not narrate obvious syntax.
+
+### Operation Comments
+
+When a logical block contains several distinct operations, give each operation
+its own short comment when the individual purpose is not immediately obvious
+from the surrounding code.
+
+Good:
+
+```python
+while remaining > 0 and self.running:
+    # Update the remaining cooldown time
+    self.state.cooldown_remaining = remaining
+
+    # Notify listeners of the countdown update
+    self.notify()
+
+    # Wait before the next update
+    await asyncio.sleep(1)
+
+    # Decrement the remaining time
+    remaining -= 1
+```
+
+The comments intentionally create visual separation between operations even
+though all operations belong to the same `while` block.
+
+Do not force unrelated operations under a single broad comment merely because
+they belong to the same Python block.
+
+Avoid:
+
+```python
+# Update the cooldown
+while remaining > 0 and self.running:
+    self.state.cooldown_remaining = remaining
+    self.notify()
+    await asyncio.sleep(1)
+    remaining -= 1
+```
+
+The broad comment describes the overall block but does not make the individual
+operations or their sequence immediately clear.
+
+### Comment Hierarchy
+
+Comments should match the hierarchy of the code they describe.
+
+Use a higher-level comment for a group of related operations:
+
+```python
+# Reset session state
+self.state.wins = 0
+self.state.losses = 0
+self.state.session_profit = 0.0
+```
+
+Use individual comments when the statements perform different operations:
+
+```python
+# Update the remaining cooldown time
+self.state.cooldown_remaining = remaining
+
+# Notify listeners
+self.notify()
+
+# Wait before the next update
+await asyncio.sleep(1)
+
+# Decrement the remaining time
+remaining -= 1
+```
+
+Do not combine unrelated operations simply to reduce the number of comments.
+
+### Visual Flow
+
+Comments may be used to create visual rhythm and hierarchy in code. This is
+especially useful when a sequence contains several short operations that are
+conceptually different but must remain together.
+
+The goal is not to comment every line. The goal is to make the structure of
+the code obvious at a glance.
+
+Good:
+
+```python
+# Prepare the request
+request = build_request(data)
+
+# Send the request
+await send(request)
+
+# Wait for the response
+response = await receive()
+
+# Process the response
+return parse_response(response)
+```
+
+### Separator Comments
+
+Do not use decorative separator bars as section markers.
+
+Bad:
+
+```python
+# -----------------
+# Get user
+# -----------------
+
+user = get_user()
+```
+
+Use a concise comment instead:
+
+```python
+# Fetch the authenticated user
+user = get_user()
+```
+
+Comments should provide visual structure through meaningful text and spacing,
+not through decorative characters.
 
 ---
 
