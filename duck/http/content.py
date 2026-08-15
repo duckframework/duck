@@ -1,7 +1,6 @@
 """
 Module to represent a request/response Content class.
 """
-import os
 import gzip
 import zlib
 import fnmatch
@@ -422,9 +421,8 @@ class Content:
         """
         if not content_type:
             if self.filepath:
-                filename = os.path.basename(self.filepath)
                 content_type = guess_file_mimetype(filename)
-                print(content_type)
+                
             # Guess data mimetype if guessing filedata mimetype fails
             content_type = content_type or guess_data_mimetype(data=self.data or b"")
             

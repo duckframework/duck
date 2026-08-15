@@ -2,6 +2,14 @@ import os
 import mimetypes
 
 
+FALLBACK_TYPES = {
+    ".webp": "image/webp",
+    ".avif": "image/avif",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
+}
+
+
 def guess_file_mimetype(filename: str) -> str:
     """
     Determine the MIME type of a file based on its filename or content.
@@ -18,12 +26,17 @@ def guess_file_mimetype(filename: str) -> str:
         str: The determined MIME type of the file. Defaults to 'application/octet-stream' if the type cannot be determined.
     """
     mimetype = None
-    
+
     if filename:
-        # Attempt to guess the MIME type based on the file extension
+        # Attempt to guess mimetype using mimetypes module
         mimetype, _ = mimetypes.guess_type(os.path.basename(filename))
-    
-    return mimetype
+
+        if mimetype is None:
+            ext = os.path.splitext(filename)[-1].lower()
+            mimetype = FALLBACK_TYPES.get(ext)
+
+    return mimetype or "application/octet-stream"
+
 
 
 def guess_data_mimetype(data: bytes) -> str:
@@ -37,9 +50,6 @@ def guess_data_mimetype(data: bytes) -> str:
     Returns:
         str: The determined MIME type of the input data.
     """
-    if not data:
-        return "application/octet-stream"
-
     html_tags = (
         b"<html",
         b"<!DOCTYPE html",
