@@ -421,7 +421,7 @@ class Content:
         """
         if not content_type:
             if self.filepath:
-                content_type = guess_file_mimetype(filename)
+                content_type = guess_file_mimetype(self.filepath)
                 
             # Guess data mimetype if guessing filedata mimetype fails
             content_type = content_type or guess_data_mimetype(data=self.data or b"")
