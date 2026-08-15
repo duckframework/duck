@@ -32,13 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Simplified `View.run` to accept `request, **kwargs` but default to match the default function convention.
+- Simplified `View.run` to accept `request, **kwargs` by default to match the default function convention.
 - Changed the "duck monitor" argument from "--duck-process" to "--process" for simplicity and consistency.
 - `TransactionThreadPool`'s `general_threads_free_level` now defaults to `None`, using the new adaptive freeing strategy; set it to an int to keep the original fixed-percentage behavior.
 - `window.LIVELY_APPLICATION.createDuckEvent` now supports a `raw` argument. When `true`, Duck skips its default event processing (e.g. extracting `value` from a `button`) and passes the `detail` argument directly to Python event handler instead.
 
 ### Fixed
 
+- Fixed text color issue on snackber when `glacier` variant is used.
 - Fixed some MCP bug resulting in generating mcp registry.
 - Command `duck monitor` not formatting output data correctly causing ValueError.
 

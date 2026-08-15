@@ -132,7 +132,6 @@ class Snackbar(FlexContainer):
         self.warning_color = self.kwargs.get("warning_color", "#f59e0b") # Tailwind amber-500
 
         # Component setup
-        self.color = "#222"
         self.klass = f"snackbar snackbar-{self.type} snackbar-{self.variant}"
 
         # Update props
