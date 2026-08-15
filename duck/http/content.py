@@ -131,8 +131,7 @@ class Content:
                 and isinstance(data, bytes) and mimetype_supported):
             
             if not encoding:
-                raise ContentError(
-                    "Please set encoding first to compress data")
+                raise ContentError("Please set encoding first to compress data")
 
             if encoding == "gzip":
                 data = gzip.compress(data, compresslevel=self.compression_level)

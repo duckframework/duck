@@ -344,9 +344,11 @@ class xsocket:
             OSError: If a socket error occurs.
         """
         self.raise_if_blocking() # Raise error if socket is in blocking mode.
+        
         try:
             await asyncio.wait_for(self.loop.sock_sendall(self.raw_socket, data), timeout)
             return len(data)
+        
         except asyncio.TimeoutError:
             raise TimeoutError(f"Send timed out after {timeout} seconds")
 
@@ -367,11 +369,18 @@ class xsocket:
             OSError: If a socket error occurs.
         """
         self.raise_if_blocking() # Raise error if socket is in blocking mode.
+        
         try:
             return await asyncio.wait_for(self.loop.sock_recv(self.raw_socket, n), timeout)
+        
         except asyncio.TimeoutError:
             raise TimeoutError(f"Receive timed out after {timeout} seconds")
-            
+        
+        except ValueError as e:
+            if "Invalid file descriptor" in str(e):
+                raise ConnectionResetError("Client disconnected") from e
+            raise
+    
     def __setattr__(self, key: str, value: Any) -> None:
         """
         Custom setattr to track attributes defined on this wrapper.

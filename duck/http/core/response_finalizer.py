@@ -411,8 +411,9 @@ class ResponseFinalizer:
              
             # Set the content-type if not set.
             if not content_type:
-                response.set_header("content-type", "application/octet-stream") # default content type for streaming responses.
-                
+                content_type = response.content_obj.content_type
+                response.set_header("content-type", content_type)
+    
     @log_failsafe
     def do_set_streaming_range(self, response, request):
         """
