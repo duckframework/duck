@@ -216,6 +216,9 @@ def get_duck_formatted_log(
     # Add more context
     info += f"\n  {reset}├── ADDR {list(addr)} "
     
+    # Content type
+    info += f'\n  {reset}├── Content Type [{response.content_type}] '
+    
     if not debug_message:
         # Obtain debug message if not present.
         debug_message = get_status_debug_msg(response, request)
