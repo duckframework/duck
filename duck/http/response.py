@@ -461,7 +461,7 @@ class LazyHttpResponse(HttpResponse):
             content_type: Optional MIME type of the response content.
         """
         self._loaded_content = self._UNLOADED
-
+        
         super().__init__(
             None,
             status_code=status_code,

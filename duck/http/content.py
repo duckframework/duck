@@ -421,11 +421,12 @@ class Content:
         """
         if not content_type:
             if self.filepath:
+                print(self.filepath)
                 content_type = guess_file_mimetype(self.filepath)
             
-            # guess data mimetype if guessing filedata mimetype fails
+            # Guess data mimetype if guessing filedata mimetype fails
             content_type = content_type or guess_data_mimetype(data=self.data or b"")
-
+            
             if not content_type:
                 # Guessing data and filedata mimetype fails, this is likely binary content
                 content_type = "application/octet-stream"

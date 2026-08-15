@@ -347,7 +347,7 @@ class ResponseFinalizer:
             for initial_chunk in response.iter_content():
                 if initial_chunk:
                     # Create a fresh compression wrapper or content object per chunk
-                    chunk = initial_chunk[:8] # Check compression using first 8 bytes to avoid performance degradationt
+                    chunk = initial_chunk[:8] # Check compression using first 8 bytes to avoid performance degradation
                     content_obj = response.content_obj.__class__()  # Clone a fresh object
                     content_obj.set_content(chunk, content_type=content_type)
                     content_obj.compression_level = COMPRESSION_LEVEL
