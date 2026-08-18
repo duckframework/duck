@@ -14,6 +14,7 @@ from duck.http.fileuploads import BaseFileUpload, FileUploadError, FileTypeNotAl
 from duck.html.components.core.websocket import LivelyWebSocketView
 from duck.html.components.core.opcodes import EventOpCode
 from duck.views import csrf_exempt
+from duck.contrib.sync import ensure_async
 
 
 # Default seconds to wait for a client to start uploading
@@ -115,7 +116,7 @@ def mark_file_upload_failed(file_id: str, reason: str = "", strict: bool = False
             as failed or otherwise has a completed future.
     """
     future = STARTED_FILE_UPLOADS.get(file_id)
-
+    
     if future is None:
         if strict:
             raise FileUploadNotFoundError(f"File upload '{file_id}' not found.")
@@ -134,7 +135,7 @@ def mark_file_upload_failed(file_id: str, reason: str = "", strict: bool = False
     return True
 
 
-def notify_file_upload_progress(file_id: str, percent: float, strict: bool = False) -> bool:
+async def notify_file_upload_progress(file_id: str, percent: float, strict: bool = False) -> bool:
     """
     Notify the server of a file upload's current progress.
 
@@ -151,14 +152,14 @@ def notify_file_upload_progress(file_id: str, percent: float, strict: bool = Fal
         FileUploadNotFoundError: If the upload does not exist and `strict` is True.
     """
     entry = REQUESTED_FILES.get(file_id)
-
+    
     if entry is None:
         if strict:
             raise FileUploadNotFoundError(f"File upload '{file_id}' was not found.")
         return False
 
     if entry.on_progress is not None:
-        entry.on_progress(percent)
+        await ensure_async(entry.on_progress)(percent)
 
     # Return final flag
     return True 
@@ -186,7 +187,7 @@ async def ws_request_file(
         name: Name of the file to request (usually the name of the file input).
         ws: Active Lively websocket connection for the current client.
         allowed_mimes: Optional list of mimetypes to expect from client.
-        on_progress: Optional callable to call on file upload progress. Defaults to None.
+        on_progress: Optional sync/async callable to call on file upload progress. Defaults to None.
         timeout: Seconds to wait before giving up on the upload.
         total_timeout: Total seconds in overall for the whole file upload to finish.
         
@@ -210,7 +211,7 @@ async def ws_request_file(
     file_future = event_loop.create_future()
     file_started_future = event_loop.create_future()
     allowed_mimes = allowed_mimes or []
-    upload_url = resolve("receive_ws_file")
+    upload_url = resolve("lively-receive-ws-file")
     auth_secret = generate_csrf_secret()
     auth_token = mask_cipher_secret(auth_secret)
     fire_on_progress = bool(on_progress)
@@ -223,7 +224,7 @@ async def ws_request_file(
         file_id=file_id,
         future=file_future,
         allowed_mimes=allowed_mimes,
-        auth_secret=auth_secret,
+        token_secret=auth_secret,
         on_progress=on_progress,
     )
 
@@ -241,6 +242,11 @@ async def ws_request_file(
         except asyncio.TimeoutError:
             raise TimeoutError(f"File upload slow, total file upload failed to complete in {total_timeout} seconds.")
             
+        if fire_on_progress:
+            # When progress reaches 100, the requested file might be already cleaned up in finally block so
+            # Lets simulate it, the tradeoff is that progress for 100 might sometimes be called twice.
+            await notify_file_upload_progress(file_id, 100)
+            
         # Return the final uploaded file.
         return uploaded_file
     
@@ -252,11 +258,12 @@ async def ws_request_file(
         error_lower = error.lower()
         
         if "no file selected" in error_lower:
-            raise NoFileSelectedError(error)
+            raise FileNotSelectedError(error)
         
         if "file type" in error_lower and "allowed" in error_lower:
             raise FileTypeNotAllowedError(error)
         
+        # Reraise exception
         raise
     
     finally:
@@ -290,7 +297,7 @@ async def receive_ws_file(request) -> JsonResponse:
         return jsonify({"error": "Invalid or expired file_id"}, status_code=400)
     
     # Verify auth token
-    auth_secret = requested_file_entry.auth_secret
+    auth_secret = requested_file_entry.token_secret
     
     try:
         declared_secret = unmask_cipher_token(auth_token)
@@ -319,8 +326,5 @@ async def receive_ws_file(request) -> JsonResponse:
         
     except Exception as e:
         future.set_exception(e)
-    
-    finally:
-        clean_requested_file(file_id)
-            
+        
     return jsonify({"status": "received", "id": file_id})

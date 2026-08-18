@@ -275,7 +275,7 @@ class URL:
             # url is None
             url = ""
         
-        disallowed_chars = ("<", '"', "'", "^", ">", ";", "|", "{", "}", "`", " ")
+        disallowed_chars = ("<", '"', "'", "^", ">", ";", "|", "{", "}", "`", " ", "..") # Added .. to avoid path traversal
         url = url.replace("\\", "/")
     
         # removing disallowed characters

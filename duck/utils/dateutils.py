@@ -165,8 +165,7 @@ def years_to_seconds(yrs):
     return yrs * 3.154e7
 
 
-def datetime_difference(date_x: datetime.datetime,
-                        date_y: datetime.datetime) -> dict:
+def datetime_difference(date_x: datetime.datetime, date_y: datetime.datetime) -> dict:
     """
     Get the difference between two datetime objects (date_x and date_y).
 
@@ -314,13 +313,13 @@ def build_readable_date(date_: dict, one_date=False) -> str:
     """
     r = []
     try:
-        years = date_["years"]
-        months = date_["months"]
-        weeks = date_["weeks"]
-        days = date_["days"]
-        hours = date_["hours"]
-        minutes = date_["minutes"]
-        seconds = date_["seconds"]
+        years = date_.get("years", 0)
+        months = date_.get("months", 0)
+        weeks = date_.get("weeks", 0)
+        days = date_.get("days", 0)
+        hours = date_.get("hours", 0)
+        minutes = date_.get("minutes", 0)
+        seconds = date_.get("seconds", 0)
 
         if years:
             if years == 1:

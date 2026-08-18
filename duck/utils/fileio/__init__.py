@@ -52,13 +52,12 @@ from duck.exceptions.all import AsyncViolationError
 from duck.utils.asyncio import in_async_context
 from duck.utils.threading import async_to_sync_future
 from duck.utils.caching import InMemoryCache
-from duck.contrib.sync import convert_to_async_if_needed
+from duck.contrib.sync import ensure_async
+from duck.logging import logger
 
 
 # Shared LRU read cache — stores (data: bytes, mtime: float) per filepath.
-# 1 024-entry cap matches the original TODO recommendation; LRU eviction is
-# handled by InMemoryCache internally.
-FILE_CACHE: InMemoryCache = InMemoryCache(maxkeys=1024)
+FILE_CACHE: InMemoryCache = InMemoryCache(maxkeys=2048)
 
 # Valid event names accepted by hook()
 VALID_EVENTS = frozenset({"on_read", "on_write"})
@@ -87,6 +86,7 @@ def to_async_fileio_stream(fileio_stream: "FileIOStream") -> "AsyncFileIOStream"
         chunk_size=fileio_stream.chunk_size,
         open_now=False,
         mode=fileio_stream._mode,
+        disable_path_traversal=fileio_stream.disable_path_traversal,
     )
 
     if not new_stream._file_size:
@@ -110,6 +110,12 @@ def to_async_fileio_stream(fileio_stream: "FileIOStream") -> "AsyncFileIOStream"
     return new_stream
 
 
+class PathTraversalWarning(UserWarning):
+    """
+    Warning for path traversal vulnerability.
+    """
+    
+
 class FileIOStream(io.IOBase):
     """
     Synchronous file streaming class that mimics ``io.IOBase``.
@@ -125,11 +131,11 @@ class FileIOStream(io.IOBase):
     """
 
     __slots__ = {
-        "filepath",
         "chunk_size",
         "open_now",
         "ignore_file_open_on_delete",
         "close_on_delete",
+        "_filepath",
         "_file",
         "_pos",
         "_mode",
@@ -139,6 +145,7 @@ class FileIOStream(io.IOBase):
         "_cache_mtime",     # mtime recorded when this stream last populated the cache
         "_on_read_hooks",   # list[Callable] fired after every read
         "_on_write_hooks",  # list[Callable] fired after every write
+        "_path_traversal_warned",
     }
 
     def __init__(
@@ -147,22 +154,24 @@ class FileIOStream(io.IOBase):
         chunk_size: int = 2 * 1024 * 1024,
         open_now: bool = False,
         mode: str = "rb",
+        disable_path_traversal: bool = True,
     ):
         """
         Initialize the FileIOStream object.
 
         Args:
             filepath: Path to the file to be streamed.
-            chunk_size: Maximum number of bytes to read or write at once.
-                Defaults to 2 MB.
+            chunk_size: Maximum number of bytes to read or write at once. Defaults to 2 MB.
             open_now: Whether to open the file immediately. Defaults to False.
             mode: File open mode. Defaults to ``'rb'``.
+            disable_path_traversal (bool): Whether to remove `..` in paths to avoid path traversal. Defaults to True.
         """
         # NOTE: FD must always be opened on read/write - to catch FileNotFoundError if file is nolonger available rather than just returning cached data.
-        self.filepath = filepath
         self.chunk_size = chunk_size
         self.ignore_file_open_on_delete = False
         self.close_on_delete = True
+        self.disable_path_traversal = disable_path_traversal
+        self._filepath = filepath
         self._file: Optional[io.BufferedIOBase] = None
         self._pos = 0
         self._mode = mode
@@ -171,12 +180,27 @@ class FileIOStream(io.IOBase):
         self._cache_mtime: Optional[float] = None
         self._on_read_hooks: list[Callable] = []
         self._on_write_hooks: list[Callable] = []
+        self._path_traversal_warned = False
 
         if open_now:
             self.open()
-
+            
     # Public API
-
+    
+    @property
+    def filepath(self) -> str:
+        """
+        Returns the filepath for the stream.
+        """
+        if self.disable_path_traversal:
+            return self._filepath.replace("..", "")
+        
+        if not self._path_traversal_warned:
+            logger.warn("Argument `disable_path_traversal=False`, this might allow path traversal", PathTraversalWarning)
+            self._path_traversal_warned = True
+            
+        return self._filepath
+        
     @property
     def is_modified(self) -> bool:
         """
@@ -637,7 +661,7 @@ class AsyncFileIOStream(FileIOStream):
         Asynchronously open the file.
         """
         if not self.is_open():
-            await convert_to_async_if_needed(super().open)()
+            await ensure_async(super().open)()
 
     async def fire_hooks_async(self, hooks: list[Callable], data: bytes) -> None:
         """
@@ -693,9 +717,9 @@ class AsyncFileIOStream(FileIOStream):
             read_pos = self.get_pos()
 
             if size == -1:
-                data = await convert_to_async_if_needed(self._file.read)()
+                data = await ensure_async(self._file.read)()
             else:
-                data = await convert_to_async_if_needed(self._file.read)(
+                data = await ensure_async(self._file.read)(
                     min(size, self.chunk_size)
                 )
 
@@ -735,14 +759,14 @@ class AsyncFileIOStream(FileIOStream):
             self._file.seek(self.get_pos())
             
             # Do the actual write
-            written = await convert_to_async_if_needed(self._file.write)(data)
+            written = await ensure_async(self._file.write)(data)
 
             # Record the write start position before advancing _pos
             write_pos = self.get_pos()
             self.increment_pos(written)
 
             # Flush so the OS updates mtime before we re-stat
-            await convert_to_async_if_needed(self._file.flush)()
+            await ensure_async(self._file.flush)()
 
             # Patch all cached entries that overlap the written region
             self.cache_patch_on_write(write_pos, data)
@@ -759,7 +783,7 @@ class AsyncFileIOStream(FileIOStream):
         """
         async with self._lock:
             if self.is_open():
-                await convert_to_async_if_needed(super().close)()
+                await ensure_async(super().close)()
 
     async def __aenter__(self):
         await self.async_open()

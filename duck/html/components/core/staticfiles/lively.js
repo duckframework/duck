@@ -1134,6 +1134,12 @@ class DOMPatcher {
           }
         }
         
+        // Check whether event dispatching is allowed.
+        if (!window.LIVELY_APPLICATION.ALLOW_LIVELY_EVENT_DISPATCH) {
+          // Dispatch is not allowed - maybe user is doing a full page reload.
+          return;
+        }
+        
         try {
           window.LIVELY_APPLICATION.websocketClient.sendData([
             EventOpCodes.DISPATCH_COMPONENT_EVENT,
@@ -1234,6 +1240,7 @@ class DOMPatcher {
     
     for (const eventType of events) {
       const cleanEvent = eventType.trim();
+      
       if (!cleanEvent) continue;
   
       const handler = (e) => {
@@ -1243,6 +1250,7 @@ class DOMPatcher {
         
         // Only process events for current UID.
         if (!currentEventMap) return;
+        
         for (const [eventType, eventHandler] of currentEventMap.entries()) {
           if (eventType == e.type && eventHandler ===  handler) {
             mustDispatchEvent = true;
@@ -1252,6 +1260,12 @@ class DOMPatcher {
         if (!mustDispatchEvent) {
           // Unbind this very event.
           document.removeEventListener(e.type, handler);
+        }
+        
+        // Check whether event dispatching is allowed.
+        if (!window.LIVELY_APPLICATION.ALLOW_LIVELY_EVENT_DISPATCH) {
+          // Dispatch is not allowed - maybe user is doing a full page reload.
+          return;
         }
         
         try {
@@ -1583,6 +1597,10 @@ class NavigationHandler {
     */
   static doFullPageReload(url, reason) {
     if (url) {
+      // Pause any further events.
+      window.LIVELY_APPLICATION.ALLOW_LIVELY_EVENT_DISPATCH = false;
+      
+      // Do full page reload.
       window.location.href = url;
     }
   }
@@ -2076,6 +2094,9 @@ class LivelyWebSocketClient {
               snackbar.LABEL.textContent = "Session expired, reloading...";
               showSnackbar(snackbar, "warning", 2000);
               
+              // Avoid any further lively events to continue being sent to server.
+              window.LIVELY_APPLICATION.ALLOW_LIVELY_EVENT_DISPATCH = false;
+              
               // Server can't provide patches if it has no reference to current component so,
               // do a fullpage reload.
               window.location.reload();
@@ -2084,8 +2105,8 @@ class LivelyWebSocketClient {
           }
           
           case EventOpCodes.REQUEST_FILE: {
-            // Handle navigation response from server, whether apply patches or do a fullpage reload.
-            const [_, form_id, file_id, name, upload_url, allowed_mimes, fire_on_progress, auth_token] = data;
+            // Handle file requests from server
+            const [_, [form_id, file_id, name, upload_url, allowed_mimes, fire_on_progress, auth_token]] = data;
             FileRequestHandler.handleRequest(this, form_id, file_id, name, upload_url, allowed_mimes, fire_on_progress, auth_token);
             break;
           }
@@ -2218,11 +2239,11 @@ class FileRequestHandler {
    * @param {boolean} notifyOnProgress - Whether to send upload progress over WebSocket.
    * @param {string} authToken - CSRF token authorizing this upload.
    */
-  static async handleRequest(wsClient, formId, fileId, name, uploadURL, allowedMimes, notifyOnProgress, authToken) {
+  static async handleRequest(wsClient, formId, fileID, name, uploadURL, allowedMimes, notifyOnProgress, authToken) {
     const form = document.getElementById(formId);
   
     if (!form) {
-      this.notifyFileUploadError(wsClient, fileId, `Form '${formId}' not found.`);
+      this.notifyFileUploadError(wsClient, fileID, `Form '${formId}' not found.`);
       return;
     }
   
@@ -2230,7 +2251,7 @@ class FileRequestHandler {
     const input = form.querySelector(`input[name="${name}"]`);
   
     if (!input) {
-      this.notifyFileUploadError(wsClient, fileId, `Input '${name}' not found in form '${formId}'.`);
+      this.notifyFileUploadError(wsClient, fileID, `Input '${name}' not found in form '${formId}'.`);
       return;
     }
   
@@ -2238,11 +2259,11 @@ class FileRequestHandler {
     const file = input.files[0];
   
     if (file) {
-      this.uploadFile(wsClient, file, fileId, uploadURL, allowedMimes, notifyOnProgress, authToken);
+      this.uploadFile(wsClient, file, fileID, uploadURL, allowedMimes, notifyOnProgress, authToken);
     }
     else {
       // No file selected, raise no file chose error.
-      this.notifyFileUploadError("No file selected");
+      this.notifyFileUploadError(wsClient, fileID, "No file selected");
     }
   }
   
@@ -2324,7 +2345,7 @@ class FileRequestHandler {
    * @param {string} errorMessage - Description of the error that occurred.
    */
   static async notifyFileUploadError(wsClient, fileID, errorMessage) {
-    wsClient.sendData([EventOpCode.FILE_UPLOAD_ERROR, [fileID, errorMessage]]);
+    wsClient.sendData([EventOpCodes.FILE_UPLOAD_ERROR, fileID, errorMessage]);
   }
   
   /**
@@ -2334,7 +2355,7 @@ class FileRequestHandler {
    * @param {string} fileID - Unique ID of the file upload.
    */
   static async notifyFileUploadStarted(wsClient, fileID) {
-    wsClient.sendData([EventOpCode.FILE_UPLOAD_STARTED, [fileID]]);
+    wsClient.sendData([EventOpCodes.FILE_UPLOAD_STARTED, fileID]);
   }
   
   /**
@@ -2345,7 +2366,7 @@ class FileRequestHandler {
    * @param {float} progressPercent - Upload progress as a percentage (0-100.0).
    */
   static async notifyFileUploadProgress(wsClient, fileID, progressPercent) {
-    wsClient.sendData([EventOpCode.FILE_UPLOAD_PROGRESS, [fileID, progressPercent]]);
+    wsClient.sendData([EventOpCodes.FILE_UPLOAD_PROGRESS, fileID, progressPercent]);
   }
 
 }
@@ -2381,6 +2402,9 @@ class LivelyApp {
     // Assign important elem specific attributes
     this.PAGE_SNACKBAR.LABEL = this.PAGE_SNACKBAR.querySelector(".snackbar-label");
     this.PAGE_PROGRESS = 0;
+    
+    // Global Flag for allowing execution of lively events - useful when doing full page reload, no need to fire further events.
+    this.ALLOW_LIVELY_EVENT_DISPATCH = true;
     
     // Do some magic
     this.duckEvents = {};

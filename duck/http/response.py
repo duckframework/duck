@@ -635,7 +635,7 @@ class StreamingHttpResponse(HttpResponse):
             raise ValueError("Stream must be either a callable, iterable or a file-like object.")
             
     @classmethod
-    def file_io_stream(cls, filepath: str, chunk_size: int = 2 * 1024 * 1024) -> FileIOStream:
+    def file_io_stream(cls, filepath: str, chunk_size: int = 2 * 1024 * 1024, disable_path_traversal: bool = True) -> FileIOStream:
         """
         Creates an IOBase-like stream from a file for efficient handling of large files.
 
@@ -647,7 +647,8 @@ class StreamingHttpResponse(HttpResponse):
         Args:
             filepath (str): The path to the file that should be streamed.
             chunk_size (int, optional): The size of each chunk in bytes. Defaults to 2MB.
-
+            disable_path_traversal (bool): Whether to remove `..` in paths to avoid path traversal. Defaults to True.
+            
         Returns:
             FileIOStream: A custom stream object that behaves like io.IOBase.
 
@@ -662,7 +663,7 @@ class StreamingHttpResponse(HttpResponse):
         - The file is opened lazily when the stream is accessed.
         - The `seek` and `tell` methods allow for random access to the file.
         """
-        return FileIOStream(filepath, chunk_size, open_now=False)
+        return FileIOStream(filepath, chunk_size, open_now=False, disable_path_traversal=disable_path_traversal)
 
     def _read_from_file(self, file_obj: io.IOBase, chunk_size: int = 2 * 1024 * 1024) -> Generator:
         """
@@ -702,7 +703,7 @@ class StreamingHttpResponse(HttpResponse):
     # ASYNCHRONOUS IMPLEMENTATIONS
     
     @classmethod
-    def async_file_io_stream(cls, filepath: str, chunk_size: int = 2 * 1024 * 1024) -> AsyncFileIOStream:
+    def async_file_io_stream(cls, filepath: str, chunk_size: int = 2 * 1024 * 1024, disable_path_traversal: bool = True) -> AsyncFileIOStream:
         """
         Creates an asynchronous IOBase-like stream from a file for efficient handling of large files.
 
@@ -714,6 +715,7 @@ class StreamingHttpResponse(HttpResponse):
         Args:
             filepath (str): The path to the file that should be streamed.
             chunk_size (int, optional): The size of each chunk in bytes. Defaults to 2MB.
+            disable_path_traversal (bool): Whether to remove `..` in paths to avoid path traversal. Defaults to True.
 
         Returns:
             FileIOStream: A custom stream object that behaves like io.IOBase.
@@ -729,7 +731,7 @@ class StreamingHttpResponse(HttpResponse):
         - The file is opened lazily when the stream is accessed.
         - The `seek` and `tell` methods allow for random access to the file.
         """
-        return AsyncFileIOStream(filepath, chunk_size, open_now=False)
+        return AsyncFileIOStream(filepath, chunk_size, open_now=False, disable_path_traversal=disable_path_traversal)
 
     async def _async_read_from_file(self, file_obj: io.IOBase, chunk_size: int = 2 * 1024 * 1024) -> Generator:
         """
@@ -1091,6 +1093,7 @@ class FileResponse(StreamingRangeHttpResponse):
         chunk_size: int = 2 * 1024 * 1024,
         start_pos: int = 0,
         end_pos: Optional[int] = -1,
+        disable_path_traversal: bool = True,
     ):
         """
         Initializes a streaming HTTP response for serving a file. Determines whether to stream the file in chunks
@@ -1120,7 +1123,11 @@ class FileResponse(StreamingRangeHttpResponse):
                 
             end_pos (int):
                 The ending byte position for the range request. Defaults to -1, meaning the entire stream is used.
-    
+            
+            disable_path_traversal (bool):
+                Whether to remove `..` in filepath. This is to avoid resolving filepaths outside target scope and 
+                safeguard against Path traversal.
+                
         Raises:
             FileNotFoundResponseError: If the specified file does not exist.
             ValueError: If the file path is invalid or inaccessible.
@@ -1144,9 +1151,9 @@ class FileResponse(StreamingRangeHttpResponse):
         
         try:
             if SETTINGS['ASYNC_HANDLING']:
-                file_stream = StreamingHttpResponse.async_file_io_stream(filepath)
+                file_stream = StreamingHttpResponse.async_file_io_stream(filepath, disable_path_traversal=disable_path_traversal)
             else:
-                file_stream = StreamingHttpResponse.file_io_stream(filepath)
+                file_stream = StreamingHttpResponse.file_io_stream(filepath, disable_path_traversal=disable_path_traversal)
             
             if not file_stream.is_open():
                 # Open file stream immediately

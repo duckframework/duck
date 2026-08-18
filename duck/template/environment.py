@@ -104,7 +104,7 @@ class Engine:
         env = None # The real environment e.g. Jinja2 or Django.
         
         # Normalize template path to make it easy for getting path parts
-        template_name = normalize_url_path(template_name)
+        template_name = normalize_url_path(template_name) # Also removes `..` to avoid any potential path traversal
         
         if isinstance(self, Jinja2Engine):
             env = self.environment

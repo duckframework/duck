@@ -625,7 +625,7 @@ in real time.
 Basic usage:
 
 ```python
-from duck.html.components.core.lively_utils.file_request import ws_request_file
+from duck.html.components.lively_utils.file_request import ws_request_file
 from duck.http.fileuploads import FileVerificationError, FileTypeNotAllowedError
 
 
@@ -646,7 +646,7 @@ async def on_form_submit(..., ws):
 Advanced usage:
 
 ```python
-from duck.html.components.core.lively_utils.file_request import (
+from duck.html.components.lively_utils.file_request import (
     ws_request_file,
     FileTypeNotAllowedError,
     FileNotSelectedError,
@@ -680,7 +680,7 @@ async def on_form_submit(..., ws):
 With real-time progress:
 
 ```python
-from duck.html.components.core.lively_utils.file_request import (
+from duck.html.components.lively_utils.file_request import (
     ws_request_file,
     FileTypeNotAllowedError,
     FileNotSelectedError,
@@ -715,7 +715,7 @@ async def on_form_submit(..., ws):
 ```
 
 > **Note:** Exception classes from `duck.http.fileuploads` and
-> `duck.html.components.core.lively_utils.file_request` refer to the same thing.
+> `duck.html.components.lively_utils.file_request` refer to the same thing.
 > Run `help(ws_request_file)` to see all available configurations.
 
 ---

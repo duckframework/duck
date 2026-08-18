@@ -868,7 +868,7 @@ class EventHandler:
         from duck.html.components.core.lively_utils.file_request import mark_file_upload_started
         
         # Recv Format: [132, [file_id]]
-        _, file_id = data
+        file_id = data[0]
         
         # Mark file upload started
         mark_file_upload_started(file_id)
@@ -880,10 +880,10 @@ class EventHandler:
         from duck.html.components.core.lively_utils.file_request import mark_file_upload_failed
         
         # Recv format: [131, [file_id, reason]]
-        _, file_id, reason = data
+        file_id, reason = data
         
         # Mark file upload failed
-        mark_file_upload_failed(file_id, message=reason or "")
+        mark_file_upload_failed(file_id, reason=reason or "")
 
     async def handle_file_upload_progress(self, data: List[Any]):
         """
@@ -892,7 +892,7 @@ class EventHandler:
         from duck.html.components.core.lively_utils.file_request import notify_file_upload_progress
         
         # Recv format: [133, [file_id, percent]]
-        _, file_id, progress = data
+        file_id, progress = data
         
         # Notify file upload progress
-        notify_file_upload_progress(file_id, progress)
+        await notify_file_upload_progress(file_id, progress)

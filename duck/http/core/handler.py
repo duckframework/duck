@@ -180,6 +180,8 @@ def get_duck_formatted_log(
         request (Optional[HttpRequest]): The http request object.
         debug_message (Optional[Union[str, List[str]]]): Custom debug message or list of messages to add to log.
     """
+    from duck.utils.readable import readable_size
+    
     info = ""
     debug_message = debug_message or ""
     reset = logger.Style.RESET_ALL
@@ -219,6 +221,19 @@ def get_duck_formatted_log(
     # Content type
     info += f'\n  {reset}├── Content Type [{response.content_type}] '
     
+    # Content length
+    size = response.get_header("content-length")
+    
+    if size:
+        try:
+            size = readable_size(float(size))
+        except Exception:
+            # Error here doesn't
+            raise
+        
+        # Add log to other logs
+        info += f'\n  {reset}├── Content Length [{size}] '
+                
     if not debug_message:
         # Obtain debug message if not present.
         debug_message = get_status_debug_msg(response, request)

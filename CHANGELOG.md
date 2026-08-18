@@ -8,10 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ---
 
 
-## [Unreleased]
+## [2.3.0] - August 18, 2026
 
 ### Added
 
+- Added `duck.html.components.lively_utils.file_request` for fetching file uploads inside `Lively` event handlers without needing a separate upload logic.
+- Added `duck.html.components.lively_utils` module for Lively specific operations.
+- Added `duck.utils.readable` for human readable formatting utilities.
 - Added `duck.http.response.LazyHttpResponse` for lazy loaded HTTP responses.
 - Corrected HTTP `keep-alive` handling and updated the server default to `keep-alive`.
 - Added settings `DATA_UPLOAD_MAX_SIZE` and `FILE_UPLOAD_MAX_SIZE` and they default to `100MB`
@@ -39,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Fixed Path Traversal in `duck.utils.urlcrack.URL.normalize_url`
 - Fixed text color issue on snackber when `glacier` variant is used.
 - Fixed some MCP bug resulting in generating mcp registry.
 - Command `duck monitor` not formatting output data correctly causing ValueError.

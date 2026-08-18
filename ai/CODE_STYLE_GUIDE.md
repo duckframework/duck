@@ -88,6 +88,8 @@ class ProductCard:
         ...
 ```
 
+> **`async_` prefix rule:** Async functions must be prefixed with `async_` (e.g. `do_async` -> `async_do`), but only when the API can support both sync and async. Skip the prefix when async-only is obvious (e.g. WebSocket handlers).
+
 ---
 
 ## Formatting
