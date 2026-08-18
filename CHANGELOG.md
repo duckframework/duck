@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.3.1] - August 18, 2026
+
+### Fixed
+
+- Small bug fixes to `LivelyComponentSystem`.
 
 ## [2.3.0] - August 18, 2026
 
