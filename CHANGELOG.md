@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Added `Content Type` and `Content Length` fields in request logs.
 - Added `duck.html.components.lively_utils.file_request` for fetching file uploads inside `Lively` event handlers without needing a separate upload logic.
 - Added `duck.html.components.lively_utils` module for Lively specific operations.
 - Added `duck.utils.readable` for human readable formatting utilities.

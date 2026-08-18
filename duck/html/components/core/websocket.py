@@ -865,7 +865,7 @@ class EventHandler:
         """
         Handle file upload started event.
         """
-        from duck.html.components.core.lively_utils.file_request import mark_file_upload_started
+        from duck.html.components.lively_utils.file_request import mark_file_upload_started
         
         # Recv Format: [132, [file_id]]
         file_id = data[0]
@@ -877,7 +877,7 @@ class EventHandler:
         """
         Handle file upload error event.
         """
-        from duck.html.components.core.lively_utils.file_request import mark_file_upload_failed
+        from duck.html.components.lively_utils.file_request import mark_file_upload_failed
         
         # Recv format: [131, [file_id, reason]]
         file_id, reason = data
@@ -889,7 +889,7 @@ class EventHandler:
         """
         Handle file upload progress event.
         """
-        from duck.html.components.core.lively_utils.file_request import notify_file_upload_progress
+        from duck.html.components.lively_utils.file_request import notify_file_upload_progress
         
         # Recv format: [133, [file_id, percent]]
         file_id, progress = data
