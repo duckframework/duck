@@ -556,7 +556,6 @@ class Page(InnerComponent):
             children=[
                 Label(
                     klass="snackbar-label",
-                    color="white",
                     style={
                         "text-align": "center",
                         "margin": "auto",
