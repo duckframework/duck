@@ -146,9 +146,22 @@ BASE_CSS = """
 
 GA_SCRIPT = """
 window.dataLayer = window.dataLayer || [];
+
 function gtag(){{dataLayer.push(arguments);}}
+
+{consent}
+
 gtag('js', new Date());
 gtag('config', '{tracking_id}');
+"""
+
+GA_CONSENT_SCRIPT = """
+gtag('consent', 'default', {{
+    analytics_storage: '{analytics_storage}',
+    ad_storage: '{ad_storage}',
+    ad_user_data: '{ad_user_data}',
+    ad_personalization: '{ad_personalization}'
+}});
 """
 
 
@@ -1020,29 +1033,60 @@ class Page(InnerComponent):
         # Return script component.
         return script
         
-    def add_google_analytics(self, tracking_id: str) -> List[Script]:
+    def add_google_analytics(
+        self,
+        tracking_id: str,
+        *,
+        consent_mode: bool = False,
+        analytics_granted: bool = False,
+    ) -> List[Script]:
         """
-        Add Google Analytics snippet with the given tracking ID.
-        
+        Add Google Analytics 4 to the page.
+    
+        Args:
+            tracking_id:
+                Google Analytics 4 measurement ID.
+    
+            consent_mode:
+                Whether to initialize Google Consent Mode v2. When ``False``,
+                consent management is left entirely to the application.
+                Defaults to False.
+    
+            analytics_granted:
+                Whether the visitor has already consented to analytics
+                cookies (from a prior stored choice). Only read when
+                ``consent_mode`` is True. Defaults to False, so first-time
+                visitors start denied until they accept.
+    
         Returns:
-            List[Script]: Script for the google tag manager and the other is the Google Analytics script.
-        
-        Notes:
-            Make sure you include `https://www.googletagmanager.com` in CSP script-src if you are using Content Security Policy. 
-        Example:
-        
-        ```py
-        add_google_analytics("UA-XXXXX-Y")
-        ```
+            The Google Analytics scripts added to the page.
         """
         if not tracking_id:
-            return
+            return []
+    
+        # Add tagmanager script
+        s0 = self.add_script(f"https://www.googletagmanager.com/gtag/js?id={tracking_id}", async_=True)
+    
+        # Build consent script from the visitor's actual stored state
+        state = "granted" if analytics_granted else "denied"
         
-        # Load GA script async in head, plus inline config
-        s0 = self.add_script("https://www.googletagmanager.com/gtag/js?id=" + tracking_id, async_=True)
-        s1 = self.add_script(inline=GA_SCRIPT.format(tracking_id=tracking_id))
-        
-        # Return the added scripts.
+        # Build consent
+        consent = GA_CONSENT_SCRIPT.format(
+            analytics_storage=state,
+            ad_storage=state,
+            ad_user_data=state,
+            ad_personalization=state,
+        ) if consent_mode else ""
+    
+        # Add appropriate GA_SCRIPT
+        s1 = self.add_script(
+            inline=GA_SCRIPT.format(
+                tracking_id=tracking_id,
+                consent=consent,
+            )
+        )
+    
+        # Return added scripts
         return [s0, s1]
         
     def add_to_head(self, child_or_childs: Union[Component, List[Component]], *args, **kwargs):
