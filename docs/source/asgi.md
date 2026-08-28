@@ -56,7 +56,7 @@ async def myview(request):
 from duck.views import View
 
 class MyView(View):
-    def strictly_async(self):
+    def strictly_async(self, *args, **kwargs):
         # Return True to force this view to always use async
         # (disables automatic sync → async conversion).
         ...

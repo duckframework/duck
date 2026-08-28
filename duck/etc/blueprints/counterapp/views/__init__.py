@@ -338,9 +338,11 @@ class HomePage(Page):
 
         # Counter state
         self.counter = 0
+        
         def on_increment(btn, *_):
             self.counter += 1
             self.count_label.text = self.counter
+            
             # Sync ring via JS
             self.count_label.props["data-count"] = str(self.counter)
 
@@ -355,7 +357,7 @@ class HomePage(Page):
             self.count_label.props["data-count"] = "0"
 
 
-        # ── Root wrapper ──────────────────────────────────────────
+        # Root wrapper
         root = FlexContainer(id="counterapp-root")
         root.style["flex-direction"] = "column"
         root.style["align-items"] = "center"
@@ -370,7 +372,7 @@ class HomePage(Page):
         back.add_children([back_icon, back_text])
         root.add_child(back)
 
-        # ── Main card ─────────────────────────────────────────────
+        # Main card
         card = FlexContainer(flex_direction="column")
         card.klass = "counterapp-card"
 
@@ -542,6 +544,6 @@ class HomeView(View):
     """
     CounterApp home view.
     """
-    def run(self):
+    def run(self, *_, **kw):
         page = HomePage(self.request)
         return to_response(page)

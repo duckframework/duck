@@ -69,7 +69,7 @@ def myview(request):
 from duck.views import View
 
 class MyView(View):
-    def run(self):
+    def run(self, *args, **kwargs):
         # Some code to return HttpResponse
         ...
 ```

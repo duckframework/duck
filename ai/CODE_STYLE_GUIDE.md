@@ -94,8 +94,6 @@ class ProductCard:
 
 ## Formatting
 
-- Follow Black-compatible formatting.
-- Maximum line length: 88 characters.
 - Use two blank lines between top-level definitions.
 - Use one blank line between logical blocks inside functions.
 - Use f-strings instead of `.format()` or `%`.
