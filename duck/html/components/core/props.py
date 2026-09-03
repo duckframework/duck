@@ -7,6 +7,7 @@ from typing import (
     Tuple,
     Dict,
     Callable,
+    Union,
 )
 
 
@@ -45,23 +46,32 @@ class PropertyStore(dict):
     def _version(self) -> int:
         return self.__version
         
-    def __setitem__(self, key: str, value: str, call_on_set_item_handler: bool = True) -> None:
+    def __setitem__(self, key: str, value: Union[str, bool], call_on_set_item_handler: bool = True) -> None:
         """
         Sets the value for the given key if the key is allowed.
-
+    
         Args:
             key (str): The key to set the value for. Must be a string.
-            value (str): The value to set. Must be a string.
+            value (str | bool): The value to set. If bool: True adds the prop
+                with an empty value, False skips/removes it entirely.
             call_on_set_item_handler (bool): Whether to call `on_set_item` after the actual `__setitem__`.
-
+    
         Raises:
-            AssertionError: If the key or value is not a string.
+            AssertionError: If the key or value is not a string or bool.
         """
         assert isinstance(key, str), f"Keys for `PropertyStore` must be strings not {type(key)}"
-        assert isinstance(value, str), f"Values for `PropertyStore` must be strings not {type(value)}"
-        
+        assert isinstance(value, (str, bool)), f"Values for `PropertyStore` must be strings or booleans not {type(value)}"
+    
         k = key.strip().lower()
-        
+    
+        # Boolean values: True -> prop present with no value, False -> prop omitted/removed
+        if isinstance(value, bool):
+            if not value:
+                if k in self:
+                    self.__delitem__(k, call_on_delete_item_handler)
+                return
+            value = ""
+    
         # Avoid using setitem if value is the same
         try:
             old = self[k]
@@ -69,13 +79,13 @@ class PropertyStore(dict):
                 return
         except KeyError:
             pass
-            
+    
         # Set key-value pair
         super().__setitem__(k, value)
-        
+    
         if call_on_set_item_handler:
             self._on_set_item(k, value)
-
+            
     def __delitem__(self, key: str, call_on_delete_item_handler: bool = True) -> None:
         """
         Deletes a key from the property store.

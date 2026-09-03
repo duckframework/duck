@@ -26,7 +26,7 @@ Author
 -----------
 
 - **Author**: Brian Musakwa
-- **Email**: digreatbrian@gmail.com
+- **Email**: hello@duckframework.com
 
 Contents
 ---------------

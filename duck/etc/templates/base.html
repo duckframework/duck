@@ -704,7 +704,7 @@
       <h1>{{ heading }}</h1>
       
       {# Request metadata — method, path, and HTTP version #}
-      {% if request is defined and request %}
+      {% if debug and request is defined and request %}
         <div class="request-meta">
           <span class="method-badge">{{ request.method }}</span>
           <span class="request-meta-item">{{ request.path }}</span>

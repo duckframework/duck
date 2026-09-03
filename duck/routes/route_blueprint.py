@@ -139,4 +139,5 @@ class Blueprint:
          
         urlpattern["url"] = route
         urlpattern["name"] = name
+        
         self.urlpatterns.append(urlpattern)

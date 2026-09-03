@@ -1666,6 +1666,7 @@ Before writing code that uses a Duck component you're unsure about:
 - Accessing or interacting with the `root` component from a child or grandchild MUST be performed within the `on_root_finalized` lifecycle method.
 - Components MUST NOT attempt to access or rely on the root component before `on_root_finalized` has been executed, as the hierarchy may not yet be fully established.
 - Components that will be used in event handlers or other relatable methods must be attached to self.
+- If a component is likely to be used by user for custom behavior attach it to the parent e.g., `self.dismiss_btn = Button()` instead of letting user do `parent.children[idx]`.
 - HTML components should receive plain view data instead of ORM models. Pass lightweight dictionaries or typed view models containing only the fields required for rendering. Keep components independent from the database layer to improve reuse, caching, and testing:
 
 ```python

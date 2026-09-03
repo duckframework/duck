@@ -968,7 +968,7 @@ class HtmlComponent:
                     ensure_freeze_callback()
                 
             except Exception as e:
-                raise e # Reraise exception
+                raise # Reraise exception
             
             finally:
                 self.__is_loading = False

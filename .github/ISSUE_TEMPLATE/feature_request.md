@@ -40,6 +40,6 @@ Add screenshots, references, or links if available.
 
 ---
 
-🙏 **Sponsor Support (Optional)**  
-If this feature is important to you, please consider [sponsoring us](https://duckframework.xyz/sponsorship).
+🙏 **Contribution Support (Optional)**  
+If this feature is important to you, please consider [contributing](https://duckframework.com/contribute).
 

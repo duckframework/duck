@@ -33,6 +33,12 @@ Visit **http://localhost:8000** — you're running Duck. For the full walkthroug
 
 ---
 
+## HTML & Lively Components
+
+Duck includes everything you need to build your UI, while [Quirl](https://github.com/duckframework/quirl), the official component library, provides modern, reusable HTML and Lively components for building richer interfaces and interactions.
+
+---
+
 ## Documentation
 
 New to Duck? Start with **Getting Started**, then **Understanding the Project** — that's really all you need to build your first app. The rest is there when you need it.
@@ -46,7 +52,9 @@ New to Duck? Start with **Getting Started**, then **Understanding the Project** 
 - ⚪ [Contributing](./readme/contributing.md) — sponsorship, reporting issues, premium components
 - ⚪ [Official Documentation](https://docs.duckframework.com) — full documentation
 
-🟢 = start here &nbsp;·&nbsp; 🔵 = once you're building &nbsp;·&nbsp; ⚪ = optional reading
+🟢 = start here  
+🔵 = once you're building  
+⚪ = optional reading
 
 ---
 

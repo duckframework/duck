@@ -655,7 +655,7 @@ class Request:
     
         # The URL part before the "?" and the queries after
         queries = splits[-1]
-
+    
         for query in queries.split("&"):
             key_value = query.split("=", 1)
     
@@ -666,7 +666,11 @@ class Request:
             else:
                 key, value = key_value
                 key = key.strip()
-                value = url_decode(value.strip())
+                # "+" is form-urlencoding's stand-in for a space and isn't
+                # touched by percent-decoding, so it must be swapped back to
+                # a space before url_decode() runs — otherwise "hello+world"
+                # (or a blank "+" placeholder) survives as a literal "+"
+                value = url_decode(value.strip().replace("+", " "))
                 
                 # Appending values to the key in QueryDict
                 query_obj.appendlist(key, value)
