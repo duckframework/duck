@@ -50,7 +50,7 @@ Contents
 
 .. toctree::
    :maxdepth: 2
-   :caption: Lively/HTML components
+   :caption: Lively
 
    lively-components/index
    theming
