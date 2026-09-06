@@ -257,7 +257,7 @@ class SocialLinks(FlexContainer):
             url=entry.get("url", "#"),
             klass="footer-social-icon",
             props={"aria-label": label},
-            children=[Span(inner_html=icon, tag="span", style={"display": "flex", "justify-content": "center", "align-items": "center"})],
+            children=[Span(inner_html=icon, style={"display": "flex", "justify-content": "center", "align-items": "center"})],
         )
 
 
