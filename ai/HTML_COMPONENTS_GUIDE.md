@@ -22,7 +22,7 @@
 7. [Events and Reactivity](#7-events-and-reactivity)
 8. [Page Components](#8-page-components)
 9. [Container vs Non-Container Components](#9-container-vs-non-container-components)
-10. [All Built-in Components](#10-all-built-in-components)
+10. [Built-in Components](#10-built-in-components)
 11. [Custom Components](#11-custom-components)
 12. [Component Extensions](#12-component-extensions)
 13. [Forms](#13-forms)
@@ -570,7 +570,7 @@ def on_create(self):
 
 ---
 
-## 10. All Built-in Components
+## 10. Built-in Components
 
 Always fetch the specific module docs before using a component to get the
 exact kwargs. Pattern:
@@ -612,11 +612,7 @@ exact kwargs. Pattern:
 | `TableOfContents` | `table_of_contents` | Container | Auto TOC |
 | `TextArea` | `textarea` | Non-container | `name=`, `placeholder=` |
 | `Video` | `video` | Non-container | Video embed |
-
-### Navbar note
-
-The built-in `Navbar` depends on jQuery. **Do not extend it.** Build custom
-navbars from `FlexContainer` + `Link` components instead.
+| `etc` | `...` | ... | Many more components added, check `duck.html.components` |
 
 ### Modal kwargs
 
