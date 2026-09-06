@@ -9,12 +9,12 @@ from duck.utils.path import joinpaths
 
 class MakeProjectCommand:
     # makeproject command
-    
+
     @classmethod
     def setup(cls):
         # Setup before command execution
         os.environ["DUCK_SETTINGS_MODULE"] = "duck.etc.structures.projects.testing.web.settings"
-    
+
     @classmethod
     def main(
         cls,
@@ -26,7 +26,16 @@ class MakeProjectCommand:
         # Setup minimum settings module for CLI to function correctly
         cls.setup()
         cls.makeproject(name, dest_dir, overwrite_existing, project_type)
-    
+
+    @classmethod
+    def print_success(cls, name, dest_project_path):
+        # Nice, low-key welcome block shown after a project is created.
+        console.log_raw(f'✓ Project "{name}" created successfully!\n', level=console.SUCCESS)
+        console.log_raw(f'  Location:    {dest_project_path}', level=console.SUCCESS)
+        console.log_raw(f'  Docs:        https://docs.duckframework.com', level=console.SUCCESS)
+        console.log_raw(f'  Contribute:  https://duckframework.com/contribute \n', level=console.SUCCESS)
+        console.log_raw(f'Run `python web/main.py` inside "{name}" to get started.\n', level=console.SUCCESS)
+
     @classmethod
     def makeproject(
         cls,
@@ -37,54 +46,57 @@ class MakeProjectCommand:
      ):
         # Execute command after setup.
         from duck.setup.makeproject import makeproject
-        
+
         dest_dir = os.path.abspath(dest_dir)
         dest_project_path = joinpaths(dest_dir, name)
         
+        # Project label
+        project_label = f'{project_type.title()} Project' if project_type != "normal" else "Project"
+        
+        # Log initial setup
         console.log(
-            f'Creating Duck {project_type.title()} Project' if project_type != "normal"
-            else f'Creating Duck Project',
+            f'Creating Duck {project_label} "{name}"...\n',
             level=console.DEBUG,
         )
+        
         try:
             makeproject(
                 name,
                 dest_dir,
                 overwrite_existing=overwrite_existing,
                 project_type=project_type,
-            )  # create project
-            
-            # Log something to the console
-            console.log(
-                f'Project "{name}" created at "{dest_project_path}"',
-                custom_color=console.Fore.GREEN,
             )
+            
+            # Print success message
+            cls.print_success(name, dest_project_path)
+
         except FileExistsError:
             console.log(
-                f'Project with name "{name}" already exists at: "{dest_project_path}"',
+                f'A project named "{name}" already exists at:\n  {dest_project_path}',
                 level=console.WARNING,
             )
-            overwrite = input(
-                "\nDo you wish to overwrite the existing project (y/N): ")
-    
-            print() # print a newline
-    
+            
+            # Get input
+            overwrite = input("\nOverwrite the existing project? (y/N): ").strip()
+            
+            # Newline for spacing
+            console.log_raw("")
+            
             if overwrite.lower().startswith("y"):
                 makeproject(
                     name,
                     dest_dir,
                     overwrite_existing=True,
-                    project_type=project_type)
+                    project_type=project_type,
+                )
                 
-                # Log something to console.
-                console.log(
-                    f'Project "{name}" created at "{dest_project_path}"',
-                    custom_color=console.Fore.GREEN)
+                # Print success message
+                cls.print_success(name, dest_project_path)
+                
             else:
-                console.log("Cancelled project creation!", level=console.DEBUG)
-    
+                console.log("Cancelled — no changes made.", level=console.DEBUG)
+
         except Exception as e:
             # Project creation failed.
-            console.log(f"Error: {str(e)}", level=console.ERROR)
+            console.log(f"Error creating project: {str(e)}", level=console.ERROR)
             raise e
-        

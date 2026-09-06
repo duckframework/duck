@@ -3,27 +3,21 @@ Navigation Bar Component Module.
 
 This module defines reusable components for creating a fully customizable navigation bar.
 It includes support for branding, navigation links, and a responsive design.
+
+No external CSS/JS dependencies required (no Bootstrap).
 """
 
-from duck.html.components import (
-    Component,
-    InnerComponent,
-    Theme,
-    to_component,
-)
-from duck.html.components.container import (
-    Container,
-    FlexContainer,
-)
-from duck.html.components.button import (
-    Button,
-    FlatButton,
-)
+from duck.html.components import InnerComponent, to_component
+from duck.html.components.theme import Theme
+from duck.html.components.container import Container, FlexContainer
+from duck.html.components.button import FlatButton
 from duck.html.components.link import Link
-from duck.html.components.icon import Icon
 from duck.html.components.image import Image
 from duck.html.components.script import Script
 from duck.html.components.style import Style
+
+# Breakpoint below which the navbar collapses behind the toggler.
+COLLAPSE_BREAKPOINT = "992px"
 
 
 class NavbarBrand(Link):
@@ -47,12 +41,13 @@ class NavbarBrand(Link):
         Initialize and configure the NavbarBrand component.
         """
         super().on_create()
-        self.color = "transaparent"
-        self.klass = "navbar-brand me-auto"
-        
+
+        self.color = "transparent"
+        self.klass = "navbar-brand"
+
         if "brand" in self.kwargs:
             self.add_navbar_image()
-            
+
     def add_navbar_image(self):
         """
         Adds a brand image and optional text to the NavbarBrand component.
@@ -62,31 +57,31 @@ class NavbarBrand(Link):
         alt = brand.get("alt", "")
         url = brand.get("url")
         text = brand.get("text", "")
-        
+
         if not url:
-            raise ValueError("Please provide valid URL in brand dictionary.")
-        
-        else:
-            self.props["href"] = url
-        
+            raise ValueError("Please provide a valid URL in the brand dictionary.")
+
+        self.props["href"] = url
+
         if image_source:
-            self.brand_image = Image(source=image_source)
-            self.brand_image.props["class"] = "nav-brand-image"
-            self.brand_image.style["height"] = "40px"
-            self.brand_image.style["width"] = "auto"
-            self.brand_image.style["margin-right"] = "8px"
-            
+            image_props = {"class": "nav-brand-image"}
+
             if alt:
-                self.brand_image.props["alt"] = alt
-            
-            # Add the brand image.
+                image_props["alt"] = alt
+
+            self.brand_image = Image(
+                source=image_source,
+                props=image_props,
+                style={"height": "40px", "width": "auto", "margin-right": "8px"},
+            )
             self.add_child(self.brand_image)
 
         if text:
-            self.brand_text = FlexContainer(text=text)
-            self.brand_text.style["display"] = "inline-flex"
-            self.brand_text.style["margin-left"] = "3px"
-            self.brand_text.props["class"] = "nav-brand-text"
+            self.brand_text = FlexContainer(
+                text=text,
+                props={"class": "nav-brand-text"},
+                style={"display": "inline-flex", "margin-left": "3px"},
+            )
             self.add_child(self.brand_text)
 
 
@@ -101,9 +96,26 @@ class NavbarLinks(InnerComponent):
             Each dictionary should have:
             * text (str): The display text for the link.
             * url (str): The URL the link navigates to.
+            * highlight (bool): Optional. Renders the link as an accented
+              button instead of a plain nav link, e.g. for a "Sign Up" call
+              to action as the last link. Defaults to False.
     """
 
-    def get_element(self):
+    # Base style shared by every link.
+    LINK_STYLE = {"color": "white", "text-wrap": "nowrap"}
+
+    # Layered on top of LINK_STYLE for links marked "highlight": True.
+    # Falls back to sensible defaults if the active Theme.current doesn't define
+    # these attributes.
+    HIGHLIGHT_LINK_STYLE = {
+        "background": getattr(Theme.current, "accent_color", "#0d6efd"),
+        "color": getattr(Theme.current, "text_color", "#ffffff"),
+        "padding": "0.4rem 1rem",
+        "border-radius": getattr(Theme.current, "border_radius_sm", "999px"),
+        "font-weight": "600",
+    }
+
+    def get_element(self) -> str:
         return "ul"
 
     def on_create(self):
@@ -111,7 +123,8 @@ class NavbarLinks(InnerComponent):
         Initialize and configure the NavbarLinks component.
         """
         super().on_create()
-        self.klass = "navbar-nav navbar-links d-flex gap-3"
+
+        self.klass = "navbar-nav"
         self.id = "navbar-links"
 
         if "links" in self.kwargs:
@@ -126,12 +139,41 @@ class NavbarLinks(InnerComponent):
         for link_item in links:
             text = link_item.get("text", "")
             url = link_item.get("url", "#")
-            link = Link(url=url, text=text, props={"class": "nav-link active", "role": "link", "aria-label": text})
-            link.color = "white"
-            link.style["text-wrap"] = "nowrap"
-            list_item = to_component(tag="li", props={'class': 'nav-item'})
-            list_item.add_child(link)
+            highlight = link_item.get("highlight", False)
+
+            link_style = {**self.LINK_STYLE, **(self.HIGHLIGHT_LINK_STYLE if highlight else {})}
+            link_classes = "nav-link" + (" nav-link-highlight" if highlight else "")
+
+            link = Link(
+                url=url,
+                text=text,
+                props={"class": link_classes, "role": "link", "aria-label": text},
+                style=link_style,
+            )
+            list_item = to_component(tag="li", props={"class": "nav-item"}, children=[link])
             self.add_child(list_item)
+
+
+class NavbarToggler(FlatButton):
+    """
+    Mobile menu toggle button. Pure CSS hamburger icon — no icon library required.
+    """
+
+    def on_create(self):
+        super().on_create()
+
+        self.klass = "navbar-toggler"
+        self.bg_color = "transparent"
+        self.style.update({"border": "none", "outline": "none !important"})
+        self.props.update({
+            "aria-label": "Toggle navigation",
+            "aria-expanded": "false",
+            "aria-controls": "navbar-links-container",
+        })
+
+        # Three bars built purely from a span + CSS ::before/::after (see NavbarContainer css).
+        self.icon_bar = to_component(tag="span", props={"class": "navbar-toggler-icon"})
+        self.add_child(self.icon_bar)
 
 
 class NavbarContainer(FlexContainer):
@@ -147,87 +189,270 @@ class NavbarContainer(FlexContainer):
         Initialize and configure the NavbarContainer component.
         """
         super().on_create()
-        self.klass = "container-fluid d-flex justify-content-between align-items-center"
-        self.style["justify-content"] = "space-between"
-        self.style["width"] = "100%"
-        
-        # Add Navbar Brand
+
+        # Update class
+        self.klass = "navbar-container"
+
+        # Update style
+        self.style.update({
+            "justify-content": "space-between",
+            "width": "100%",
+            "align-items": "center",
+        })
+
+        # Brand
         self.navbar_brand = NavbarBrand(**self.kwargs)
         self.add_child(self.navbar_brand)
-        
-        # Add Navbar Toggler (for mobile)
-        self.navbar_toggler = FlatButton()
-        self.navbar_toggler.style["outline"] = "none !important"
-        self.navbar_toggler.bg_color = "transparent"
-        self.navbar_toggler.klass = "navbar-toggler"
-        self.navbar_toggler.props["onclick"] = "toggleCollapse($('.navbar-links-container'));"
 
-        self.navbar_toggler_icon = Icon(klass="navbar-toggler-icon")
-        self.navbar_toggler_icon.style["width"] = "16px"
-        self.navbar_toggler_icon.style["height"] = "16px"
-        self.navbar_toggler_icon.style["display"] = "flex"
-        self.navbar_toggler_icon.props["alt"] = "Toggle navbar"
+        # Toggler (mobile only, opens/closes via the script below)
+        self.navbar_toggler = NavbarToggler()
 
-        self.navbar_toggler.add_child(self.navbar_toggler_icon)
-        self.add_child(self.navbar_toggler)
+        # Links, collapsed behind the toggler below the COLLAPSE_BREAKPOINT
+        self.navbar_links = NavbarLinks(**self.kwargs)
 
-        # Add Navbar Links Container
-        self.navbar_links_container = Container()
-        self.navbar_links_container.props["class"] = "navbar-links-container collapse navbar-collapse d-lg-flex align-items-center"
-        self.add_child(self.navbar_links_container)
-        
-        # Add Navbar Links to their container
-        self.navbar_links_container.add_child(NavbarLinks(**self.kwargs))
-        
-        # Add script for toggling navbar visibility
+        # Initialize nav bar links container
+        self.navbar_links_container = Container(
+            id="navbar-links-container",
+            klass="navbar-links-container",
+            children=[self.navbar_links],
+        )
+
+        # Toggle behavior: tap the toggler, tap a link, tap outside, or
+        # press Escape all close the mobile menu.
         self.script = Script(
             inner_html="""
-                function toggleCollapse(elem) {
-                    elem = $(elem);
-                    if (elem.is(':hidden')) {
-                        elem.css('display', 'flex');
-                    } else {
-                        elem.css('display', 'none');
-                    }
-                }
-                
-                function closeNavbar() {
-                  const toggleBtn = $('.navbar-toggler');
-                  const navlinks = $('.navbar-links-container');
-                  
-                  // Only hide if navbar toggle button is visible
-                  if (!toggleBtn.is(':hidden')) {
-                    navlinks.css('display', 'none');
-                  }
-                }
-                
-                $(document).ready(() => {
-                  const navlinks = $('.nav-link');
-                  navlinks.on('click', closeNavbar);
-                });
-            """
-        )
-        
-        # Add responsive styles
-        self.css = Style(
-            inner_html="""
-                @media (max-width: 768px){
-                    .navbar-links-container {
-                        justify-content: flex-start !important;
-                    }
-                    .nav-brand-image {
-                        height: 30px !important;
-                    }
-                }
+                (function () {
+                    function boot() {
+                        var toggleBtn = document.querySelector('.navbar-toggler');
+                        var navLinks = document.querySelector('.navbar-links-container');
 
-                @media (min-width: 992px){
-                    .navbar-links-container {
-                        justify-content: flex-end !important;
+                        if (!toggleBtn || !navLinks || toggleBtn._navInit) return;
+
+                        toggleBtn._navInit = true;
+
+                        function isOpen() {
+                            return navLinks.classList.contains('is-open');
+                        }
+
+                        function isTogglerVisible() {
+                            return getComputedStyle(toggleBtn).display !== 'none';
+                        }
+
+                        function setOpen(open) {
+                            navLinks.classList.toggle('is-open', open);
+                            toggleBtn.classList.toggle('is-open', open);
+                            toggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                        }
+
+                        toggleBtn.addEventListener('click', function () {
+                            setOpen(!isOpen());
+                        });
+
+                        navLinks.addEventListener('click', function (event) {
+                            // Only close if the click landed on a nav link and the
+                            // toggler is visible (i.e. we're on mobile)
+                            if (event.target.closest('.nav-link') && isTogglerVisible()) {
+                                setOpen(false);
+                            }
+                        });
+
+                        document.addEventListener('click', function (event) {
+                            if (!isOpen() || !isTogglerVisible()) return;
+                            if (toggleBtn.contains(event.target) || navLinks.contains(event.target)) return;
+                            setOpen(false);
+                        });
+
+                        document.addEventListener('keydown', function (event) {
+                            if (event.key === 'Escape' && isOpen()) {
+                                setOpen(false);
+                            }
+                        });
+
+                        // Reset mobile "open" state cleanly when crossing back to desktop.
+                        window.addEventListener('resize', function () {
+                            if (isTogglerVisible()) return;
+                            setOpen(false);
+                        });
                     }
-                }
+
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', boot);
+                    } else {
+                        boot();
+                    }
+                })();
             """
         )
-        
+
+        # Full styling — no external CSS framework required.
+        self.css = Style(
+            inner_html=f"""
+                .navbar {{
+                    display: flex;
+                    align-items: center;
+                    padding: 0.5rem 1rem;
+                }}
+
+                .navbar-container {{
+                    display: flex;
+                    flex-wrap: wrap;
+                }}
+
+                .navbar-brand {{
+                    order: 1;
+                    display: inline-flex;
+                    align-items: center;
+                    text-decoration: none;
+                }}
+
+                .navbar-toggler {{
+                    order: 2;
+                    display: none;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 0.4rem;
+                    cursor: pointer;
+                }}
+
+                .navbar-toggler-icon {{
+                    display: block;
+                    position: relative;
+                    width: 22px;
+                    height: 2px;
+                    background: #fff;
+                    transition: background-color 0.15s ease;
+                }}
+
+                .navbar-toggler-icon::before,
+                .navbar-toggler-icon::after {{
+                    content: '';
+                    position: absolute;
+                    left: 0;
+                    width: 22px;
+                    height: 2px;
+                    background: #fff;
+                    transition: transform 0.15s ease, top 0.15s ease, opacity 0.15s ease;
+                }}
+
+                .navbar-toggler-icon::before {{ top: -7px; }}
+                .navbar-toggler-icon::after {{ top: 7px; }}
+
+                .navbar-toggler.is-open .navbar-toggler-icon {{
+                    background: transparent;
+                }}
+
+                .navbar-toggler.is-open .navbar-toggler-icon::before {{
+                    top: 0;
+                    transform: rotate(45deg);
+                }}
+
+                .navbar-toggler.is-open .navbar-toggler-icon::after {{
+                    top: 0;
+                    transform: rotate(-45deg);
+                }}
+
+                .navbar-links-container {{
+                    order: 3;
+                    flex-basis: 100%;
+                    width: 100%;
+                    display: flex;
+                    max-height: 0;
+                    overflow: hidden;
+                    opacity: 0;
+                    transition: max-height 0.3s ease, opacity 0.25s ease;
+                }}
+
+                .navbar-links-container.is-open {{
+                    max-height: 600px;
+                    opacity: 1;
+                }}
+
+                .navbar-nav {{
+                    list-style: none;
+                    margin: 0;
+                    padding: 0.75rem 0 0.25rem;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.5rem;
+                    width: 100%;
+                }}
+
+                .nav-item {{
+                    display: flex;
+                }}
+
+                .nav-link {{
+                    text-decoration: none;
+                    display: inline-block;
+                    padding: 0.35rem 0.1rem;
+                }}
+
+                .nav-link-highlight {{
+                    display: inline-block;
+                    text-align: center;
+                }}
+
+                .nav-link-highlight:hover,
+                .nav-link-highlight:focus-visible {{
+                    filter: brightness(0.92);
+                }}
+
+                .nav-link-highlight:active {{
+                    transform: scale(0.97);
+                }}
+
+                .nav-brand-image {{
+                    height: 40px;
+                }}
+
+                @media (max-width: 768px) {{
+                    .nav-brand-image {{
+                        height: 30px !important;
+                    }}
+                }}
+
+                @media (max-width: {COLLAPSE_BREAKPOINT}) {{
+                    .navbar-toggler {{
+                        display: inline-flex;
+                    }}
+                }}
+
+                @media (min-width: {COLLAPSE_BREAKPOINT}) {{
+                    .navbar-container {{
+                        flex-wrap: nowrap;
+                    }}
+
+                    .navbar-toggler {{
+                        display: none !important;
+                    }}
+
+                    .navbar-links-container {{
+                        order: 2;
+                        flex-basis: auto;
+                        width: auto;
+                        max-height: none;
+                        overflow: visible;
+                        opacity: 1;
+                        transition: none;
+                    }}
+
+                    .navbar-nav {{
+                        flex-direction: row;
+                        align-items: center;
+                        gap: 1rem;
+                        padding: 0;
+                        width: auto;
+                    }}
+
+                    .nav-link {{
+                        padding: 0;
+                    }}
+                }}
+            """
+        )
+
+        self.add_child(self.navbar_toggler)
+        self.add_child(self.navbar_links_container)
         self.add_child(self.css)
         self.add_child(self.script)
 
@@ -238,12 +463,11 @@ class Navbar(InnerComponent):
 
     This component represents a full navigation bar with a brand logo, navigation links, and
     a responsive toggler button for mobile screens.
-    
-    Notes:
-    - This requires Bootsrap & Bootstrap icons library.
-    
+
+    No external dependencies (self-contained CSS + JS, no Bootstrap required).
+
     Example Template Usage:
-    
+
     ```django
     {% Navbar %}
         brand = {
@@ -259,12 +483,13 @@ class Navbar(InnerComponent):
             {"text": "Contact", "url": "{% resolve 'contact' fallback_url='#' %}"},
             {"text": "Consultation", "url": "{% resolve 'consultation' fallback_url='#' %}"},
             {"text": "Jobs", "url": "{% resolve 'jobs' fallback_url='#' %}"},
+            {"text": "Get Started", "url": "{% resolve 'signup' fallback_url='#' %}", "highlight": True},
         ],
     {% endNavbar %}
     ```
     """
 
-    def get_element(self):
+    def get_element(self) -> str:
         return "nav"
 
     def on_create(self):
@@ -272,9 +497,8 @@ class Navbar(InnerComponent):
         Initialize and configure the Navbar component.
         """
         super().on_create()
-        self.klass = "navbar navbar-expand-lg navbar-dark px-3"
+
+        self.klass = "navbar"
         self.bg_color = "rgba(100, 100, 100, .25)"
 
-        # Add Navbar Container
         self.add_child(NavbarContainer(**self.kwargs))
-       

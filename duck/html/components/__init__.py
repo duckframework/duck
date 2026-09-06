@@ -442,7 +442,7 @@ class HtmlComponent:
         
                 # Bind event.
                 self.bind(name, handler, **event_info)
-                    
+                
     @property
     def properties(self):
         """
@@ -2023,26 +2023,6 @@ class InnerHtmlComponent(
         Clears all component's children.
         """
         self.children.clear()
-        
-    
-class Theme:
-    """
-    Default Duck theme.
-    """
-    primary_color = "#4B4E75"  # Dark Blue
-    secondary_color = "#A6B48B"  # Soft Green
-    background_color = "#FFFFFF"  # White
-    text_color = "#333333"  # Dark Grey for readability
-    font_family = "Arial, sans-serif"
-    border_radius = "15px"
-    padding = "10px"
-    button_style = {
-        "background": primary_color,
-        "text_color": "#FFFFFF",
-        "border_radius": "5px",
-        "padding": "10px 20px"
-    }
-    normal_font_size = "16px"
 
 
 # Create some aliases
@@ -2050,4 +2030,3 @@ Component = HtmlComponent
 InnerComponent = InnerHtmlComponent
 NoInnerComponent = NoInnerHtmlComponent
 ComponentError = HtmlComponentError
-''

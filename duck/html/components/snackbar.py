@@ -94,10 +94,9 @@ class Snackbar(FlexContainer):
 
         Args:
             text: Snackbar message text.
-            type: Snackbar type. Must be ``info``, ``success``, ``error``,
-                or ``warning``.
-            variant: Visual style. Must be ``filled`` (solid background) or
-                ``glacier`` (frosted, outlined glass look).
+            type: Snackbar type. Must be `info`, `success`, `error`, or `warning`.
+            variant: Visual style. Must be `filled` (solid background) 
+                or `glacier` (frosted, outlined glass look).
             timeout: Auto-hide timeout in milliseconds.
             **kwargs: Additional component keyword arguments.
 
@@ -198,8 +197,8 @@ class Snackbar(FlexContainer):
         Set snackbar type and background color.
 
         Args:
-            type: Snackbar type. Must be ``info``, ``success``, ``error``,
-                or ``warning``.
+            type: Snackbar type. Must be `info`, `success`, `error`,
+                or `warning`.
 
         Raises:
             ValueError: If the snackbar type is invalid.
@@ -218,7 +217,7 @@ class Snackbar(FlexContainer):
         Set the snackbar's visual variant.
 
         Args:
-            variant: Visual style. Must be ``filled`` or ``glacier``.
+            variant: Visual style. Must be `filled` or `glacier`.
 
         Raises:
             ValueError: If the variant is invalid.
@@ -238,7 +237,7 @@ class Snackbar(FlexContainer):
         Set the default JavaScript auto-hide timeout.
 
         Args:
-            timeout: Auto-hide timeout in milliseconds, or ``None`` to disable.
+            timeout: Auto-hide timeout in milliseconds, or `None` to disable.
         """
         self.timeout = timeout
         self.props["data-timeout"] = str(timeout or "")

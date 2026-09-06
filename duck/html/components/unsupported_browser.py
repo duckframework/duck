@@ -1,6 +1,7 @@
 """
 Unsupported Browser Banner.
 """
+from duck.html.components.theme import Theme
 from duck.html.components.modal import Modal
 from duck.html.components.paragraph import Paragraph
 from duck.html.components.script import Script
@@ -56,7 +57,7 @@ class UnsupportedBrowserBanner(Modal):
             ),
             style={
                 "text-align": "center",
-                "color": "#ccc",
+                "color": Theme.current.text_color,
             }
         )
         

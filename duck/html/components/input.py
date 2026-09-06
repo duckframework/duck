@@ -2,10 +2,8 @@
 Input components module.
 """
 
-from duck.html.components import (
-    NoInnerComponent,
-    Theme,
-)
+from duck.html.components import NoInnerComponent
+from duck.html.components.theme import Theme
 from duck.html.components.container import FlexContainer
 from duck.html.components.label import Label
 
@@ -19,13 +17,13 @@ class BaseInput(NoInnerComponent):
     
     def on_create(self):
          super().on_create()
-         style = {
-            "padding": "10px",
-            "border-radius": Theme.border_radius,
-            "font-size": Theme.normal_font_size,
-         }
-         self.style.setdefaults(style)
-
+         
+         self.style.setdefaults({
+            "padding": Theme.current.padding,
+            "border-radius": Theme.current.border_radius,
+            "font-size": Theme.current.font_size,
+         })
+         
 
 class Input(BaseInput):
     """
@@ -68,8 +66,7 @@ class Input(BaseInput):
         if self.kwargs.get("minlength"):
            self.props["minlength"] = str(self.kwargs.get('minlength')) or ''  
         
-        if self.kwargs.get("disabled"):
-            self.props["disabled"] = "true" if self.kwargs.get("disabled") else "false"
+        self.props["disabled"] = bool(self.kwargs.get("disabled"))
 
 
 class InputWithLabel(FlexContainer):

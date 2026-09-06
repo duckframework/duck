@@ -12,11 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Added argument `consent` to `Page.add_google_analytics` for enabling G4 consent mode.
+- Added `duck.html.components.theme` for better theming.
+
 
 ### Changed
 
 - HTML components `style` or `props` now accept boolean values - if True, prop will be added else It wont be added at all.
 - Fixed HttpRequest's `extract_url_queries` decoding `+` as a literal plus instead of a space, which caused blank filter selections (e.g. `location=+`) to be treated as real search values and match nothing.
+- Made all builtin components themeable by default.
 
 ---
 

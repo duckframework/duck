@@ -3,7 +3,8 @@ This module contains various types of Button components.
 """
 from typing import Dict
 
-from duck.html.components import Theme, InnerComponent
+from duck.html.components import InnerComponent
+from duck.html.components.theme import Theme
 
 
 class Button(InnerComponent):
@@ -15,12 +16,13 @@ class Button(InnerComponent):
     
     def on_create(self):
         super().on_create()
+        
         btn_style = {
             "padding": "10px 20px",
             "cursor": "pointer",
             "transition": "background-color 0.3s ease",
             "border": "none",
-            "border-radius": Theme.border_radius,
+            "border-radius": Theme.current.border_radius,
         }
         
         # Set default button style.
@@ -37,7 +39,8 @@ class RoundedButton(Button):
     """
     def on_create(self):
         super().on_create()
-        self.style["border-radius"] = "50%"
+        
+        self.style.update({"border-radius": "50%"})
 
 
 class FlatButton(Button):
@@ -46,6 +49,7 @@ class FlatButton(Button):
     """
     def on_create(self):
         super().on_create()
+        
         self.style.setdefaults({
             "background-color": "transparent"
         })
@@ -57,4 +61,5 @@ class RaisedButton(Button):
     """
     def on_create(self):
         super().on_create()
-        self.style["box-shadow"] = "0 2px 2px rgba(0, 0, 0, 0.2)" # override box shadow nomatter what
+        
+        self.style.update({"box-shadow": "0 2px 2px rgba(0, 0, 0, 0.2)"}) # override box shadow nomatter what

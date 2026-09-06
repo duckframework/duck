@@ -48,12 +48,14 @@ class Container(InnerComponent):
             component.style["height"] = "100%"
     
         # Background-related styling
-        component.style["z-index"] = z_index
-        component.style["background-size"] = bg_size
-        component.style["background-repeat"] = repeat
-        component.style["background-position"] = position
-        component.style["position"] = "absolute"
-    
+        component.style.update({
+            "z-index": z_index,
+            "background-size": bg_size,
+            "background-repeat": repeat,
+            "background-position": position,
+            "position": "absolute",
+        })
+        
         # Insert as first child to render behind other components
         self.children.insert(0, component)
 
@@ -64,6 +66,8 @@ class FlexContainer(Container):
     """
     def on_create(self):
         super().on_create()
+        
+        # Update style
         self.style.setdefault("display", "flex")
         
         if "flex_direction" in self.kwargs or "direction" in self.kwargs:
@@ -76,6 +80,8 @@ class GridContainer(Container):
     """
     def on_create(self):
         super().on_create()
+        
+        # Update style
         self.style.setdefault("display", "grid")
 
 
@@ -85,6 +91,8 @@ class FluidContainer(Container):
     """
     def on_create(self):
         super().on_create()
+        
+        # Update style
         self.style.setdefault("width", "100%")
 
 
@@ -94,9 +102,10 @@ class FixedContainer(Container):
     """
     def on_create(self):
         super().on_create()
-        default_style = {
+        
+        # Update style
+        self.style.setdefaults({
             "max-width": "1200px",
             "margin": "0 auto",
             "padding": "16px"
-        }
-        self.style.setdefaults(default_style)
+        })

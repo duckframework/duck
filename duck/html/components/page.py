@@ -100,6 +100,7 @@ from duck.html.components import (
     NoInnerComponent,
     to_component,
 )
+from duck.html.components.theme import Theme
 from duck.html.components.core.exceptions import UnknownEventError, EventAlreadyBound
 from duck.html.components.extensions import RequestNotFoundError
 from duck.html.components.lively import LivelyScripts
@@ -112,7 +113,7 @@ from duck.html.components.style import Style
 from duck.html.components.modal import Modal
 from duck.html.components.paragraph import Paragraph
 from duck.html.components.unsupported_browser import UnsupportedBrowserBanner
-from duck.contrib.sync import convert_to_async_if_needed
+from duck.contrib.sync import ensure_async
 from duck.utils.lazy import Lazy
 
 
@@ -163,6 +164,10 @@ gtag('consent', 'default', {{
     ad_personalization: '{ad_personalization}'
 }});
 """
+from duck.html.components.theme import Theme
+
+
+_theme_sentinel = object()
 
 
 class PageError(Exception):
@@ -230,7 +235,7 @@ class EventHandlerChain:
                 continue
             
             try:
-                result = await convert_to_async_if_needed(event_handler)(*args)
+                result = await ensure_async(event_handler)(*args)
                 self._execution_results[event_handler] = result
             except Exception as e:
                 raise EventHandlerChainError(f"Error executing event handler '{event_handler}': {e}")
@@ -251,6 +256,7 @@ class Page(InnerComponent):
         disable_lively: bool = False,
         lazy: bool = True,
         document_event_handlers: Optional[list[Dict[str, Any]]] = None,
+        add_theme_css: bool = True,
         *args,
         **kwargs
     ):
@@ -258,20 +264,32 @@ class Page(InnerComponent):
         Initialize the Page component.
         
         Args:
-            request (HttpRequest): The target HTTP request.
-            disable_lively (bool): This disables `Lively` components for the page. Defaults to False.
-            lazy (bool): This makes the page not aggressively load the page tree on initialization but let the 
+            request (HttpRequest):
+                The target HTTP request.
+            
+            disable_lively (bool):
+                This disables `Lively` components for the page. Defaults to False.
+            
+            lazy (bool):
+                This makes the page not aggressively load the page tree on initialization but let the 
                 system decide the right time to load the page. Defaults to True.
-            document_event_handlers (Optional[list[Dict[str, Any]]]): Document-level events to automatically bind. Each dictionary maps an event name to its handler and may include additional keyword arguments forwarded to `document_bind()`, 
+            
+            document_event_handlers (Optional[list[Dict[str, Any]]]):
+                Document-level events to automatically bind. Each dictionary maps an event name to its handler and may include additional keyword arguments forwarded to `document_bind()`, 
                 e.g. `document_event_handlers=[{"DOMContentLoaded": on_dom_loaded, **extra_kwargs}]`.
+            
+            add_theme_css (bool):
+                Adds the CSS variables for the current global theme. Defaults to True.
         """
         self._request = request
         self._document_event_bindings: Dict[Union[Callable, EventHandlerChain], Set[HtmlComponent]] = {}
         self._add_doctype_declaration = True
         self._domcontentloaded_event_called = False # Will be set on successful DOMContentLoaded event.
+        
         self.disable_lively = disable_lively
         self.fullpage_reload = False # Set this to enable full page reload.
         self.fullpage_reload_headers = ["set-cookie"] # Headers that requires fullpage reload.
+        self.add_theme_css = add_theme_css
         
         # Super initialization
         super().__init__(*args, disable_lively=disable_lively, lazy=lazy, **kwargs)
@@ -349,14 +367,25 @@ class Page(InnerComponent):
         Bind an event handler to the document object.
         
         Args:
-            event (str): The name of the event to bind (e.g., "DOMContentLoaded", "DuckNavigated").
-            event_handler (Callable): A callable (preferably async) that handles the event.
-            force_bind (bool): If True, binds the event even if it's not in the recognized set.
-            update_targets (List[HtmlComponent], optional): Other components whose state may be modified 
+            event (str):
+                The name of the event to bind (e.g., "DOMContentLoaded", "DuckNavigated").
+            
+            event_handler (Callable):
+                A callable (preferably async) that handles the event.
+            
+            force_bind (bool):
+                If True, binds the event even if it's not in the recognized set.
+            
+            update_targets (List[HtmlComponent], optional):
+                Other components whose state may be modified 
                 when this event is triggered. Defaults to None.
-            update_self (bool): Whether this component’s state may change as a result of the event. 
+            
+            update_self (bool):
+                Whether this component’s state may change as a result of the event. 
                 If False, only other components will be considered for DOM updates. Defaults to True.
-            event_handler_chaining (bool): This force binding to event even if the event is already bound. This creates a chain of event 
+            
+            event_handler_chaining (bool):
+                This force binding to event even if the event is already bound. This creates a chain of event 
                 handlers that will be executed in order when an event happens.
             
         Raises:
@@ -545,6 +574,10 @@ class Page(InnerComponent):
         # This next line should be first before adding LivelyScripts for these scripts to
         # be able to resolve the Page UID.
         self.add_script(inline=f"window.PAGE_UID=document.getElementById(`{self.id}`).dataset.uid;")
+        
+        # Add theme css
+        if self.add_theme_css:
+            self.add_to_head(Theme.current.to_style())
         
         # Add other head components
         self.add_to_head([Style(inner_html=BASE_CSS), *LivelyScripts().children], force_reparent=True)
@@ -860,8 +893,10 @@ class Page(InnerComponent):
                 props={"type": "application/ld+json"}
             )
             self.add_to_head(self._json_ld_tag)
+        
         else:
             self._json_ld_tag.inner_html = json_str
+            
             if self._json_ld_tag not in self.head.children:
                 self.add_to_head(self._json_ld_tag)
         
@@ -908,8 +943,10 @@ class Page(InnerComponent):
                 "url": url or "",
             }
         }
+        
         if image:
             data["image"] = image
+        
         self.set_json_ld(data)
         
     def add_meta(self, name: str, content: str) -> NoInnerComponent:

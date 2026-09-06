@@ -3,7 +3,8 @@ Modal components module.
 """
 import random
 
-from duck.html.components import Theme, Component
+from duck.html.components import Component
+from duck.html.components.theme import Theme
 from duck.html.components.container import FlexContainer
 from duck.html.components.button import Button
 from duck.html.components.heading import Heading

@@ -66,6 +66,8 @@ class Video(InnerComponent):
         
     def on_create(self):
         super().on_create()
+        
+        # Update type
         self.props.setdefault("type", "video/mp4")
         
         if "source" in self.kwargs:
@@ -80,14 +82,9 @@ class Video(InnerComponent):
         if "height" in self.kwargs:
             self.style["height"] = self.kwargs.get("height", '')
         
-        if self.kwargs.get("autoplay"):
-            self.props["autoplay"] = "true"
-        
-        if self.kwargs.get("loop"):
-            self.props["loop"] = "true"
-            
-        if self.kwargs.get("muted"):
-            self.props["muted"] = "true"
-        
-        if self.kwargs.get("playsinline"):
-            self.props["playsinline"] = "true"
+        self.props.update({
+            "autoplay": bool(self.kwargs.get("autoplay")),
+            "loop": bool(self.kwargs.get("loop")),
+            "muted": bool(self.kwargs.get("muted")),
+            "playsinline": bool(self.kwargs.get("playsinline")),
+        })

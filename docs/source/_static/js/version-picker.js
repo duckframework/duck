@@ -15,15 +15,17 @@ document.addEventListener("DOMContentLoaded", function () {
   const versionPicker = document.createElement("div");
   versionPicker.id = "version-picker";
   versionPicker.style.position = "fixed";
-  versionPicker.style.bottom = "80px";
+  versionPicker.style.bottom = "140px";
   versionPicker.style.right = "20px";
   versionPicker.style.backgroundColor = "black";
   versionPicker.style.color = "#ffffff";
   versionPicker.style.border = "1px solid #ddd";
-  versionPicker.style.padding = "4.5px";
+  versionPicker.style.padding = "4px";
   versionPicker.style.borderRadius = "5px";
   versionPicker.style.boxShadow = "0px 2px 5px rgba(0, 0, 0, 0.2)";
   versionPicker.style.zIndex = "1000";
+  versionPicker.style.backdropFilter = "blur(20px)"
+  versionPicker.style.fontSize = ".75rem"
 
   // Create label element for the dropdown
   const label = document.createElement("label");
@@ -36,6 +38,7 @@ document.addEventListener("DOMContentLoaded", function () {
   dropdown.style.background = "transparent";
   dropdown.style.borderLeft = "1px solid #ddd";
   dropdown.style.color = "#ddd";
+  dropdown.style.outline = "none";
   
   // Populate the dropdown with versions from Sphinx's context
   versions.forEach(version => {

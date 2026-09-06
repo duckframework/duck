@@ -4,7 +4,7 @@ Textarea HTML Component.
 This module provides a customizable `TextArea` component for handling multi-line text input in HTML forms.
 """
 
-from duck.html.components import Theme
+from duck.html.components.theme import Theme
 from duck.html.components import InnerComponent
 
 
@@ -49,7 +49,7 @@ class TextArea(InnerComponent):
     ```
 
     **Default Styling:**
-    - Uses padding, borders, and font settings from the `Theme` class.
+    - Uses padding, borders, and font settings from the `Theme.current` class.
     - Minimum width is set to `50%` and minimum height to `80px`.
 
     **Returns:**
@@ -57,7 +57,9 @@ class TextArea(InnerComponent):
     """
 
     def get_element(self):
-        """Returns the HTML tag for the component."""
+        """
+        Returns the HTML tag for the component.
+        """
         return "textarea"
 
     def on_create(self):
@@ -68,16 +70,15 @@ class TextArea(InnerComponent):
         
         # Apply default styling
         textarea_style = {
-            "padding": "10px",
-            "border": "1px solid #ccc",
-            "border-radius": Theme.border_radius,
-            "font-size": Theme.normal_font_size,
+            "padding": Theme.current.padding,
+            "border": f"1px solid {Theme.current.border_color}",
+            "border-radius": Theme.current.border_radius,
+            "font-size": Theme.current.font_size,
         }
         self.style.setdefaults(textarea_style)
 
         # Set default properties
-        self.props["min-width"] = "50%"
-        self.props["min-height"] = "80px"
+        self.props.update({"min-width": "50%", "min-height": "80px"})
 
         # Assign properties based on arguments
         if "name" in self.kwargs:
@@ -95,5 +96,4 @@ class TextArea(InnerComponent):
         if "minlength" in self.kwargs:
            self.props["minlength"] = str(self.kwargs.get('minlength')) or ''  
                 
-        if "disabled" in self.kwargs:
-            self.props["disabled"] = "true" if self.kwargs.get("disabled") else "false"
+        self.props["disabled"] = bool(self.kwargs.get("disabled"))

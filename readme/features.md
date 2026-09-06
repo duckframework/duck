@@ -78,4 +78,5 @@
 8. **Complete reverse proxy server** — Duck currently proxies only Django; the goal is a full-fledged reverse proxy server with optional sticky sessions
 9. Implement Duck AI Agent system with reusable agents, MCP tool integration, task execution, and long-running worker support.
 10. Need to add analytics like web visits, etc to DASHBOARD.
-11. **...and more** — [request a feature](../feature_request.md)
+11. **Duck Native** — Cross platform framework for building native applications.
+12. **...and more** — [request a feature](../feature_request.md)

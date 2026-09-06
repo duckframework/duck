@@ -5,7 +5,9 @@ Available Forms:
 - `Form`: Basic form component.
 - `FeedbackForm`: Basic feedback form component.
 """
-from duck.html.components import InnerComponent, to_component, Theme
+
+from duck.html.components import InnerComponent
+from duck.html.components.theme import Theme
 from duck.html.components.input import Input, CSRFInput
 from duck.html.components.textarea import TextArea
 
@@ -13,62 +15,68 @@ from duck.html.components.textarea import TextArea
 class Form(InnerComponent):
     """
     Basic Form component.
-    
+
     Args:
         action (str): Form URL action.
         method (str): Form method.
         enctype (str): Form enctype
         fields (list[HtmlComponent]): List of html components, usually input html components.
     """
-    def get_element(self):
+
+    def get_element(self) -> str:
         return "form"
-    
+
     def on_create(self):
         super().on_create()
-        
+
         # Always set form method
         self.props.setdefault("method", self.kwargs.get("method", "post"))
-        
+
         if "action" in self.kwargs:
             self.props["action"] = self.kwargs.get("action") or "#"
-            
+
         if "enctype" in self.kwargs:
             self.props["enctype"] = self.kwargs.get("enctype") or "multipart/form-data"
-        
-        if "fields" in self.kwargs:
-            for field in self.kwargs.get("fields", []):
-                if "class" in field.props:
-                    field.props["class"] += " form-control"
-                else:
-                    field.props["class"] = "form-control"
-                self.add_child(field)
+
+        # Attach fields, tagging each with the shared form-control class
+        for field in self.kwargs.get("fields", []):
+            existing_class = field.klass or ""
+            
+            # Update class
+            field.klass = f"{existing_class} form-control".strip()
+            
+            # Add field
+            self.add_child(field)
 
 
 class FeedbackForm(Form):
     """
     Feedback Form component.
     
-    Notes:
-    - Use this form directly inside a template so that it will be able to access the current
-      request or parse context argument (dictionary with request key provided).
-   - This is done to be so that the form will have the CSRF token (needed for security reasons).
+    Args:
+        add_csrf (bool, optional): Whether to add CSRF input source from current request. Defaults to False.
         
     Available Fields:
-    - `fullname` (Input): Text Input html component
-    - `email` (Input): Email Input html component.
-    - `feedback` (TextArea): TextArea html component.
+    - `fullname` (Input): Text Input component
+    - `email` (Input): Email Input component.
+    - `feedback` (TextArea): TextArea component.
     """
+
     def on_create(self):
-        # Set form style
-        self.style["display"] = "flex"
-        self.style["flex-direction"] = "column"
-        self.style["gap"] = "20px"
-        self.style["padding"] = "10px"
-        self.style["border-radius"] = Theme.border_radius
-        self.style["border"] = "1px solid #ccc"
-        self.props["class"] = "feedback-form form"
+        # Form container styling
+        self.klass = "feedback-form form"
         
-        # Create fullname textfield
+        # Update style
+        self.style.update({
+            "display": "flex",
+            "flex-direction": "column",
+            "gap": "20px",
+            "padding": "10px",
+            "border-radius": Theme.current.border_radius,
+            "border": "1px solid #ccc",
+        })
+
+        # Build fields
         self.fullname = Input(
             type="text",
             placeholder="Full Name",
@@ -76,7 +84,7 @@ class FeedbackForm(Form):
             maxlength=64,
             name="fullname",
         )
-        
+
         self.email = Input(
             type="email",
             placeholder="Email",
@@ -84,7 +92,7 @@ class FeedbackForm(Form):
             maxlength=64,
             name="email",
         )
-        
+
         self.textarea = TextArea(
             placeholder="What is it you like to say?",
             maxlength=255,
@@ -92,21 +100,26 @@ class FeedbackForm(Form):
             name="feedback",
             props={"rows": "4", "cols": "50"},
         )
+
+        self.submit = Input(
+            type="submit",
+            value="Submit",
+            color=Theme.current.text_color,
+            bg_color="green",
+            style={"border": "none", "font-size": "1rem"},
+        )
         
-        self.submit = Input(type="submit", value="Submit",)
-        self.submit.color = "#ccc"
-        self.submit.bg_color = "green"
-        self.submit.style["border"] = "none"
-        self.submit.style["font-size"] = "1rem"
-        
-        # Get the current request
+        # Update fields
         self.kwargs["fields"] = [
-            CSRFInput(request=self.get_request_or_raise()),
-            fullname,
-            email,
-            textarea,
-            submit,
+            self.fullname,
+            self.email,
+            self.textarea,
+            self.submit,
         ]
         
-        # Super Create
+        # Attach CSRF-protected field set, sourced from the current request
+        if self.kwargs.get('add_csrf', False):
+            self.fields[0] = CSRFInput(request=self.get_request_or_raise())
+        
+        # Super create
         super().on_create()

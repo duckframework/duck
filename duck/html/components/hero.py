@@ -1,7 +1,6 @@
 """
 Hero component module.
 """
-from duck.html.components import Theme
 from duck.html.components.container import FlexContainer
 
 
@@ -9,11 +8,18 @@ class Hero(FlexContainer):
     """
     Basic Hero component.
     """
+
     def on_create(self):
         super().on_create()
-        self.style["flex-direction"] = "column"
-        self.style["width"] = "100%"
-        self.style["min-height"] = "100vh"
-        self.style["justify-content"] = "center"
-        self.style["overflow"] = "hidden"
-        self.props["class"] = "hero"
+        
+        # Update class
+        self.klass = "hero"
+        
+        # Update style
+        self.style.update({
+            "flex-direction": "column",
+            "width": "100%",
+            "min-height": "100vh",
+            "justify-content": "center",
+            "overflow": "hidden",
+        })

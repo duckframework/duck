@@ -50,11 +50,17 @@ Contents
 
 .. toctree::
    :maxdepth: 2
+   :caption: Lively/HTML components
+
+   lively-components/index
+   theming
+
+.. toctree::
+   :maxdepth: 2
    :caption: Core Concepts
 
    templates
    templatetags
-   lively-components
    blueprint
    shortcuts
    utils

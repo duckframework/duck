@@ -9,5 +9,6 @@ class Section(InnerComponent):
     """
     Section component class.
     """
+    
     def get_element(self):
         return "section"
