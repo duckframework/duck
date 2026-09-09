@@ -280,6 +280,7 @@ class FooterItems(FlexContainer):
             "gap": "32px",
             "padding": Theme.current.padding,
             "flex-wrap": "wrap",
+            "justify-content": "flex-start",
         })
 
         # Build one block per configured heading

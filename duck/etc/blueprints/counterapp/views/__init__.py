@@ -11,7 +11,8 @@ from duck.html.components.label import Label
 from duck.html.components.page import Page
 from duck.html.components.style import Style
 from duck.html.components.script import Script
-
+from duck.html.components.link import Link
+from duck.html.components.span import Span
 
 
 # Page-scoped CSS — dark editorial theme matching duckframework.com
@@ -76,7 +77,7 @@ body::after {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
 
-/* ── Layout ─────────────────────────────────────────────────────── */
+/* ── Layout */
 #counterapp-root {
     position: relative;
     z-index: 1;
@@ -89,7 +90,7 @@ body::after {
     gap: 32px;
 }
 
-/* ── Back link ───────────────────────────────────────────────────── */
+/* ── Back link */
 .counterapp-back {
     align-self: flex-start;
     display: flex;
@@ -106,7 +107,7 @@ body::after {
 .counterapp-back:hover { color: var(--text-muted) !important; }
 .counterapp-back .bi { font-size: 0.9rem; }
 
-/* ── Main card ───────────────────────────────────────────────────── */
+/* ── Main card */
 .counterapp-card {
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -129,7 +130,7 @@ body::after {
     background: linear-gradient(90deg, transparent, var(--accent-border), transparent);
 }
 
-/* ── Header ──────────────────────────────────────────────────────── */
+/* ── Header */
 .counterapp-header {
     text-align: center;
     display: flex;
@@ -151,7 +152,7 @@ body::after {
     letter-spacing: -0.02em !important;
 }
 
-/* ── Counter ring ────────────────────────────────────────────────── */
+/* ── Counter ring */
 .counterapp-ring-wrap {
     position: relative;
     width: 164px;
@@ -207,7 +208,7 @@ body::after {
     font-family: var(--mono);
 }
 
-/* ── Buttons ─────────────────────────────────────────────────────── */
+/* ── Buttons */
 .counterapp-btn-row {
     display: flex;
     gap: 12px;
@@ -219,7 +220,7 @@ body::after {
 #ca-dec-btn:hover  { background: rgba(255,255,255,0.1) !important; color: #ebebeb !important; transform: translateY(-1px); }
 #ca-reset-btn:hover { color: rgba(235,235,235,0.7) !important; border-color: rgba(255,255,255,0.2) !important; }
 
-/* ── View source link (GitHub) ─────────────────────────────────── */
+/* ── View source link (GitHub) */
 .counterapp-src-toggle {
     display: inline-flex;
     align-items: center;
@@ -235,7 +236,7 @@ body::after {
 .counterapp-src-toggle:hover { color: var(--accent) !important; text-decoration: none !important; }
 .counterapp-src-toggle .bi { font-size: 0.88rem; }
 
-/* ── Powered badge ───────────────────────────────────────────────── */
+/* ── Powered badge */
 .counterapp-badge {
     display: flex;
     align-items: center;
@@ -259,7 +260,7 @@ body::after {
     flex-shrink: 0;
 }
 
-/* ── Mobile ──────────────────────────────────────────────────────── */
+/* ── Mobile */
 @media (max-width: 600px) {
     #counterapp-root {
         padding: 28px 16px 48px;
@@ -315,6 +316,22 @@ PAGE_SCRIPT = """
 })();
 """
 
+INIT_SCRIPT = """
+// Sync ring on every Lively DOM patch
+document.addEventListener('DOMContentLoaded', function() {
+    var observer = new MutationObserver(function() {
+        var el = document.getElementById('ca-count');
+        if (el) {
+            var n = parseInt(el.getAttribute('data-count') || el.innerText, 10) || 0;
+            window.caUpdateRing && window.caUpdateRing(n);
+            window.caBumpCount && window.caBumpCount();
+        }
+    });
+    var target = document.getElementById('ca-count');
+    if (target) observer.observe(target, { childList: true, characterData: true, subtree: true });
+});
+"""
+
 
 class HomePage(Page):
     """
@@ -324,26 +341,24 @@ class HomePage(Page):
         super().on_create()
         self.style["font-family"] = "var(--display, system-ui)"
         self.set_title("Counter App — Duck Framework")
-
-        # Stylesheets
+        
+        # Add stylesheets
         self.add_stylesheet(href=static("counterapp/css/bootstrap-icons.min.css"))
         self.add_stylesheet(href=static("counterapp/css/prism.css"))
-
-        # Scripts
+        
+        # Add scripts
         self.add_script(src=static("counterapp/js/prism.js"), defer=True)
         self.add_script(src=static("counterapp/js/jquery-3.7.1.min.js"))
-
-        # Inject page styles
+        
+        # Add page style
         self.add_to_head(Style(inner_html=PAGE_STYLES))
 
         # Counter state
         self.counter = 0
-        
+
         def on_increment(btn, *_):
             self.counter += 1
             self.count_label.text = self.counter
-            
-            # Sync ring via JS
             self.count_label.props["data-count"] = str(self.counter)
 
         def on_decrement(btn, *_):
@@ -356,65 +371,54 @@ class HomePage(Page):
             self.count_label.text = self.counter
             self.count_label.props["data-count"] = "0"
 
-
-        # Root wrapper
-        root = FlexContainer(id="counterapp-root")
-        root.style["flex-direction"] = "column"
-        root.style["align-items"] = "center"
-
         # Back link
-        back = to_component("", "a")
-        back.klass = "counterapp-back"
-        back.props["href"] = resolve("home", fallback_url="/")
-        back_icon = to_component("", "span")
-        back_icon.klass = "bi bi-arrow-left"
-        back_text = to_component("Home", "span")
-        back.add_children([back_icon, back_text])
-        root.add_child(back)
-
-        # Main card
-        card = FlexContainer(flex_direction="column")
-        card.klass = "counterapp-card"
+        back = Link(
+            url=resolve("home", fallback_url="/"),
+            klass="counterapp-back",
+            children=[
+                Span(klass="bi bi-arrow-left"),
+                Span(text="Home"),
+            ],
+        )
 
         # Header
-        header = FlexContainer()
-        header.klass = "counterapp-header"
-        kicker = to_component("Lively Component System", "span")
-        kicker.klass = "counterapp-kicker"
-        title = Heading("h1", text="Counter App", klass="counterapp-title")
-        header.add_children([kicker, title])
-        card.add_child(header)
+        header = FlexContainer(
+            klass="counterapp-header",
+            children=[
+                Span(text="Lively Component System", klass="counterapp-kicker"),
+                Heading("h1", text="Counter App", klass="counterapp-title"),
+            ],
+        )
 
         # Ring progress
-        ring_wrap = to_component("", "div")
-        ring_wrap.klass = "counterapp-ring-wrap"
-
         svg = to_component(
             '<circle class="counterapp-ring-track" cx="82" cy="82" r="70"/>'
             '<circle id="ca-ring-fill" class="counterapp-ring-fill" cx="82" cy="82" r="70"/>',
             "svg",
+            klass="counterapp-ring-svg",
+            props={"viewBox": "0 0 164 164", "xmlns": "http://www.w3.org/2000/svg"},
         )
-        svg.klass = "counterapp-ring-svg"
-        svg.props["viewBox"] = "0 0 164 164"
-        svg.props["xmlns"]   = "http://www.w3.org/2000/svg"
 
-        ring_center = to_component("", "div")
-        ring_center.klass = "counterapp-ring-center"
+        self.count_label = Label(
+            text=self.counter,
+            id="ca-count",
+            klass="counterapp-count",
+            props={"data-count": "0"},
+        )
 
-        self.count_label = Label(text=self.counter, id="ca-count")
-        self.count_label.klass = "counterapp-count"
-        self.count_label.props["data-count"] = "0"
-
-        count_sub = to_component("count", "span")
-        count_sub.klass = "counterapp-count-label"
-
-        ring_center.add_children([self.count_label, count_sub])
-        ring_wrap.add_children([svg, ring_center])
-        card.add_child(ring_wrap)
-
-        # Button row
-        btn_row = FlexContainer()
-        btn_row.klass = "counterapp-btn-row"
+        ring_wrap = FlexContainer(
+            klass="counterapp-ring-wrap",
+            children=[
+                svg,
+                FlexContainer(
+                    klass="counterapp-ring-center",
+                    children=[
+                        self.count_label,
+                        Span(text="count", klass="counterapp-count-label"),
+                    ],
+                ),
+            ],
+        )
 
         # Base inline styles shared by all buttons
         BASE_BTN = {
@@ -433,116 +437,101 @@ class HomePage(Page):
         }
 
         # Decrement button
-        self.dec_btn = to_component("", "button")
-        self.dec_btn.id = "ca-dec-btn"
-        self.dec_btn.inner_html = "<span class='bi bi-dash-lg'></span>"
-        self.dec_btn.props["type"] = "button"
-        self.dec_btn.style.update({
-            **BASE_BTN,
-            "background": "rgba(255,255,255,0.06)",
-            "color": "rgba(235,235,235,0.55)",
-            "border": "1px solid rgba(255,255,255,0.13)",
-            "padding": "13px 20px",
-        })
+        self.dec_btn = Button(
+            id="ca-dec-btn",
+            inner_html="<span class='bi bi-dash-lg'></span>",
+            props={"type": "button"},
+            style={
+                **BASE_BTN,
+                "background": "rgba(255,255,255,0.06)",
+                "color": "rgba(235,235,235,0.55)",
+                "border": "1px solid rgba(255,255,255,0.13)",
+                "padding": "13px 20px",
+            },
+        )
         self.dec_btn.bind(
-            "click",
-            on_decrement,
-            update_targets=[self.count_label],
-            update_self=False,
+            "click", on_decrement, update_targets=[self.count_label], update_self=False,
         )
 
         # Increment button
-        self.inc_btn = to_component("", "button")
-        self.inc_btn.id = "ca-inc-btn"
-        self.inc_btn.inner_html = "<span class='bi bi-plus-lg'></span> Increment"
-        self.inc_btn.props["type"] = "button"
-        self.inc_btn.style.update({
-            **BASE_BTN,
-            "background": "#F5C842",
-            "color": "#111111",
-            "padding": "13px 28px",
-        })
+        self.inc_btn = Button(
+            id="ca-inc-btn",
+            inner_html="<span class='bi bi-plus-lg'></span> Increment",
+            props={"type": "button"},
+            style={**BASE_BTN, "background": "#F5C842", "color": "#111111", "padding": "13px 28px"},
+        )
         self.inc_btn.bind(
-            "click",
-            on_increment,
-            update_targets=[self.count_label],
-            update_self=False,
+            "click", on_increment, update_targets=[self.count_label], update_self=False,
         )
 
-        btn_row.add_children([self.dec_btn, self.inc_btn])
-        card.add_child(btn_row)
+        btn_row = FlexContainer(
+            klass="counterapp-btn-row",
+            children=[self.dec_btn, self.inc_btn],
+        )
 
         # Reset button
-        self.reset_btn = to_component("", "button")
-        self.reset_btn.id = "ca-reset-btn"
-        self.reset_btn.inner_html = "Reset"
-        self.reset_btn.props["type"] = "button"
-        self.reset_btn.style.update({
-            **BASE_BTN,
-            "background": "transparent",
-            "color": "rgba(235,235,235,0.28)",
-            "border": "1px solid rgba(255,255,255,0.07)",
-            "padding": "8px 16px",
-            "font-size": "0.78rem",
-            "border-radius": "8px",
-        })
-        self.reset_btn.bind(
-            "click",
-            on_reset,
-            update_targets=[self.count_label],
-            update_self=False,
+        self.reset_btn = Button(
+            id="ca-reset-btn",
+            inner_html="Reset",
+            props={"type": "button"},
+            style={
+                **BASE_BTN,
+                "background": "transparent",
+                "color": "rgba(235,235,235,0.28)",
+                "border": "1px solid rgba(255,255,255,0.07)",
+                "padding": "8px 16px",
+                "font-size": "0.78rem",
+                "border-radius": "8px",
+            },
         )
-        card.add_child(self.reset_btn)
+        self.reset_btn.bind(
+            "click", on_reset, update_targets=[self.count_label], update_self=False,
+        )
 
         # View source — links directly to GitHub
-        src_link = to_component("", "a")
-        src_link.klass = "counterapp-src-toggle"
-        src_link.props["href"] = "https://github.com/duckframework/duck/blob/main/duck/etc/apps/counterapp/views/__init__.py"
-        src_link.props["target"] = "_blank"
-        src_link.props["rel"] = "noopener noreferrer"
-        src_link.inner_html = "<span class='bi bi-github'></span> View source on GitHub"
-        card.add_child(src_link)
-
-        root.add_child(card)
-
-        # ── Powered badge ─────────────────────────────────────────
-        badge = to_component("", "div")
-        badge.klass = "counterapp-badge"
-        dot = to_component("", "span")
-        dot.klass = "counterapp-badge-dot"
-        badge_text = to_component("", "span")
-        badge_text.inner_html = (
-            "Powered by <a href='https://duckframework.com' "
-            "target='_blank' rel='noopener noreferrer'>Duck Framework</a> "
-            "— real-time UI, pure Python"
+        src_link = Link(
+            url="https://github.com/duckframework/duck/blob/main/duck/etc/blueprints/counterapp/views/__init__.py",
+            klass="counterapp-src-toggle",
+            props={"target": "_blank", "rel": "noopener noreferrer"},
+            inner_html="<span class='bi bi-github'></span> View source on GitHub",
         )
-        badge.add_children([dot, badge_text])
-        root.add_child(badge)
 
+        card = FlexContainer(
+            flex_direction="column",
+            klass="counterapp-card",
+            children=[header, ring_wrap, btn_row, self.reset_btn, src_link],
+        )
+
+        # Powered badge
+        badge = FlexContainer(
+            klass="counterapp-badge",
+            children=[
+                Span(klass="counterapp-badge-dot"),
+                Span(
+                    inner_html=(
+                        "Powered by <a href='https://duckframework.com' "
+                        "target='_blank' rel='noopener noreferrer'>Duck Framework</a> "
+                        "— real-time UI, pure Python"
+                    )
+                ),
+            ],
+        )
+
+        root = FlexContainer(
+            id="counterapp-root",
+            style={"flex-direction": "column", "align-items": "center"},
+            children=[back, card, badge],
+        )
         self.add_to_body(root)
 
         # Ring sync + bump script — runs after Lively patches the DOM
         self.add_to_body(Script(inner_html=PAGE_SCRIPT))
-        self.add_to_body(Script(inner_html="""
-// Sync ring on every Lively DOM patch
-document.addEventListener('DOMContentLoaded', function() {
-    var observer = new MutationObserver(function() {
-        var el = document.getElementById('ca-count');
-        if (el) {
-            var n = parseInt(el.getAttribute('data-count') || el.innerText, 10) || 0;
-            window.caUpdateRing && window.caUpdateRing(n);
-            window.caBumpCount && window.caBumpCount();
-        }
-    });
-    var target = document.getElementById('ca-count');
-    if (target) observer.observe(target, { childList: true, characterData: true, subtree: true });
-});
-"""))
+        self.add_to_body(Script(inner_html=INIT_SCRIPT))
 
 
 class HomeView(View):
     """
-    CounterApp home view.
+    Counter App Home view.
     """
     def run(self, *_, **kw):
         page = HomePage(self.request)

@@ -10,7 +10,7 @@
  * - When using Lively, make sure DOM changes are done within the system as any DOM mutation outside Lively will be detected and an error will be shown.  
  *
  * @author Brian Musakwa <digreatbrian@gmail.com>
- * @version 2.3.0
+ * @version 2.3.1
  */
 
 /**
@@ -1021,18 +1021,25 @@ class DOMPatcher {
    * Recursively builds a DOM element from virtual DOM node.
    * @param {Array} node Virtual DOM node
    * @param {boolean} addToUidMap Whether to add element to UID Map.
+   * @param {boolean} isSvgContext Whether this node is inside an <svg> subtree.
    * @returns {HTMLElement} DOM element
    */
-  buildElementDom(node, addToUidMap=true) {
+  buildElementDom(node, addToUidMap=true, isSvgContext=false) {
     const tag = node[0];
     const uid = node[1];
     const props = node[2];
     const style = node[3];
     const text = node[4];
     const children = node[5];
-    
+
+    // SVG elements must be created in the SVG namespace, or they render as
+    // inert HTMLUnknownElements — no paint, no effect from CSS toggles, and
+    // setAttribute silently lowercases attribute names (viewBox -> viewbox).
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    const inSvg = isSvgContext || tag === "svg";
+
     // Create element.
-    const el = document.createElement(tag);
+    const el = inSvg ? document.createElementNS(SVG_NS, tag) : document.createElement(tag);
     
     if (uid) {
       // Assign element UID.
@@ -1088,9 +1095,13 @@ class DOMPatcher {
       this.setElementCachedStyle(el, style);
     }
     
+    // foreignObject re-enters HTML content — its children are plain HTML,
+    // not SVG, even though foreignObject itself lives in the SVG namespace.
+    const childSvgContext = tag === "foreignObject" ? false : inSvg;
+    
     // Build and add children to DOM also.
     for (const index in children) {
-      el.appendChild(this.buildElementDom(children[index], true));
+      el.appendChild(this.buildElementDom(children[index], true, childSvgContext));
     }
     
     // Finally return the newly created element.
@@ -1805,7 +1816,20 @@ class NavigationHandler {
         // Scroll to top unless the URL contains a valid hash anchor.
         const hasHash = new URL(fullpath, window.location.origin).hash;
         
-        if (!hasHash) {
+        if (hasHash) {
+          // hash may or may not include the leading '#' depending on where it's set upstream —
+          // strip it defensively since getElementById wants the raw id.
+          const hashId = hash.startsWith('#') ? hash.slice(1) : hash;
+          const el = document.getElementById(hashId);
+        
+          if (el) {
+            requestAnimationFrame(() => {
+              el.scrollIntoView();
+            });
+          }
+          // If el is null (bad/stale hash), do nothing — no error, no fallback scroll.
+        }
+        else {
           requestAnimationFrame(() => {
             this.scrollToTop(true);
           });
@@ -1927,6 +1951,8 @@ class LivelyWebSocketClient {
     this.patcher = patcher;
     this._reconnectInProgress = false;  // Flag to track if a reconnect attempt is ongoing
     this._reconnectAbortController = null; // Controller to cancel ongoing reconnect attempts
+    this._reconnectInProgress = false;  // Flag to track if a reconnect attempt is ongoing
+    this._lastCloseWasNetworkDrop = false; // Whether the most recent close looked like a real network failure
   }
   
   /**
@@ -1983,8 +2009,8 @@ class LivelyWebSocketClient {
         }
       }
       
-      // Show connected snackbar - only if it's a reconnect.
-      if (this._reconnectInProgress) {
+      // Show connected snackbar - only if it's a reconnect from a real network drop.
+      if (this._reconnectInProgress && this._lastCloseWasNetworkDrop) {
         const snackbar = window.LIVELY_APPLICATION.PAGE_SNACKBAR;
         snackbar.LABEL.textContent = "Connection restored"
       
@@ -2014,22 +2040,28 @@ class LivelyWebSocketClient {
       if (window.LIVELY_APPLICATION.DEBUG) {
         console.warn("[Lively] WebSocket closed:", e);
       }
-      
+    
+      // A clean close (server sent a close frame, e.g. its own idle-timeout close)
+      // is not a real internet problem. Only e.wasClean === false (no handshake,
+      // typically code 1006) means the connection actually dropped.
+      this._lastCloseWasNetworkDrop = !e.wasClean;
+    
       // Reset navigation in progress flag.
       NavigationHandler.navigationInProgress = false;
-      
+    
       // Reset progressbar if present.
       window.LIVELY_APPLICATION.resetPageProgressBar();
-      
-      // Show not connected snackbar - If no reconnect attempt.
-      if (!this._reconnectInProgress) {
+    
+      // Show not connected snackbar - only for a genuine network drop, and only
+      // if no reconnect attempt is already showing it.
+      if (!this._reconnectInProgress && this._lastCloseWasNetworkDrop) {
         const snackbar = window.LIVELY_APPLICATION.PAGE_SNACKBAR;
         snackbar.LABEL.textContent = "You're offline"
-      
+    
         // Show an error snackbar and autohide.
        showSnackbar(snackbar, "error", 2000);
       }
-      
+    
       // Attempt reconnection on connection close.
       await this.tryReconnect();
     };

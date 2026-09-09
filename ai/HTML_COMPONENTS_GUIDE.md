@@ -689,9 +689,12 @@ class Divider(NoInnerComponent):
 
     def on_create(self):
         super().on_create()
-        self.style["border"] = "none"
-        self.style["border-top"] = "1px solid var(--theme-border)"
-        self.style["margin"] = "24px 0"
+        
+        self.style.update({
+            "border": "none",
+            "border-top": "1px solid var(--theme-border)",
+            "margin": "24px 0",
+        })
 ```
 
 ### Extending built-in components
@@ -1485,18 +1488,29 @@ theming can be done through using `Theme's` class attributes e.g., `Theme.accent
 
 ```python
 # web/ui/components/theme.py
+from duck.html.components.theme import Theme
 
-class Theme:
-    accent_color = "rgba(0, 35, 6, 1)"
-    border_radius = "12px"
-    font_size = "1rem"
+theme = Theme(
+    name="mytheme",
+    accent_color="rgba(0, 35, 6, 1)",
+    border_radius="12px",
+    font_size="1rem",
     # Other theming options here
+)
+
+# Set global theme
+Theme.current = theme
+
 ```
 
 > For a Duck project, a centralized system is recommended not only for theming but also for metadata and this 
 > type of data can be stored in `web/meta.py` (optional).
 
 > Always write clear descriptive theme attributes e.g. `accent_color` instead of `accent`.
+
+```{important}
+More information on theming is available at [Duck Framework Docs](https://docs.duckframework.com/main/theming).
+```
 
 ---
 
@@ -1768,9 +1782,13 @@ def build_card():
   - Defined once
   - Imported where needed
 
+- Keep component files small and readable:
+  - Split into a modular folder structure once a file gets big
+
 - Follow strict separation:
   - Pages -> `web/ui/pages`
   - Components -> `web/ui/components`
+
 
 ---
 

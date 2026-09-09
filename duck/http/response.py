@@ -317,15 +317,15 @@ class BaseResponse:
             ValueError: If an invalid value is provided for `samesite`.
         """
         self.payload_obj.set_cookie(
-            key = key,
-            value = value,
-            domain = domain,
-            path = path,
-            max_age = max_age,
-            expires = expires,
-            secure = secure,
-            httponly = httponly,
-            samesite = samesite,
+            key=key,
+            value=value,
+            domain=domain,
+            path=path,
+            max_age=max_age,
+            expires=expires,
+            secure=secure,
+            httponly=httponly,
+            samesite=samesite,
        )
        
     def delete_cookie(self, key: str, path: str = "/", domain: Optional[str] = None) -> None:

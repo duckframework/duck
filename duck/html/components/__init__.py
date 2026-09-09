@@ -374,7 +374,7 @@ class HtmlComponent:
             'compatibility_keys',
             'kwargs',
         ] # __style, __properties, __children are already copied independantly, no need for them to be in here.
-             
+        
         # Add public attributes
         self.element = element
         self.accept_inner_html = accept_inner_html
@@ -395,6 +395,14 @@ class HtmlComponent:
         assert isinstance(properties, dict), f"Properties for the Html component must be a dictionary not '{type(properties)}' "
         assert isinstance(style, dict), f"Style for the Html component must be a dictionary not '{type(style)}'"
         assert not (props and properties), "Properties and props cannot be provided at the same time. Provide one of them instead." 
+        
+        # Snapshot the caller's explicit style/props so they always win over
+        # whatever component-internal defaults on_create() applies below.
+        # on_create() typically does self.style.update({...defaults...}),
+        # which would otherwise silently clobber any overlapping key the
+        # caller passed in at construction time.
+        explicit_style = dict(style)
+        explicit_props = dict(properties or props)
         
         # Update some styles and properties
         self.__properties.update(properties or props)
@@ -422,6 +430,12 @@ class HtmlComponent:
         
         if not lazy: 
             self.load()
+            
+            # Re-apply the caller's explicit overrides last, after on_create()
+            # has had its chance to set the component's own default styling.
+            self.__style.update(explicit_style)
+            self.__properties.update(explicit_props)
+            
         else:
             from duck.html.components.page import Page
             
@@ -547,12 +561,12 @@ class HtmlComponent:
         - If a component is a root component, a unique ID will be generated whenever the `uid` property is accessed.
         """
         if self.isroot() and not self.__uid:
-            self.__uid = f"{id(self)}" # Using id() is faster than secrets.token_urlsafe(8)
+            self.__uid = secrets.token_urlsafe(8) 
             
         if not self.__uid:
             raise ComponentError("Property `uid` is not assigned yet, `assign_component_uids` must be called first.")
         
-        # Retuen the final UID
+        # Return the final UID
         return self.__uid
         
     @uid.setter

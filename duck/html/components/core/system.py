@@ -3,13 +3,16 @@ Manages the registration and lifecycle of HTML components, and enables communica
 with the browser via WebSocket to dispatch events and execute JavaScript in real-time.
 """
 import os
-import threading
+import time
+import secrets
 
 from typing import (
     List,
     Type,
     Any,
     Optional,
+    Tuple,
+    Dict,
 )
 
 from pathlib import Path
@@ -43,12 +46,27 @@ class LivelyComponentSystem:
     """
     Mapping of UIDs to components.
     
-    Format: {root_uid: {root_uid: component, child_uid: component, ...}}
+    Format: {root_uid: (owner_token, {root_uid: component, child_uid: component, ...}, disconnected_at)}
     """
     
-    registry_lock = threading.Lock()
+    OWNER_TOKEN_NBYTES: int = 16
     """
-    Lock for avoiding race conditions in multiple threads, especially in worker threads.
+    Number of bytes for the Lively owner token registration.
+    """
+    
+    OWNER_TOKEN_REQUEST_KEY: str = "LIVELY_OWNER_TOKEN"
+    """
+    Key to set in `request.META` when owner token is generated.
+    """
+    
+    OWNER_COOKIE_KEY: str = "_lively_owner"
+    """
+    The cookie key to set in response when owner token is set.
+    """
+    
+    OWNER_TOKEN_MAX_AGE: float = 3600
+    """
+    The maximum seconds for the owner token to last.
     """
     
     @classmethod
@@ -99,6 +117,85 @@ class LivelyComponentSystem:
         return bool(SETTINGS['ENABLE_COMPONENT_SYSTEM'])
         
     @classmethod
+    def get_owner(
+        cls,
+        root_uid: str,
+        entry: Optional[Tuple[str, Dict[str, "Component"], Optional[float]]] = None,
+    ) -> Optional[str]:
+        """
+        Get the owner token bound to a root_uid, lazily expiring it first if needed.
+    
+        If the root_uid's component tree has been disconnected (via
+        `mark_disconnected`) for longer than `OWNER_TOKEN_MAX_AGE`, the entry is
+        deleted and treated as gone rather than being returned. This enforces
+        a time-bounded expiry without a background sweep task -- the check
+        simply runs on whatever access happens to come in next (a reconnect
+        attempt, a dispatch call, etc.).
+    
+        Args:
+            root_uid: The root component's UID to look up.
+            entry: An already-fetched `(owner_token, root_registry, disconnected_at)`
+                tuple for this root_uid, if the caller has one on hand (e.g. from
+                a prior `cls.registry.get(root_uid)`). Pass this to avoid a
+                redundant registry lookup. If omitted, it's fetched here.
+    
+        Returns:
+            The owner token if the entry exists and hasn't expired, else None.
+        """
+        if entry is None:
+            entry = cls.registry.get(root_uid)
+    
+        if entry is None:
+            return None
+    
+        # Get data
+        owner_token, root_registry, disconnected_at = entry
+    
+        if disconnected_at is not None and (time.monotonic() - disconnected_at) > cls.OWNER_TOKEN_MAX_AGE:
+            # Treat as gone even though LRU hasn't necessarily evicted it yet.
+            cls.registry.delete(root_uid)
+            return None
+    
+        return owner_token
+    
+    @classmethod
+    def mark_connected(cls, root_uid: str) -> None:
+        """
+        Mark a root_uid's component tree as having an active WebSocket connection.
+    
+        Clears any pending disconnect timestamp, so the entry is treated as
+        alive indefinitely for as long as the connection stays open --
+        expiry only starts counting again after the next `mark_disconnected`.
+    
+        Args:
+            root_uid: The root component's UID whose WebSocket just connected.
+        """
+        entry = cls.registry.get(root_uid)
+        
+        if entry is not None:
+            owner_token, root_registry, _ = entry
+            cls.registry.set(root_uid, (owner_token, root_registry, None))
+    
+    @classmethod
+    def mark_disconnected(cls, root_uid: str) -> None:
+        """
+        Mark a root_uid's component tree as having lost its WebSocket connection.
+    
+        Stamps the current time so that a subsequent `get_owner` call can
+        lazily expire this entry once `OWNER_TOKEN_MAX_AGE` has elapsed since
+        disconnect, giving the client a grace period to reconnect (e.g. after
+        a sleep/wake or brief network drop) before the entry is discarded.
+    
+        Args:
+            root_uid: The root component's UID whose WebSocket just disconnected.
+        """
+        entry = cls.registry.get(root_uid)
+        
+        if entry is not None:
+            owner_token, root_registry, _ = entry
+            cls.registry.set(root_uid, (owner_token, root_registry, time.monotonic()))
+        
+    @classmethod
     def get_from_registry(cls, root_uid: str, uid: str, default: Optional[Any] = None) -> Optional[Component]:
         """
         Retrieve a component from the registry using its UID.
@@ -111,45 +208,92 @@ class LivelyComponentSystem:
         Returns:
             Component | Any: The component if found, otherwise the default value.
         """
-        with cls.registry_lock:
-            root_uid_dict = cls.registry.get(root_uid) or {}
-            return root_uid_dict.get(uid)
+        _, root_uid_dict, _ = cls.registry.get(root_uid) or (None, {}, None)
+        return root_uid_dict.get(uid, default)
 
     @classmethod
-    def add_to_registry(cls, uid: str, component: Component) -> None:
+    def add_to_registry(cls, uid: str, component: "Component") -> None:
         """
-        Add a component to the internal registry.
-
+        Add a component to the internal Lively registry.
+    
+        For the first component registered under a given root_uid (which must
+        be the root component itself), this also mints a cryptographically
+        random owner token and binds it to the component's request. The
+        WebSocket layer later checks incoming `dispatch_component_event` calls
+        against this token to confirm the connection actually owns that
+        root_uid before touching anything in the registry.
+    
         Args:
-            uid (str): The unique identifier for the component.
-            component (Component): The component instance to register.
-
+            uid: The unique identifier for the component within its root tree.
+            component: The component instance to register.
+    
         Raises:
-            AlreadyInRegistry: If the component is already registered with the same UID.
-            ComponentSystemError: If the provided component is not a valid Component instance.
+            ComponentSystemError:
+                If `component` isn't a `Component`; if the
+                first-ever registration under a fresh root_uid is not the root
+                component; or if a root component has no request bound to it.
+            
+            AlreadyInRegistry:
+                If a root component is registered twice under
+                the same UID.
         """
+        from duck.html.components.extensions import RequestNotFoundError
+    
         if not isinstance(component, Component):
             raise ComponentSystemError(
-                f"Expected instance of Component, got {type(component).__name__}."
+                f"Expected a Component instance, got {type(component).__name__!r}."
             )
-        
+    
         root_uid = component.get_raw_root().uid
         
-        with cls.registry_lock:
-            root_registry = cls.registry.get(root_uid, None)
-            
-            if root_registry is None:
-                cls.registry.set(root_uid, {})
-                root_registry = cls.registry.get(root_uid)
+        # Fetch existing entry
+        existing_entry = cls.registry.get(root_uid)
+        
+        if existing_entry is None:
+            # First time this root_uid has been seen. Validate before
+            # mutating anything, so a failed call leaves no partial state.
+            if not component.isroot():
+                raise ComponentSystemError(
+                    f"First registration under root_uid={root_uid!r} must "
+                    f"be the root component, got {component!r}."
+                )
+
+            try:
+                request = component.get_request_or_raise()
+            except RequestNotFoundError as e:
+                raise ComponentSystemError(
+                    f"Root component {component!r} has no request bound. "
+                    f"A request is required to issue its Lively owner token."
+                ) from e
                 
-            if component.isroot():
-                existing = root_registry.get(uid)
-                if existing is component:
-                    raise AlreadyInRegistry("Component is already registered with this UID.")
-                    
-            root_registry[uid] = component
-            cls.registry.set(root_uid, root_registry) # Update registry just in case.
+            # Get existing token or generate new owner token
+            existing = request.COOKIES.get(cls.OWNER_COOKIE_KEY)
+            owner_token = existing or secrets.token_urlsafe(cls.OWNER_TOKEN_NBYTES)
             
+            if not existing:
+                # Set the owner token in request's meta
+                request.META[cls.OWNER_TOKEN_REQUEST_KEY] = owner_token
+            
+            # Typing helpers
+            root_registry: Dict[str, Component] = {}
+        
+        else:
+            owner_token, root_registry, _ = existing_entry
+
+            if component.isroot():
+                existing_component = root_registry.get(uid)
+                
+                if existing_component is component:
+                    raise AlreadyInRegistry(
+                        f"Root component already registered under uid={uid!r}."
+                    )
+
+        # Assign component UID in registry
+        root_registry[uid] = component
+        
+        # Register entry
+        cls.registry.set(root_uid, (owner_token, root_registry, None))
+        
     @classmethod
     def get_html_tags(cls) -> List[ComponentTag]:
         """
@@ -170,5 +314,7 @@ class LivelyComponentSystem:
                     component_tags.append(ComponentTag.get_tag(name))
         except Exception as e:
             raise ComponentSystemError(f"Error loading HTML components: {e}") from e
+        
+        # Return final component tags.
         return component_tags
     

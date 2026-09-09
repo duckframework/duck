@@ -97,7 +97,7 @@ class ProgressBar(Container):
                 "transform-origin": "left",
                 "transform": "scaleX(0)",
                 "will-change": "transform",
-                "transition": "transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+                "transition": "transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
                 "border-radius": Theme.current.border_radius,
             },
         )

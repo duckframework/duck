@@ -277,18 +277,23 @@ class LivelyWebSocketView(WebSocketView):
         """
         On open event.
         """
-        pass
+        self.bound_root_uids: Set[str] = set()
         
     async def on_close(self, frame):
         """
         On close event.
         """
+        from duck.html.components.core.system import LivelyComponentSystem
+        
         await super().on_close(frame)
         
         for future in self.execution_futures.values():
             if not future.done():
                 future.cancel()
-                
+        
+        for root_uid in self.bound_root_uids:
+            LivelyComponentSystem.mark_disconnected(root_uid)
+                    
     async def on_receive(self, data: bytes, opcode: int):
         """
         Handles incoming WebSocket data.
@@ -314,6 +319,7 @@ class LivelyWebSocketView(WebSocketView):
         try:
             event_opcode = data[0] # Get event opcode
             await self.event_handler.dispatch(event_opcode, data[1:])
+        
         except (IndexError, Exception) as e:
             if not isinstance(e, (asyncio.CancelledError)):
                 if SETTINGS['DEBUG']:
@@ -362,7 +368,7 @@ class EventHandler:
         async with self.browser_state_sync_lock:
             
             # Also, sessions may be saved here
-            await SettingsLoaded.ASGI.apply_middlewares_to_response(dummy_response, root_request)
+            await SettingsLoaded.ASGI.finalize_response(dummy_response, root_request)
             
             # Update the root_request cookies based on cookies attached to dummy_response.
             cookies = dummy_response.get_all_cookies()
@@ -395,12 +401,14 @@ class EventHandler:
                 await handler(data)
                 
         except Exception as e:
-            logger.log_exception(e)
             if not isinstance(e, asyncio.CancelledError):
                 if SETTINGS['DEBUG']:
                     logger.log("Error whilst handling lively operation for ws client: ", level=logger.WARNING)
                     logger.log_exception(e)
                  
+            else:
+                logger.log_exception(e)
+                
     async def dispatch_component_event(self, data: List[Any]):
         """
         Dispatch a component event e.g. Button click, then send patches to client on changes the button click event made
@@ -411,7 +419,27 @@ class EventHandler:
         from duck.html.components import HtmlComponent
         
         root_uid, uid, event_name, value, is_document_event = data
-            
+        
+        # Get some data
+        entry = LivelyComponentSystem.registry.get(root_uid)
+        owner_token = LivelyComponentSystem.get_owner(root_uid, entry=entry)
+        presented_token = self.ws_view.request.COOKIES.get(LivelyComponentSystem.OWNER_COOKIE_KEY)
+        
+        if not owner_token or not presented_token or not secrets.compare_digest(owner_token, presented_token):
+            if SETTINGS['DEBUG']:
+                logger.log(
+                    f"Rejected dispatch for root_uid `{root_uid}`: connection is not the owner.\n",
+                    level=logger.WARNING,
+                )
+            await self.ws_view.send_data([EventOpCode.COMPONENT_UNKNOWN, [uid, False]])
+            return
+    
+        # First time this connection has referenced this root_uid -- bind it,
+        # so disconnect knows to clear it later.
+        if root_uid not in self.ws_view.bound_root_uids:
+            self.ws_view.bound_root_uids.add(root_uid)
+            LivelyComponentSystem.mark_connected(root_uid)
+
         # Retrieve the component and then dispatch the event.
         component = resolved_component = LivelyComponentSystem.get_from_registry(root_uid, uid)
         

@@ -13,13 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Added argument `consent` to `Page.add_google_analytics` for enabling G4 consent mode.
 - Added `duck.html.components.theme` for better theming.
-
+- Added autominify capability to `Script` & `Style` components.
 
 ### Changed
 
 - HTML components `style` or `props` now accept boolean values - if True, prop will be added else It wont be added at all.
-- Fixed HttpRequest's `extract_url_queries` decoding `+` as a literal plus instead of a space, which caused blank filter selections (e.g. `location=+`) to be treated as real search values and match nothing.
 - Made all builtin components themeable by default.
+- Preserved scroll-to-hash-element behavior during partial (patch-based) reloads, matching native full-page navigation.
+- Fixed `Connection restored` snackbar to only fire after a genuine network drop, not a server-initiated idle-timeout close.
+
+### Fixed
+
+- **Security:** closed a WebSocket authorization gap in the Lively Component System that let one connected client trigger event handlers on and read state from another user's live component; root UIDs are now cryptographically random and no longer usable across connections without authorization. Thanks to **@jankesec** for responsibly disclosing this critical vulnerability (GHSA-2xr9-r4w3-jx36) 🙏
+- Fixed HttpRequest's `extract_url_queries` decoding `+` as a literal plus instead of a space, which caused blank filter selections (e.g. `location=+`) to be treated as real search values and match nothing.
+- SVGs are now correctly created in the SVG namespace on partial page navigation.
+- Explicit HTML component props/style now take precedence over those defined in `on_create()`.
 
 ---
 

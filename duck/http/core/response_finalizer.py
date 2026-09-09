@@ -169,6 +169,7 @@ class ResponseFinalizer:
             
             if csp_directives:
                 csp_parts = []
+                
                 for directive, sources in csp_directives.items():
                     if not sources:
                         continue
@@ -238,8 +239,11 @@ class ResponseFinalizer:
     @log_failsafe
     def do_set_extra_headers(self, response, request) -> None:
         """
-        Sets last final extra headers like Date & Cache-Control.
+        Sets extra headers like Date, Cache-Control and other internal headers.
         """
+        from duck.html.components.core.system import LivelyComponentSystem
+        from duck.logging import logger
+        
         response.set_header_if_absent("date", gmt_date())
         
         if not SETTINGS['DEBUG']:
@@ -251,6 +255,19 @@ class ResponseFinalizer:
             # Set the no-cache control
             response.set_header("cache-control", "no-cache")
         
+        # Set lively owner if Lively component system active
+        if request and LivelyComponentSystem.is_active():
+            lively_owner_token = request.META.get(LivelyComponentSystem.OWNER_TOKEN_REQUEST_KEY)
+            
+            if lively_owner_token is not None:
+                response.set_cookie(
+                    LivelyComponentSystem.OWNER_COOKIE_KEY,
+                    lively_owner_token,
+                    httponly=True,
+                    samesite="Strict",
+                    max_age=LivelyComponentSystem.OWNER_TOKEN_MAX_AGE,
+                )
+            
     @log_failsafe
     def do_content_compression(self, response, request) -> None:
         """
