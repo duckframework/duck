@@ -441,7 +441,8 @@ class EventHandler:
             LivelyComponentSystem.mark_connected(root_uid)
 
         # Retrieve the component and then dispatch the event.
-        component = resolved_component = LivelyComponentSystem.get_from_registry(root_uid, uid)
+        _, data, _ = entry
+        component = resolved_component = data.get(uid, None)
         
         if not component:
             msg = (
@@ -771,22 +772,43 @@ class EventHandler:
         try:
             prev_component_uid, next_component_uid, fullpath, headers = data
             root_component_uid = prev_component_uid # Same as prev_component uid
+            presented_token = self.ws_view.request.COOKIES.get(LivelyComponentSystem.OWNER_COOKIE_KEY)
+            prev_component = None
             
             if prev_component_uid and fullpath and headers:
                 # Fetch previous root component.
-                prev_component = LivelyComponentSystem.get_from_registry(
-                    root_component_uid,
-                    prev_component_uid,
-                )
+                prev_component_entry= LivelyComponentSystem.registry.get(prev_component_uid)
+                prev_component_owner_token = LivelyComponentSystem.get_owner(prev_component_uid, entry=prev_component_entry)
+                
+                if not prev_component_owner_token or not presented_token or not secrets.compare_digest(prev_component_owner_token, presented_token):
+                    # Don't update the prev_component at this point.'
+                    if SETTINGS['DEBUG']:
+                        logger.log(
+                            f"Rejected navigation from root_uid `{next_component_uid}`: connection is not the owner.\n",
+                            level=logger.WARNING,
+                        )
+                
+                else:
+                    _, data, _ = prev_component_entry
+                    prev_component = data.get(prev_component_uid)
                 
                 # Try getting the next component if available
                 next_component = None
 
                 if next_component_uid:
-                    next_component = LivelyComponentSystem.get_from_registry(
-                        next_component_uid,
-                        next_component_uid,
-                    )
+                    next_component_entry= LivelyComponentSystem.registry.get(next_component_uid)
+                    next_component_owner_token = LivelyComponentSystem.get_owner(next_component_uid, entry=next_component_entry)
+                    
+                    if not next_component_owner_token or not presented_token or not secrets.compare_digest(next_component_owner_token, presented_token):
+                        # Don't update the next component at this point.'
+                        if SETTINGS['DEBUG']:
+                            logger.log(
+                                f"Rejected navigation to root_uid `{next_component_uid}`: connection is not the owner.\n",
+                                level=logger.WARNING,
+                            )
+                    else:
+                        _, data, _ = next_component_entry
+                        next_component = data.get(next_component_uid)
                     
                 if prev_component:
                     root_request = prev_component.get_raw_root().request
