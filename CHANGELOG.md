@@ -72,7 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- Fixed Path Traversal in `duck.utils.urlcrack.URL.normalize_url`
+- Fixed Path Traversal in `duck.utils.urlcrack.URL.normalize_url`, thanks to [EQSTLab](https://github.com/EQSTLab).
 - Fixed text color issue on snackber when `glacier` variant is used.
 - Fixed some MCP bug resulting in generating mcp registry.
 - Command `duck monitor` not formatting output data correctly causing ValueError.
