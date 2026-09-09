@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
+## [2.3.2] - September 9, 2026
 
 ### Added
 
@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- **Security:** closed a WebSocket authorization gap in the Lively Component System that let one connected client trigger event handlers on and read state from another user's live component; root UIDs are now cryptographically random and no longer usable across connections without authorization. Thanks to **@jankesec** for responsibly disclosing this critical vulnerability (GHSA-2xr9-r4w3-jx36) 🙏
+- **Security:** closed a WebSocket authorization gap in the Lively Component System that let one connected client trigger event handlers on and read state from another user's live component; root UIDs are now cryptographically random and no longer usable across connections without authorization. Thanks to [**@jankesec**](https://github.com/jankesec) for responsibly disclosing this critical vulnerability (GHSA-2xr9-r4w3-jx36) 🙏
 - Fixed HttpRequest's `extract_url_queries` decoding `+` as a literal plus instead of a space, which caused blank filter selections (e.g. `location=+`) to be treated as real search values and match nothing.
 - SVGs are now correctly created in the SVG namespace on partial page navigation.
 - Explicit HTML component props/style now take precedence over those defined in `on_create()`.
