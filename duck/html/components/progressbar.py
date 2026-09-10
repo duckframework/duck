@@ -8,45 +8,84 @@ from duck.html.components.script import Script
 
 
 PROGRESS_BAR_SCRIPT = """
+const PROGRESS_FILL_TRANSITION = 'transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+
 function updateProgressBar(progressBar, progress, autoHideWhenZero = true) {
   const progressBarInner = progressBar.querySelector('.progress-bar-inner');
+  if (!progressBarInner) return;
+
   progress = Math.max(0, Math.min(100, progress));
 
-  requestAnimationFrame(() => {
-    if (!progressBarInner) return;
+  if (progress <= 0 && autoHideWhenZero) {
+    hideProgressBar(progressBar);
+    return;
+  }
 
-    if (progress > 0) {
-      progressBar.style.display = 'block';
+  // Cancel any hide currently in flight so it can't fight this update.
+  cancelPendingHide(progressBar);
 
-      // Flip display before opacity so the fade-in actually transitions
-      requestAnimationFrame(() => {
-        progressBar.style.opacity = '1';
-      });
+  const wasHidden = progressBar.style.opacity !== '1';
 
-      progressBarInner.style.transform = `scaleX(${progress / 100})`;
-    } else if (autoHideWhenZero) {
-      hideProgressBar(progressBar);
-    } else {
-      progressBarInner.style.transform = 'scaleX(0)';
-    }
-  });
+  if (wasHidden) {
+    // Start from empty with no transition, force a reflow so the browser
+    // commits that starting point, then restore the transition. Without
+    // this, the display/opacity/transform changes can collapse into a
+    // single frame and the fill jumps or flickers instead of animating
+    // smoothly forward.
+    progressBarInner.style.transition = 'none';
+    progressBarInner.style.transform = 'scaleX(0)';
+    progressBar.style.display = 'block';
+    void progressBar.offsetHeight;
+    progressBarInner.style.transition = PROGRESS_FILL_TRANSITION;
+    progressBar.style.opacity = '1';
+  }
+
+  progressBarInner.style.transform = `scaleX(${progress / 100})`;
 }
 
 function hideProgressBar(progressBar) {
   const progressBarInner = progressBar.querySelector('.progress-bar-inner');
+  const alreadyHidden = progressBar.style.opacity === '0';
+
+  cancelPendingHide(progressBar);
+
+  // Keep the fill exactly where it is — only opacity should move, so the
+  // bar never appears to shrink backwards while it fades out.
+  progressBar.style.opacity = '0';
+
+  if (alreadyHidden) {
+    finishHide(progressBar, progressBarInner);
+    return;
+  }
 
   const onFadeOut = (event) => {
     if (event.target !== progressBar || event.propertyName !== 'opacity') return;
-    progressBar.style.display = 'none';
-    progressBar.removeEventListener('transitionend', onFadeOut);
+    finishHide(progressBar, progressBarInner);
   };
 
-  // Only hide from layout once the fade-out has actually finished
+  progressBar._hideHandler = onFadeOut;
   progressBar.addEventListener('transitionend', onFadeOut);
-  progressBar.style.opacity = '0';
+}
+
+function finishHide(progressBar, progressBarInner) {
+  cancelPendingHide(progressBar);
+  progressBar.style.display = 'none';
 
   if (progressBarInner) {
+    // Reset instantly, with no transition, now that the bar is invisible,
+    // so the next show animates forward from empty instead of rewinding
+    // from wherever the fill last stopped.
+    progressBarInner.style.transition = 'none';
     progressBarInner.style.transform = 'scaleX(0)';
+    void progressBarInner.offsetHeight;
+    progressBarInner.style.transition = PROGRESS_FILL_TRANSITION;
+  }
+}
+
+function cancelPendingHide(progressBar) {
+  if (progressBar._hideHandler) {
+    progressBar.removeEventListener('transitionend', progressBar._hideHandler);
+    progressBar._hideHandler = null;
   }
 }
 """
@@ -62,6 +101,9 @@ class ProgressBar(Container):
     """
 
     TRACK_HEIGHT = "3px"
+    FILL_TRANSITION = "transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
+    FADE_TIP = True
+    FADE_MASK = "linear-gradient(to right, black 0%, black 88%, transparent 100%)"
 
     # Colors
     FILL_COLOR = getattr(Theme.current, "progress_color", getattr(Theme.current, "accent_color", "#F5C842"))
@@ -79,7 +121,6 @@ class ProgressBar(Container):
         self.style.update({
             "width": "100%",
             "height": self.TRACK_HEIGHT,
-            "border-radius": "999px",
             "overflow": "hidden",
             "display": "none",
             "opacity": "0",
@@ -88,18 +129,24 @@ class ProgressBar(Container):
         })
 
         # Component children
+        inner_style = {
+            "width": "100%",
+            "height": "100%",
+            "transform-origin": "left",
+            "transform": "scaleX(0)",
+            "will-change": "transform",
+            "transition": self.FILL_TRANSITION,
+            "border-radius": Theme.current.border_radius,
+        }
+
+        if self.FADE_TIP:
+            inner_style["-webkit-mask-image"] = self.FADE_MASK
+            inner_style["mask-image"] = self.FADE_MASK
+
         self._progress_bar = Container(
             klass="progress-bar-inner",
             bg_color=self.FILL_COLOR,
-            style={
-                "width": "100%",
-                "height": "100%",
-                "transform-origin": "left",
-                "transform": "scaleX(0)",
-                "will-change": "transform",
-                "transition": "transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
-                "border-radius": Theme.current.border_radius,
-            },
+            style=inner_style,
         )
 
         self.add_children([
@@ -127,15 +174,27 @@ class ProgressBar(Container):
             raise ValueError("Progress must be between 0 and 100.")
 
         visible = progress > 0
-        
+
         # Update track style
         self.style.update({
             "display": "block" if visible else "none",
             "opacity": "1" if visible else "0",
         })
-        
-        # Update progress style
-        self._progress_bar.style.update({"transform": f"scaleX({progress / 100})"})
+
+        if visible:
+            self._progress_bar.style.update({
+                "transition": self.FILL_TRANSITION,
+                "transform": f"scaleX({progress / 100})",
+            })
+        else:
+            # Snap the fill back to empty without animating it — the
+            # track's opacity fade above is the only motion that should
+            # be visible, so the bar never appears to run backwards
+            # before it hides.
+            self._progress_bar.style.update({
+                "transition": "none",
+                "transform": "scaleX(0)",
+            })
 
     def set_progress_color(self, color: str) -> None:
         """
@@ -154,3 +213,15 @@ class ProgressBar(Container):
             color: CSS color value.
         """
         self.bg_color = color
+
+    def set_fade_tip(self, enabled: bool) -> None:
+        """
+        Toggle the soft fade at the leading edge of the progress fill.
+
+        Args:
+            enabled: Whether the fade should be applied.
+        """
+        self._progress_bar.style.update({
+            "-webkit-mask-image": self.FADE_MASK if enabled else "none",
+            "mask-image": self.FADE_MASK if enabled else "none",
+        })

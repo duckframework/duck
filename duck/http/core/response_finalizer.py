@@ -348,6 +348,8 @@ class ResponseFinalizer:
             
             if hasattr(response, "stream") and hasattr(response.stream, "tell") and hasattr(response.stream, "seek"):
                 # Get the stream size
+                current_position = response.stream.tell()
+                
                 try:
                     response.stream.seek(0, io.SEEK_END)
                     total_stream_size = response.stream.tell()
@@ -852,6 +854,8 @@ class AsyncResponseFinalizer(ResponseFinalizer):
             
             if hasattr(response, "stream") and hasattr(response.stream, "tell") and hasattr(response.stream, "seek"):
                 # Get the stream size
+                current_position = response.stream.tell()
+                
                 try:
                     response.stream.seek(0, io.SEEK_END)
                     total_stream_size = response.stream.tell()
