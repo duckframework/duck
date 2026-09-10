@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## Unreleased
+
+### Added
+
+- Added support for tuple/list as `options` to builtin `Select` HTML component.
+
+---
+
 ## [2.3.2] - September 9, 2026
 
 ### Added

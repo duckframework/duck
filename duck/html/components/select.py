@@ -108,14 +108,16 @@ class Select(InnerComponent):
         Normalizes a raw option value into an `Option` component.
 
         Args:
-            option: A string/int/float, a dict of Option kwargs, or an
+            option: A string/int/float, a two-item tuple/list of
+                `(value, text)`, a dict of Option kwargs, or an
                 existing `Option` component.
 
         Returns:
             An `Option` component.
 
         Raises:
-            ComponentError: If `option` isn't one of the supported types.
+            ComponentError: If `option` isn't one of the supported types,
+                or a tuple/list isn't exactly two items.
         """
         if isinstance(option, Option):
             return option
@@ -123,9 +125,17 @@ class Select(InnerComponent):
         if isinstance(option, (str, int, float)):
             return Option(text=option)
 
+        if isinstance(option, (tuple, list)):
+            if len(option) != 2:
+                raise ComponentError(
+                    f"Option tuple/list must have exactly 2 items (value, text), got {len(option)}"
+                )
+            value, text = option
+            return Option(text=text, value=value)
+
         if isinstance(option, dict):
             return Option(**option)
 
         raise ComponentError(
-            f"Option must be a string, number, dictionary, or Option component, not {type(option)}"
+            f"Option must be a string, number, tuple/list, dictionary, or Option component, not {type(option)}"
         )
