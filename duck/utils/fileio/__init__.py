@@ -15,8 +15,8 @@ Even in async context, the below methods don't necessarily need to be async:
 In async context, only `read`, `write`, and `close` need to be asynchronous.
 
 **Caching:**
-Read results are cached in a shared LRU ``InMemoryCache`` keyed by
-``filepath:pos:size``. Each unique ``(file, offset, length)`` triple has its
+Read results are cached in a shared LRU `InMemoryCache` keyed by
+`filepath:pos:size`. Each unique `(file, offset, length)` triple has its
 own independent cache slot, so reads from different positions are all
 cache-warm without interfering with each other — beneficial in environments
 that seek frequently. Stale entries (detected via mtime) are evicted on
@@ -27,29 +27,33 @@ in place; boundary-partial overlaps are evicted. The exact slice just
 written is always stored in a new cache entry.
 
 **Events:**
-Hooks can be attached to ``on_read`` and ``on_write`` events via ``hook()``.
-Each hook receives ``(stream, data, byte_count)`` and can be a plain callable
+Hooks can be attached to `on_read` and `on_write` events via `hook()`.
+Each hook receives `(stream, data, byte_count)` and can be a plain callable
 or an async coroutine function. Async hooks on a sync stream are scheduled
 fire-and-forget on the running event loop when one is available.
 
-Example::
+Example:
 
-    stream = FileIOStream("data.bin", open_now=True)
+```python
+stream = FileIOStream("data.bin", open_now=True)
 
-    def log_read(stream, data, n):
-        print(f"read {n} bytes from {stream.filepath}")
+def log_read(stream, data, n):
+    print(f"read {n} bytes from {stream.filepath}")
 
-    stream.hook("on_read", log_read)
-    stream.read()
+stream.hook("on_read", log_read)
+stream.read()
+```
+
 """
-
-import asyncio
 import io
 import os
-from typing import Callable, Optional
+import asyncio
+
+from typing import Callable, Optional, Tuple
+from email.utils import formatdate
 
 from duck.exceptions.all import AsyncViolationError
-from duck.utils.asyncio import in_async_context
+from duck.utils.asyncio import in_async_context, create_task
 from duck.utils.threading import async_to_sync_future
 from duck.utils.caching import InMemoryCache
 from duck.contrib.sync import ensure_async
@@ -118,10 +122,10 @@ class PathTraversalWarning(UserWarning):
 
 class FileIOStream(io.IOBase):
     """
-    Synchronous file streaming class that mimics ``io.IOBase``.
+    Synchronous file streaming class that mimics `io.IOBase`.
 
     Provides chunked reading and writing with a shared LRU cache and a
-    simple event-hook system for ``on_read`` and ``on_write``.
+    simple event-hook system for `on_read` and `on_write`.
 
     Read results are served from cache when the file is unchanged since the
     last read. Writes update the cache directly with the written bytes so the
@@ -163,7 +167,7 @@ class FileIOStream(io.IOBase):
             filepath: Path to the file to be streamed.
             chunk_size: Maximum number of bytes to read or write at once. Defaults to 2 MB.
             open_now: Whether to open the file immediately. Defaults to False.
-            mode: File open mode. Defaults to ``'rb'``.
+            mode: File open mode. Defaults to `'rb'`.
             disable_path_traversal (bool): Whether to remove `..` in paths to avoid path traversal. Defaults to True.
         """
         # NOTE: FD must always be opened on read/write - to catch FileNotFoundError if file is nolonger available rather than just returning cached data.
@@ -206,18 +210,51 @@ class FileIOStream(io.IOBase):
         """
         Whether the file has been modified since this stream last read it.
 
-        Returns ``False`` when no read has occurred yet — there is no
+        Returns `False` when no read has occurred yet — there is no
         baseline mtime to compare against.
 
         Returns:
-            ``True`` if the file's current mtime differs from the mtime
-            recorded during the last read, ``False`` otherwise.
+            `True` if the file's current mtime differs from the mtime
+            recorded during the last read, `False` otherwise.
         """
         if self._cache_mtime is None:
             # No read has happened yet — no baseline to compare against
             return False
         return self.current_mtime() != self._cache_mtime
 
+    @property
+    def etag(self) -> str:
+        """
+        Returns a stable ETag derived from the file's size and mtime.
+
+        Built from `st_size` and `st_mtime_ns` (nanosecond precision is
+        preferred over `st_mtime` to avoid false cache hits on rapid
+        successive writes), formatted as `"size-mtime_ns"`. Since the
+        value is derived from the whole file's metadata rather than any
+        requested slice, it is identical for every byte range served
+        from this file.
+
+        Returns:
+            The ETag string, e.g. `'"12345-1699999999000000000"'`.
+        """
+        size, mtime_ns = self._get_stat_metadata()
+        return f'"{size}-{mtime_ns}"'
+
+    @property
+    def last_modified(self) -> str:
+        """
+        Returns the file's last-modified time as an HTTP-date string.
+
+        Formatted with `email.utils.formatdate(usegmt=True)` to produce
+        an RFC 7231 compliant `Last-Modified` header value, derived from
+        `st_mtime_ns`.
+
+        Returns:
+            The formatted `Last-Modified` header value.
+        """
+        _, mtime_ns = self._get_stat_metadata()
+        return formatdate(mtime_ns / 1e9, usegmt=True)
+        
     def is_open(self) -> bool:
         """
         Check if the file is currently open.
@@ -264,10 +301,10 @@ class FileIOStream(io.IOBase):
         modified since the last read. On a cache miss the file is read
         normally and the result is stored in the cache for future calls.
 
-        Fires all ``on_read`` hooks after a successful read.
+        Fires all `on_read` hooks after a successful read.
 
         Args:
-            size: Number of bytes to read. ``-1`` reads all content.
+            size: Number of bytes to read. `-1` reads all content.
 
         Returns:
             File data as bytes.
@@ -311,11 +348,11 @@ class FileIOStream(io.IOBase):
         Synchronously write data to the file.
 
         The written bytes are flushed to disk immediately, then stored in
-        the cache under the full-read key (``size=-1``) with the post-write
+        the cache under the full-read key (`size=-1`) with the post-write
         mtime. This means the next full read is served from cache without a
         disk round-trip.
 
-        Fires all ``on_write`` hooks after a successful write.
+        Fires all `on_write` hooks after a successful write.
 
         Args:
             data: Data to write.
@@ -391,19 +428,19 @@ class FileIOStream(io.IOBase):
 
             fn(stream, data, byte_count)
 
-        where ``stream`` is this ``FileIOStream``, ``data`` is the bytes that
-        were read or written, and ``byte_count`` is ``len(data)``.
+        where `stream` is this `FileIOStream`, `data` is the bytes that
+        were read or written, and `byte_count` is `len(data)`.
 
         Both plain callables and async coroutine functions are accepted.
         Async hooks on a synchronous stream are scheduled fire-and-forget on
         the running event loop when one is available.
 
         Args:
-            event: One of ``"on_read"`` or ``"on_write"``.
+            event: One of `"on_read"` or `"on_write"`.
             fn: The callable to register.
 
         Raises:
-            ValueError: When ``event`` is not a recognised event name.
+            ValueError: When `event` is not a recognised event name.
         """
         if event not in VALID_EVENTS:
             raise ValueError(
@@ -416,7 +453,7 @@ class FileIOStream(io.IOBase):
 
     def fire_hooks(self, hooks: list[Callable], data: bytes) -> None:
         """
-        Fires all hooks in the given list with ``(self, data, len(data))``.
+        Fires all hooks in the given list with `(self, data, len(data))`.
 
         Sync hooks are called inline. Async hooks are scheduled as
         fire-and-forget tasks on the running loop, or run in a new loop
@@ -431,7 +468,7 @@ class FileIOStream(io.IOBase):
                 # Best-effort: schedule on the running loop or spin a new one
                 try:
                     loop = asyncio.get_running_loop()
-                    loop.create_task(fn(self, data, len(data)))
+                    create_task(fn(self, data, len(data)), loop=loop)
                 except RuntimeError:
                     asyncio.run(fn(self, data, len(data)))
             else:
@@ -441,47 +478,48 @@ class FileIOStream(io.IOBase):
 
     def current_mtime(self) -> float:
         """
-        Returns the file's current modification time from the OS.
+        Returns the file's current modification time from the OS (as nanoseconds).
 
         Returns:
-            The ``st_mtime`` value for this stream's filepath, or 0.0
+            The `st_mtime_ns` value for this stream's filepath, or 0.0
             if the file does not exist.
         """
         try:
-            return os.stat(self.filepath).st_mtime
+            _, mtime_ns = self._get_stat_metadata()
+            return mtime_ns
         except FileNotFoundError:
             return 0.0
 
     def make_cache_key(self, pos: int, size: int) -> str:
         """
-        Builds the cache key for a read starting at ``pos`` of length ``size``.
+        Builds the cache key for a read starting at `pos` of length `size`.
 
         The key encodes the filepath, position, and size so that reads
         from different offsets occupy independent cache slots.
 
         Args:
             pos: The file offset at which the read starts.
-            size: Number of bytes requested, or ``-1`` for a full read.
+            size: Number of bytes requested, or `-1` for a full read.
 
         Returns:
-            A string cache key of the form ``"filepath:pos:size"``.
+            A string cache key of the form `"filepath:pos:size"`.
         """
         return f"{self.filepath}:{pos}:{size}"
 
     def cache_get(self, size: int) -> Optional[bytes]:
         """
-        Returns cached bytes for the current position and size, or ``None``.
+        Returns cached bytes for the current position and size, or `None`.
 
-        Each ``(filepath, pos, size)`` triple has its own independent cache
+        Each `(filepath, pos, size)` triple has its own independent cache
         slot, so reads from different offsets are served correctly without
         interfering with each other. Stale entries (mtime mismatch) are
         evicted on access.
 
         Args:
-            size: The read size passed to ``read()``, or ``-1`` for a full read.
+            size: The read size passed to `read()`, or `-1` for a full read.
 
         Returns:
-            Cached bytes if the entry exists and is fresh, else ``None``.
+            Cached bytes if the entry exists and is fresh, else `None`.
         """
         cache_key = self.make_cache_key(self._pos, size)
         entry = FILE_CACHE.get(cache_key)
@@ -502,7 +540,7 @@ class FileIOStream(io.IOBase):
         """
         Stores a read result in the cache keyed by position and size.
 
-        Records the mtime on the instance so ``is_modified`` can compare
+        Records the mtime on the instance so `is_modified` can compare
         against it later without an extra cache lookup.
 
         Args:
@@ -520,11 +558,11 @@ class FileIOStream(io.IOBase):
 
         Rather than flushing all cached entries or re-reading the whole file,
         this method iterates over existing cache keys for this filepath and
-        patches any entry whose byte range overlaps ``[write_pos, write_pos +
-        len(data))``.  Entries that do not overlap are left untouched — they
+        patches any entry whose byte range overlaps `[write_pos, write_pos +
+        len(data))`.  Entries that do not overlap are left untouched — they
         remain valid because their byte ranges were not affected by the write.
 
-        A new entry is always written for ``(write_pos, len(data))`` so the
+        A new entry is always written for `(write_pos, len(data))` so the
         exact slice just written is immediately cache-warm.
 
         Entries that overlap but cannot be fully reconstructed from the
@@ -602,9 +640,28 @@ class FileIOStream(io.IOBase):
         )
         self._cache_mtime = mtime
         
+    def _get_stat_metadata(self) -> Tuple[int, int]:
+        """
+        Retrieves the file's size and modification time in a single stat call.
+
+        Combines what would otherwise be two separate `os.stat()` calls
+        (one for `etag`, one for `last_modified`) into one, so callers
+        that need both values only pay the stat cost once per access.
+
+        Returns:
+            A `(st_size, st_mtime_ns)` tuple for the file, or `(0, 0)` if
+            the file does not exist.
+        """
+        try:
+            stat_result = os.stat(self.filepath)
+        except FileNotFoundError:
+            return 0, 0
+
+        return stat_result.st_size, stat_result.st_mtime_ns
+    
     def _accumulate_read_bytes(self, data: bytes) -> None:
         """
-        Appends newly read bytes to the running ``_total_read_bytes`` buffer.
+        Appends newly read bytes to the running `_total_read_bytes` buffer.
 
         Args:
             data: The bytes returned from the most recent read operation.
@@ -618,9 +675,9 @@ class FileIOStream(io.IOBase):
         """
         Ensure the file is closed on delete else it raises a RuntimeError.
 
-        Always calls the synchronous base ``close`` directly — ``__del__``
+        Always calls the synchronous base `close` directly — `__del__`
         can never be a coroutine, so we must not dispatch to the async
-        override on ``AsyncFileIOStream``.
+        override on `AsyncFileIOStream`.
         """
         if self.is_open() and not self.ignore_file_open_on_delete:
             if self.close_on_delete:
@@ -642,14 +699,14 @@ class AsyncFileIOStream(FileIOStream):
 
     Provides async-compatible methods for reading and writing files in a
     non-blocking way. Shares the same LRU cache and event-hook system as
-    ``FileIOStream``.
+    `FileIOStream`.
 
     Writes update the cache directly with the written bytes, matching the
     synchronous behaviour. Async hooks registered on this stream are
     awaited inside the lock; sync hooks are called inline.
 
     Notes:
-        Compatible with async context managers (``async with``).
+        Compatible with async context managers (`async with`).
     """
 
     def __init__(self, *args, **kwargs):
@@ -689,10 +746,10 @@ class AsyncFileIOStream(FileIOStream):
         modified since the last read. On a cache miss the file is read in a
         thread and the result is stored in the cache.
 
-        Fires all ``on_read`` hooks after a successful read.
+        Fires all `on_read` hooks after a successful read.
 
         Args:
-            size: Max bytes to read. ``-1`` reads full content.
+            size: Max bytes to read. `-1` reads full content.
 
         Returns:
             Data read from file.
@@ -743,7 +800,7 @@ class AsyncFileIOStream(FileIOStream):
         under the full-read key with the post-write mtime, so the next
         full read is served from cache without a disk round-trip.
 
-        Fires all ``on_write`` hooks after a successful write.
+        Fires all `on_write` hooks after a successful write.
 
         Args:
             data: Bytes to write.

@@ -8,6 +8,7 @@ import json
 import asyncio
 
 from inspect import isasyncgen
+from email.utils import formatdate
 from http.cookies import SimpleCookie, Morsel
 from datetime import datetime, timedelta
 from collections.abc import (
@@ -72,6 +73,8 @@ class BaseResponse:
         self,
         payload_obj: HttpResponsePayload,
         content_obj: Optional[Content] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         """'
         Initialize Response object
@@ -79,6 +82,8 @@ class BaseResponse:
         Args:
             payload_obj (HttpResponsePayload): Response Header object to represent Header
             content_obj (Optional[Content]): Content object.
+            etag (Optional[str]): Optional Etag value (if available).
+            last_modified (Optional[Union[str, datetime]]): Optional Last modified value (if available).
         """
         assert isinstance(payload_obj, BaseResponsePayload), f"Expected payload type 'BaseResponsePayload', but got '{type(payload_obj).__name__}'"
         
@@ -86,8 +91,79 @@ class BaseResponse:
         self.payload_obj: BaseResponsePayload = payload_obj
         self.content_obj: Content = content_obj or Content(b"")
         
+        # Etag & Last modified
+        self._etag = etag
+        self._last_modified = last_modified
+        
         # Set the content type header
         self.set_content_type_header()
+        
+        # Set conditional headers
+        self.set_conditional_headers()
+    
+    @property
+    def etag(self) -> Optional[str]:
+        """
+        Returns the ETag assigned to this response, or `None` if unset.
+
+        Subclasses may override this to derive a value (e.g. from a
+        backing stream) when no explicit value has been assigned.
+        """
+        return self._etag
+
+    @etag.setter
+    def etag(self, value: Optional[str]) -> None:
+        """
+        Explicitly assigns the ETag for this response.
+
+        Args:
+            value: The ETag string including surrounding quotes
+                (e.g. `'"123-456"'`), or `None` to clear it.
+        """
+        self._etag = value
+
+    @property
+    def last_modified(self) -> Optional[str]:
+        """
+        Returns the Last-Modified value for this response as an
+        RFC 7231 HTTP-date string, or `None` if unset.
+
+        Subclasses may override this to derive a value (e.g. from a
+        backing stream) when no explicit value has been assigned.
+        """
+        return self._last_modified
+
+    @last_modified.setter
+    def last_modified(self, value: Optional[Union[str, datetime]]) -> None:
+        """
+        Explicitly assigns the Last-Modified header for this response.
+
+        Args:
+            value: A `datetime` (converted to an RFC 7231HTTP-date string) 
+                or an already-formatted HTTP-date
+                string. `None` clears it.
+        """
+        self._last_modified = self._normalize_last_modified(value)
+
+    @staticmethod
+    def normalize_last_modified(value: Optional[Union[str, datetime]]) -> Optional[str]:
+        """
+        Normalizes a Last-Modified value into an HTTP-date string.
+
+        Args:
+            value: A `datetime`, a pre-formatted HTTP-date
+                string, or `None`.
+
+        Returns:
+            The normalized HTTP-date string, or `None` if `value` is `None`.
+        """
+        if value is None or isinstance(value, str):
+            return value
+
+        if isinstance(value, datetime):
+            return formatdate(value.timestamp(), usegmt=True)
+
+        raise TypeError(f"last_modified must be a str, datetime, or None, not {type(value)}.")
         
     @property
     def cookies(self) -> SimpleCookie:
@@ -363,6 +439,21 @@ class BaseResponse:
         """
         self.set_header("content-type", self.content_obj.content_type)
     
+    def set_conditional_headers(self) -> None:
+        """
+        Applies the `ETag` response header derived from `etag`.
+
+        `last_modified` is deliberately NOT written to a response
+        header here — it's tracked on the response for internal use
+        only (e.g. request-side validation), never disclosed to the
+        client, to avoid leaking precise file-modification timestamps.
+        """
+        if self.payload_obj.status_code not in (200, 206, 304):
+            return
+        
+        if self.etag is not None:
+            self.set_header_if_absent("ETag", self.etag)
+            
     def set_header(self, header: str, value: str):
         """
         Updates/sets a response header.
@@ -401,6 +492,8 @@ class HttpResponse(BaseResponse):
         status_code: int = 200,
         headers: dict = {},
         content_type: Optional[str] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         # Initialize payload object.
         payload_obj = HttpResponsePayload()
@@ -428,7 +521,7 @@ class HttpResponse(BaseResponse):
         content_obj = Content(data=content, content_type=content_type or content_type_header)
         
         # Super initialize.
-        super().__init__(payload_obj, content_obj)
+        super().__init__(payload_obj, content_obj, etag=etag, last_modified=last_modified)
 
 
 class LazyHttpResponse(HttpResponse):
@@ -451,6 +544,8 @@ class LazyHttpResponse(HttpResponse):
         status_code: int = 200,
         headers: Optional[dict] = None,
         content_type: Optional[str] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         """
         Initialize a lazy HTTP response.
@@ -459,6 +554,8 @@ class LazyHttpResponse(HttpResponse):
             status_code: HTTP status code of the response.
             headers: Optional HTTP response headers.
             content_type: Optional MIME type of the response content.
+            etag (Optional[str]): Optional Etag value (if available).
+            last_modified (Optional[Union[str, datetime]]): Optional Last modified value (if available).
         """
         self._loaded_content = self._UNLOADED
         
@@ -467,6 +564,8 @@ class LazyHttpResponse(HttpResponse):
             status_code=status_code,
             headers=headers or {},
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
 
     @property
@@ -571,6 +670,8 @@ class StreamingHttpResponse(HttpResponse):
         headers: Dict = {},
         content_type: Optional[str] = 'application/octet-stream',
         chunk_size: int = 2 * 1024 * 1024,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         """
         Initialize a streaming response object.
@@ -597,12 +698,20 @@ class StreamingHttpResponse(HttpResponse):
                 The default value is 2MB (2 048 000 bytes).
                 Common sizes are between 1 MB (1048576 bytes) and 4 MB (4194304 bytes), but it should be adjusted based on the specific use case and server capabilities.
                 If the content is callable, this argument is ignored, and chunking must be handled by the callable itself.   
+        
+            etag (Optional[str]):
+                Optional Etag value (if available).
+            
+            last_modified (Optional[Union[str, datetime]]):
+                Optional Last modified value (if available).
         """
         super().__init__(
             content=b"",
             status_code=status_code,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
         
         # Initialize default chunk size
@@ -823,6 +932,8 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
         chunk_size: int = 2 * 1024 * 1024,
         start_pos: int = 0,
         end_pos: Optional[int] = -1,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         """
         Initialize StreamingRangeHttpResponse class.
@@ -849,6 +960,12 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
             
             end_pos (int):
                 The ending byte position for the range request. Defaults to -1, meaning the entire stream is used.
+        
+            etag (Optional[str]):
+                Optional Etag value (if available).
+            
+            last_modified (Optional[Union[str, datetime]]):
+                Optional Last modified value (if available).
         """
         
         # Validate and assign the stream and content type
@@ -869,6 +986,8 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
             headers=headers,
             content_type=content_type,
             chunk_size=chunk_size,
+            etag=etag,
+            last_modified=last_modified,
         )
         
         # Parse range.
@@ -981,9 +1100,9 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
         # Get stream length
         stream_length = self.stream.tell()
         
-        # If end_pos is -1, calculate it based on the stream length
+        # If end_pos is -1, resolve to the last valid byte index (inclusive)
         if end_pos == -1:
-            end_pos = stream_length
+            end_pos = stream_length - 1
             
         # Handle negative start_pos (e.g., -n means starting from the last n bytes)
         if start_pos < 0:
@@ -991,12 +1110,16 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
             # Avoid negative numbers using the max function
             start_pos = max(0, stream_length + start_pos)
         
+        # Clamp end_pos to the last valid byte index (inclusive)
+        end_pos = min(end_pos, stream_length - 1)
+        
         # Reset stream to beginning
         self.stream.seek(default_offset)
         
         # Set start and end positions
         self.start_pos = start_pos
         self.end_pos = end_pos
+        self.stream_length = stream_length
         
         # Set content range headers
         self.set_content_range_headers()
@@ -1008,15 +1131,15 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
         )
         
         # Finally, return stream length
-        return stream_length        
-    
+        return stream_length
+        
     def set_content_range_headers(self):
         """
         Sets the content range headers based on current content range.
         """
-        self.set_header('Content-Range', f"bytes {self.start_pos}-{self.end_pos}/*")
+        self.set_header('Content-Range', f"bytes {self.start_pos}-{self.end_pos}/{self.stream_length}")
         self.set_header('Accept-Ranges', 'bytes')
-    
+        
     def clear_content_range_headers(self):
         """
         Clear or deletes the content range headers.
@@ -1036,8 +1159,8 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
         # Seek to start_pos
         self.stream.seek(self.start_pos)
         
-        # If start_pos == end_pos, this mean last byte is required. This is represented by `or 1` statement.
-        remaining = (self.end_pos - self.start_pos) or 1
+        # end_pos is inclusive, so the byte count is (end - start + 1)
+        remaining = self.end_pos - self.start_pos + 1
         
         while remaining > 0:
             chunk_size = min(self.chunk_size, remaining)
@@ -1047,6 +1170,8 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
                 break  # No more data to read
             
             yield chunk
+            
+            # Decrement remaining
             remaining -= len(chunk)
     
     async def _async_get_range_stream(self) -> AsyncGenerator:
@@ -1061,8 +1186,8 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
         # Seek to start_pos
         self.stream.seek(self.start_pos)
         
-        # If start_pos == end_pos, this mean last byte is required. This is represented by `or 1` statement.
-        remaining = (self.end_pos - self.start_pos) or 1
+        # end_pos is inclusive, so the byte count is (end - start + 1)
+        remaining = self.end_pos - self.start_pos + 1
         
         while remaining > 0:
             chunk_size = min(self.chunk_size, remaining)
@@ -1073,8 +1198,9 @@ class StreamingRangeHttpResponse(StreamingHttpResponse):
             
             yield chunk
             
+            # Decrement remaining
             remaining -= len(chunk)
-    
+            
     def __repr__(self):
         return f"<{self.__class__.__name__} (" f"'{self.status_code}'" f") {repr(self.stream).replace('<', '[').replace('>', ']')}>"
 
@@ -1094,6 +1220,8 @@ class FileResponse(StreamingRangeHttpResponse):
         start_pos: int = 0,
         end_pos: Optional[int] = -1,
         disable_path_traversal: bool = True,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         """
         Initializes a streaming HTTP response for serving a file. Determines whether to stream the file in chunks
@@ -1128,6 +1256,12 @@ class FileResponse(StreamingRangeHttpResponse):
                 Whether to remove `..` in filepath. This is to avoid resolving filepaths outside target scope and 
                 safeguard against Path traversal.
                 
+            etag (Optional[str]):
+                Optional Etag value (if available).
+            
+            last_modified (Optional[Union[str, datetime]]):
+                Optional Last modified value (if available).
+            
         Raises:
             FileNotFoundResponseError: If the specified file does not exist.
             ValueError: If the file path is invalid or inaccessible.
@@ -1163,6 +1297,10 @@ class FileResponse(StreamingRangeHttpResponse):
             # Raise our custom error which Duck knows how to handle.
             raise FileNotFoundResponseError(str(e)) 
         
+        # Set stream already because set_conditional_headers depends on it.
+        self.stream = file_stream
+        
+        # Super initilization
         super().__init__(
             stream=file_stream,
             status_code=status_code,
@@ -1171,6 +1309,8 @@ class FileResponse(StreamingRangeHttpResponse):
             chunk_size=chunk_size,
             start_pos=start_pos,
             end_pos=end_pos,
+            etag=etag,
+            last_modified=last_modified,
         )
         
         # Set file size
@@ -1185,6 +1325,35 @@ class FileResponse(StreamingRangeHttpResponse):
             
             # Resets content type header
             self.set_content_type_header()
+            
+    @property
+    def etag(self) -> Optional[str]:
+        """
+        Returns the explicitly assigned ETag, falling back to the
+        backing stream's derived ETag (`stream.etag`) when none was
+        explicitly assigned.
+        """
+        if self._etag is not None:
+            return self._etag
+        return getattr(self.stream, "etag", None)
+
+    @etag.setter
+    def etag(self, value: Optional[str]) -> None:
+        self._etag = value
+
+    @property
+    def last_modified(self) -> Optional[str]:
+        """
+        Returns the explicitly assigned Last-Modified value, falling
+        back to the backing stream's derived value (`stream.last_modified`) when none was explicitly assigned.
+        """
+        if self._last_modified is not None:
+            return self._last_modified
+        return getattr(self.stream, "last_modified", None)
+
+    @last_modified.setter
+    def last_modified(self, value: Optional[Union[str, datetime]]) -> None:
+        self._last_modified = self._normalize_last_modified(value)
 
 
 class HttpRedirectResponse(HttpResponse):
@@ -1198,6 +1367,8 @@ class HttpRedirectResponse(HttpResponse):
         headers: Dict = {},
         content_type: Optional[str] = None,
         permanent: bool = False,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         
         # Initialize new headers
@@ -1218,6 +1389,8 @@ class HttpRedirectResponse(HttpResponse):
             status_code,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
 
 
@@ -1231,6 +1404,8 @@ class HttpSwitchProtocolResponse(HttpResponse):
         upgrade_to: str,
         headers: Dict = {},
         content_type: Optional[str] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         """
         Initialize an HTTP 101 Switching Protocols response.
@@ -1239,6 +1414,8 @@ class HttpSwitchProtocolResponse(HttpResponse):
             upgrade_to (str): The protocol to upgrade to (e.g., "h2c" for HTTP/2 cleartext).
             headers (Dict): Additional headers to include in the response.
             content_type (str): Content-Type header (not usually needed for 101 response).
+            etag (Optional[str]): Optional Etag value (if available).
+            last_modified (Optional[Union[str, datetime]]): Optional Last modified value (if available).
         """
         headers = {"Connection": "Upgrade", "Upgrade": upgrade_to, **headers}
         
@@ -1247,6 +1424,8 @@ class HttpSwitchProtocolResponse(HttpResponse):
             status_code=101,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )  
 
 
@@ -1260,6 +1439,8 @@ class JsonResponse(HttpResponse):
         status_code: int = 200,
         headers: Dict = {},
         content_type = "application/json",
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         # Set JSON object for reference.
         self.json_obj = content or {}
@@ -1269,6 +1450,8 @@ class JsonResponse(HttpResponse):
             status_code,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
 
 
@@ -1283,6 +1466,8 @@ class HttpErrorRequestResponse(HttpResponse):
         status_code: int = 400,
         headers: Dict = {},
         content_type: Optional[str] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         if not content:
             short_msg, content = responses.get(status_code, (f"{status_code}", "Sorry, There is an error in request"))
@@ -1292,6 +1477,8 @@ class HttpErrorRequestResponse(HttpResponse):
             status_code,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
 
 
@@ -1305,12 +1492,16 @@ class HttpRangeNotSatisfiableResponse(HttpErrorRequestResponse):
         content: Optional[Union[str, bytes]] = None,
         headers: Dict = {},
         content_type: Optional[str] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         super().__init__(
             content,
             status_code=416,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
 
 
@@ -1324,12 +1515,16 @@ class HttpBadRequestResponse(HttpErrorRequestResponse):
         content: Optional[Union[str, bytes]] = None,
         headers: Dict = {},
         content_type: Optional[str] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         super().__init__(
             content,
             status_code=400,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
 
 
@@ -1343,12 +1538,16 @@ class HttpForbiddenRequestResponse(HttpErrorRequestResponse):
         content: Optional[Union[str, bytes]] = None,
         headers: Dict = {},
         content_type: Optional[str] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         super().__init__(
             content,
             status_code=403,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
 
 
@@ -1362,12 +1561,16 @@ class HttpBadRequestSyntaxResponse(HttpErrorRequestResponse):
         content: Optional[Union[str, bytes]] = "Bad Request Syntax",
         headers: Dict = {},
         content_type: Optional[str] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         super().__init__(
             content,
             status_code=400,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
 
 
@@ -1381,12 +1584,16 @@ class HttpUnsupportedVersionResponse(HttpErrorRequestResponse):
         content: Optional[Union[str, bytes]] = None,
         headers: Dict = {},
         content_type: Optional[str] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         super().__init__(
             content,
             status_code=505,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
 
 
@@ -1400,12 +1607,16 @@ class HttpNotFoundResponse(HttpErrorRequestResponse):
         content: Optional[Union[str, bytes]] = None,
         headers: Dict = {},
         content_type: Optional[str] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         super().__init__(
             content,
             status_code=404,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
 
 
@@ -1419,12 +1630,16 @@ class HttpMethodNotAllowedResponse(HttpErrorRequestResponse):
         content: Optional[Union[str, bytes]] = None,
         headers: Dict = {},
         content_type: Optional[str] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         super().__init__(
             content,
             status_code=405,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
 
 
@@ -1438,12 +1653,16 @@ class HttpServerErrorResponse(HttpErrorRequestResponse):
         content: Optional[Union[str, bytes]] = None,
         headers: Dict = {},
         content_type: Optional[str] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         super().__init__(
             content,
             status_code=500,
             headers=headers,
-           content_type=content_type,
+            content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
        )
 
 
@@ -1457,12 +1676,16 @@ class HttpBadGatewayResponse(HttpErrorRequestResponse):
         content: Optional[Union[str, bytes]] = None,
         headers: Dict = {},
         content_type: Optional[str] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         super().__init__(
             content,
             status_code=502,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
 
 
@@ -1476,12 +1699,16 @@ class HttpTooManyRequestsResponse(HttpErrorRequestResponse):
         content: Optional[Union[str, bytes]] = "Too many requests",
         headers: Dict = {},
         content_type: Optional[str] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         super().__init__(
             content,
             status_code=429,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
 
 
@@ -1495,12 +1722,16 @@ class HttpRequestTimeoutResponse(HttpErrorRequestResponse):
         content: Optional[Union[str, bytes]] = None,
         headers: Dict = {},
         content_type: Optional[str] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         super().__init__(
             content,
             status_code=408,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
 
 
@@ -1517,6 +1748,8 @@ class TemplateResponse(LazyHttpResponse):
         headers: Dict = {},
         content_type: str = "text/html",
         engine: Optional[Engine] = None,
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         # Set some attributes
         self.template = template
@@ -1542,6 +1775,8 @@ class TemplateResponse(LazyHttpResponse):
             status_code=status_code,
             headers=headers,
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
 
     def load(self) -> str:
@@ -1570,7 +1805,9 @@ class ComponentResponse(LazyHttpResponse):
         status_code (int, optional): HTTP status code. Defaults to 200.
         headers (Dict, optional): Response headers. Defaults to empty dict.
         content_type (str, optional): Content-Type header. If not provided, it may be inferred.
-    
+        etag (Optional[str]): Optional Etag value (if available).
+        last_modified (Optional[Union[str, datetime]]): Optional Last modified value (if available).
+            
     Raises:
         ValueError: If the component is None.
         TypeError: If the component is not an instance of Component.
@@ -1581,6 +1818,8 @@ class ComponentResponse(LazyHttpResponse):
         status_code: int = 200,
         headers: Optional[Dict[str, str]] = None,
         content_type: Optional[str] = "text/html",
+        etag: Optional[str] = None,
+        last_modified: Optional[Union[str, datetime]] = None,
     ):
         if component is None:
             raise ValueError("Component is required for this response.")
@@ -1596,6 +1835,8 @@ class ComponentResponse(LazyHttpResponse):
             status_code=status_code,
             headers=headers or {},
             content_type=content_type,
+            etag=etag,
+            last_modified=last_modified,
         )
         
         # Process some data

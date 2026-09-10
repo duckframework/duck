@@ -14,6 +14,7 @@ from inspect import isasyncgen
 from typing import (
     Dict,
     Callable,
+    Optional,
 )
 from duck.http.content import COMPRESS_STREAMING_RESPONSES
 from duck.http.request import HttpRequest
@@ -326,15 +327,19 @@ class ResponseFinalizer:
                 # Compressing streaming responses disallowed
                 return
             
-             # Check if we are dealing with a StreamingRangeHttpResponse
-            if isinstance(response, StreamingRangeHttpResponse):
-                start_pos, end_pos = response.start_pos, response.end_pos
-                content_size = end_pos - start_pos
-                
-                if not (content_size >= COMPRESSION_MIN_SIZE and content_size <= COMPRESSION_MAX_SIZE):
-                    # Compression not applicable.
-                    return
-                    
+            # A byte-range response's offsets refer to the representation
+            # being requested, so it must not be transformed WHILE it is
+            # actually serving a partial range (206). If If-Range failed
+            # validation and do_set_streaming_range downgraded this to a
+            # full 200, it's safe to compress like any other streaming
+            # response — checking status_code rather than isinstance()
+            # avoids permanently disabling compression on a
+            # StreamingRangeHttpResponse instance that is no longer
+            # actually serving a range.
+            if isinstance(response, StreamingRangeHttpResponse) and response.status_code == 206:
+                response.set_header("Content-Encoding", "identity")
+                return
+        
             # Get content type
             content_type = response.get_header("content-type", "")
             
@@ -342,8 +347,13 @@ class ResponseFinalizer:
             total_stream_size = None
             
             if hasattr(response, "stream") and hasattr(response.stream, "tell") and hasattr(response.stream, "seek"):
-                response.stream.seek(0, io.SEEK_END) # seek to EOF
-                total_stream_size = response.stream.tell()
+                # Get the stream size
+                try:
+                    response.stream.seek(0, io.SEEK_END)
+                    total_stream_size = response.stream.tell()
+                finally:
+                    response.stream.seek(current_position)
+                    
             else:
                 return # Quit with the compression, no stream!
                     
@@ -430,13 +440,75 @@ class ResponseFinalizer:
             if not content_type:
                 content_type = response.content_obj.content_type
                 response.set_header("content-type", content_type)
-    
+
+    @staticmethod
+    def is_range_valid(
+        request: HttpRequest,
+        etag: Optional[str],
+        last_modified: Optional[str],
+    ) -> bool:
+        """
+        Determines whether a `Range` request should be honored, per `If-Range`.
+
+        `If-Range` (RFC 7233 §3.2) lets a client say "give me just this byte
+        range, but only if the resource I have cached is still exactly this
+        version — otherwise send me the whole thing." If no `If-Range` header
+        is present, `Range` is always honored (this returns `True`).
+
+        Unlike `If-None-Match`, `If-Range` requires a **strong** comparison —
+        a weak validator (`W/"..."`) never satisfies it, even if the
+        underlying value is identical, since a weak ETag only promises
+        semantic equivalence, not byte-for-byte identity, which is unsafe to
+        splice a partial range into. If the header value doesn't look like
+        an ETag (no surrounding quotes), it's treated as an HTTP-date and
+        compared against `last_modified` instead.
+
+        Args:
+            request: The incoming request, inspected for the `If-Range` header.
+            etag: The response's current (strong) ETag, or `None`.
+            last_modified: The response's current Last-Modified value
+                (HTTP-date string), or `None`. Used only when `If-Range`
+                carries a date rather than an ETag.
+
+        Returns:
+            `True` if `Range` should be honored (no `If-Range` sent, or it
+            matches the current strong validator). `False` if the resource
+            has changed and the full body should be sent instead.
+        """
+        if_range = request.get_header("If-Range")
+
+        if if_range is None:
+            # No If-Range sent — Range is unconditional, always honor it.
+            return True
+
+        if_range = if_range.strip()
+
+        # A weak validator can never satisfy If-Range, per RFC 7233 §3.2 —
+        # fail safe by treating it as non-matching (serve full body).
+        if if_range.startswith("W/"):
+            return False
+
+        # ETag-shaped value (quoted) — strong comparison against our ETag.
+        # Our own ETag is always strong (never W/-prefixed), so a direct
+        # string match is correct here.
+        if if_range.startswith('"'):
+            return etag is not None and if_range == etag
+
+        # Otherwise treat it as an HTTP-date and compare against Last-Modified.
+        return last_modified is not None and if_range == last_modified
+
     @log_failsafe
     def do_set_streaming_range(self, response, request):
         """
         Set streaming range attributes on StreamingRangeHttpResponse. 
         This method parses the 'Range' header from the request and sets the 
         start and end positions for partial content streaming.
+
+        If an `If-Range` header is present and does not match the response's
+        current strong validator (`ETag`, falling back to `Last-Modified`),
+        the `Range` header is ignored entirely and the full resource is
+        served as `200`, since splicing a partial range against a changed
+        resource would silently corrupt the client's reconstructed file.
     
         Args:
             response (StreamingRangeHttpResponse): The response object to set streaming range on.
@@ -454,12 +526,18 @@ class ResponseFinalizer:
         # Set the Range header.
         range_header = request.get_header('Range')
         
-        if not range_header:
-            if isinstance(response, StreamingRangeHttpResponse):
-                if response.status_code == 206:
-                    response.payload_obj.parse_status(200) # modify the response to correct status
-                    response.clear_content_range_headers() # clear range headers
-            return  # If no Range header exists, no need to set content range headers.
+        # Treat the request as rangeless if no Range was sent, or if an
+        # If-Range precondition was sent but failed to match — in both
+        # cases we fall through to serving the full 200 body.
+        honor_range = bool(range_header) and self.is_range_valid(
+            request, response.etag, response.last_modified
+        )
+        
+        if not honor_range:
+            if response.status_code == 206:
+                response.payload_obj.parse_status(200) # modify the response to correct status
+                response.clear_content_range_headers() # clear range headers
+            return  # No Range header, or If-Range failed — full body, no content range headers.
         
         # Parse Range header.
         if response.status_code == 200:
@@ -478,7 +556,7 @@ class ResponseFinalizer:
             # Replace response data
             new_response = make_response(
                 HttpRangeNotSatisfiableResponse,
-                extra_content={"exception": e},
+                extra_context={"exception": e},
             )
                 
             # Replace response with new data
@@ -494,7 +572,7 @@ class ResponseFinalizer:
             )
         
     @log_failsafe
-    def do_request_response_transformation(self, response: HttpResponse, request: HttpRequest):
+    def do_request_response_transformation(self, response: HttpResponse, request: HttpRequest) -> bool:
         """
         Transforms the response object by applying request- and response-based modifications.
         
@@ -503,22 +581,55 @@ class ResponseFinalizer:
         Behavior Examples:
         - If the request method is `HEAD`, the response body is replaced with empty bytes.
         - If a matching template is found in the `CUSTOM_TEMPLATES` configuration, the entire response may be replaced.
+        - If the response is downgraded to `304 Not Modified`, further response processing (e.g. body
+          generation, streaming setup) should be skipped by the caller.
     
         Args:
             response (HttpResponse): The original response to be transformed.
             request (HttpRequest): The incoming HTTP request associated with the response.
+
+        Returns:
+            bool: `True` if the caller should continue normal response processing,
+                `False` if processing should stop here (e.g. the response was
+                downgraded to `304 Not Modified` and has nothing further to do).
         """
         if response:
+            # Handle 304 here.
+            if request:
+                last_modified = response.last_modified
+                etag = response.etag
+
+                # Conditional revalidation only applies to safe methods with a
+                # cacheable representation (200/206) and a validator to check against.
+                if (
+                    request.method in ("GET", "HEAD")
+                    and response.status_code in (200, 206)
+                    and (etag is not None or last_modified is not None)
+                    and self.is_not_modified(request, etag, last_modified)
+                ):
+                    # Downgrade to 304 response
+                    self.downgrade_to_not_modified(response)
+                    
+                    # Nothing left to do — no body, no custom template, no further transforms.
+                    return False
+
+                # HEAD never carries a body, regardless of what produced it.
+                if request.method == "HEAD":
+                    if isinstance(response, StreamingHttpResponse):
+                        streaming_content_replace(response, stream=[b""])
+                    else:
+                        content_replace(response, b"", new_content_type="use_existing")
+                        
+            # Handle custom status code templates 
             if response.status_code in CUSTOM_TEMPLATES:
                 response_callable = CUSTOM_TEMPLATES[response.status_code]
+                
                 if not callable(response_callable):
                     raise TypeError(f"Callable required for custom template corresponding to status code of '{response.status_code}' ")
                 
                 # Parse parameters and obtain the custom template response.
-                new_response = response_callable(
-                    current_response=response,
-                    request=request,
-                )
+                new_response = response_callable(current_response=response, request=request)
+                
                 try:
                     new_response = to_response(new_response) # convert or check the validity of the custom response.
                 except TypeError:
@@ -527,6 +638,100 @@ class ResponseFinalizer:
                 
                 # Replace response with new data
                 replace_response(response, new_response)
+
+        # Normal path — caller should continue processing this response.
+        return True
+
+    @staticmethod
+    def is_not_modified(request: HttpRequest, etag: Optional[str], last_modified: Optional[str]) -> bool:
+        """
+        Determines whether a request's conditional headers match the response's validators.
+
+        `If-None-Match` (ETag) is authoritative and checked first, since it is
+        precise to the nanosecond via `FileIOStream.etag`. `If-Modified-Since`
+        is only consulted as a fallback when the client sent no `If-None-Match`
+        — it is never used to override a mismatching ETag, and `Last-Modified`
+        is never read from response headers here since it is intentionally
+        never emitted (see `HttpResponseBase.finalize_headers`); this compares
+        against the response's internal `last_modified` value instead.
+
+        Args:
+            request: The incoming request, inspected for `If-None-Match` / `If-Modified-Since` headers.
+            etag: The response's current ETag, or `None`.
+            last_modified: The response's current Last-Modified value (HTTP-date string), or `None`.
+
+        Returns:
+            `True` if the client's cached copy is still valid and a `304`
+            should be sent instead of the body.
+        """
+        
+        def strip_weak_prefix(etag_value: str) -> str:
+            """
+            Strips the `W/` weak-validator prefix from an ETag value, if present.
+    
+            Args:
+                etag_value: A raw ETag token, e.g. `'"abc-123"'` or `'W/"abc-123"'`.
+    
+            Returns:
+                The ETag with any leading `W/` removed, e.g. `'"abc-123"'`.
+            """
+            if etag_value.startswith("W/"):
+                return etag_value[2:]
+            return etag_value
+        
+        if_none_match = request.headers.get("If-None-Match")
+        
+        if if_none_match is not None:
+            if etag is None:
+                return False
+            
+            # Support comma-separated lists and the "*" wildcard per RFC 7232 §3.2.
+            if if_none_match.strip() == "*":
+                return True
+            
+            # Create candidates
+            candidates = {strip_weak_prefix(tag.strip()) for tag in if_none_match.split(",")}
+            
+            # Check if etag is in candidates
+            return etag in candidates
+
+        # No ETag sent by the client — fall back to Last-Modified, if we
+        # have one to compare against.
+        if_modified_since = request.headers.get("If-Modified-Since")
+        
+        if if_modified_since is not None and last_modified is not None:
+            return if_modified_since == last_modified
+
+        return False
+
+    @staticmethod
+    def downgrade_to_not_modified(response: HttpResponse) -> None:
+        """
+        Converts a fully-built 200/206 response in place into a 304.
+
+        Strips the body and any representation-specific headers (since a
+        `304` has no body), while preserving the validators
+        (`ETag` is kept; `Last-Modified` remains unemitted as always) so
+        the client can keep using its cached copy.
+
+        Args:
+            response: The response to downgrade. Mutated in place.
+        """
+        response.status_code = 304
+        
+        if isinstance(response, StreamingHttpResponse):
+            streaming_content_replace(response, stream=[b""])
+        else:
+            content_replace(response, b"", new_content_type="use_existing")
+        
+        # A 304 has no representation, so headers describing the body
+        # (as opposed to the resource) do not apply.
+        for header in ("Content-Length", "Content-Type", "Content-Range", "Content-Encoding"):
+            response.delete_header(header, failsafe=True)
+
+        # Re-apply validators (ETag only — Last-Modified stays header-less
+        # by policy) now that headers were cleared above.
+        response.set_conditional_headers()
         
     def finalize_response(
         self,
@@ -545,16 +750,16 @@ class ResponseFinalizer:
         # All of the following method calls are failsafe meaning failure of any method
         # will not affect the execution of other methods, thus an error encountered will be
         # logged appropriately. Decorator responsible: @log_failsafe
-        self.do_request_response_transformation(response, request) 
+        continue_processing = self.do_request_response_transformation(response, request) 
+        
+        # Continue with next steps
         self.do_set_fixed_headers(response, request)
         self.do_set_connection_mode(response, request)
         self.do_set_extra_headers(response, request)
         
-        if request and request.method == "HEAD":
-            if isinstance(response, StreamingHttpResponse):
-                streaming_content_replace(response, stream=[b""])
-            else:
-                content_replace(response, b"", new_content_type="use_existing")
+        if not continue_processing:
+            # Stop further processing at this point - we would have done this immediately
+            # after do_request_response_transformation but we want other headers to be set.
             return
             
         if do_set_streaming_range:
@@ -629,21 +834,30 @@ class AsyncResponseFinalizer(ResponseFinalizer):
                 # Compressing streaming responses disallowed
                 return
             
-            # Check if we are dealing with a StreamingRangeHttpResponse
-            if isinstance(response, StreamingRangeHttpResponse):
-                start_pos, end_pos = response.start_pos, response.end_pos
-                content_size = end_pos - start_pos
-                
-                if not(content_size >= COMPRESSION_MIN_SIZE and content_size <= COMPRESSION_MAX_SIZE):
-                    # Compression not applicable.
-                    return
+            # A byte-range response's offsets refer to the representation
+            # being requested, so it must not be transformed WHILE it is
+            # actually serving a partial range (206). If If-Range failed
+            # validation and do_set_streaming_range downgraded this to a
+            # full 200, it's safe to compress like any other streaming
+            # response — checking status_code rather than isinstance()
+            # avoids permanently disabling compression on a
+            # StreamingRangeHttpResponse instance that is no longer
+            # actually serving a range.
+            if isinstance(response, StreamingRangeHttpResponse) and response.status_code == 206:
+                response.set_header("Content-Encoding", "identity")
+                return
                     
             content_type = response.get_header("content-type", "")
             total_stream_size = None
             
             if hasattr(response, "stream") and hasattr(response.stream, "tell") and hasattr(response.stream, "seek"):
-                response.stream.seek(0, io.SEEK_END) # seek to EOF
-                total_stream_size = response.stream.tell()
+                # Get the stream size
+                try:
+                    response.stream.seek(0, io.SEEK_END)
+                    total_stream_size = response.stream.tell()
+                finally:
+                    response.stream.seek(current_position)
+    
             else:
                 if not isinstance(response, ComponentResponse):
                     return # Quit with the compression, no stream!
@@ -709,6 +923,12 @@ class AsyncResponseFinalizer(ResponseFinalizer):
         Set streaming range attributes on StreamingRangeHttpResponse. 
         This method parses the 'Range' header from the request and sets the 
         start and end positions for partial content streaming.
+
+        If an `If-Range` header is present and does not match the response's
+        current strong validator (`ETag`, falling back to `Last-Modified`),
+        the `Range` header is ignored entirely and the full resource is
+        served as `200`, since splicing a partial range against a changed
+        resource would silently corrupt the client's reconstructed file.
     
         Args:
             response (StreamingRangeHttpResponse): The response object to set streaming range on.
@@ -726,12 +946,18 @@ class AsyncResponseFinalizer(ResponseFinalizer):
         # Set the Range header.
         range_header = request.get_header('Range')
         
-        if not range_header:
-            if isinstance(response, StreamingRangeHttpResponse):
-                if response.status_code == 206:
-                    response.payload_obj.parse_status(200) # modify the response to correct status
-                    response.clear_content_range_headers() # clear range headers
-            return  # If no Range header exists, no need to set content range headers.
+        # Treat the request as rangeless if no Range was sent, or if an
+        # If-Range precondition was sent but failed to match — in both
+        # cases we fall through to serving the full 200 body.
+        honor_range = bool(range_header) and self.is_range_valid(
+            request, response.etag, response.last_modified
+        )
+        
+        if not honor_range:
+            if response.status_code == 206:
+                response.payload_obj.parse_status(200) # modify the response to correct status
+                response.clear_content_range_headers() # clear range headers
+            return  # No Range header, or If-Range failed — full body, no content range headers.
         
         # Parse Range header.
         if response.status_code == 200:
@@ -744,13 +970,13 @@ class AsyncResponseFinalizer(ResponseFinalizer):
             start, end = StreamingRangeHttpResponse.extract_range(range_header)
             
             # Set the start and end positions on the response object
-            response.parse_range(start, end) # set content range headers (if applicable)
+            response.parse_range(start, end) # Set content range headers (if applicable)
             
         except ValueError as e:
             # Replace response data
             new_response = make_response(
                 HttpRangeNotSatisfiableResponse,
-                extra_content={"exception": e},
+                extra_context={"exception": e},
             )
             
             # Replace response with new data
@@ -782,16 +1008,18 @@ class AsyncResponseFinalizer(ResponseFinalizer):
         # All of the following method calls are failsafe meaning failure of any method
         # will not affect the execution of other methods, thus an error encountered will be
         # logged appropriately. Decorator responsible: @log_failsafe
-        self.do_request_response_transformation(response, request) 
+        # NOTE: do_request_response_transformation already handles 304 downgrading,
+        # HEAD body-stripping, and custom status-code templates — kept in sync with
+        # the sync class rather than duplicating HEAD-handling here.
+        continue_processing = self.do_request_response_transformation(response, request)
+        
         self.do_set_fixed_headers(response, request)
         self.do_set_connection_mode(response, request)
         self.do_set_extra_headers(response, request)
         
-        if request and request.method == "HEAD":
-            if isinstance(response, StreamingHttpResponse):
-                streaming_content_replace(response, stream=[b""])
-            else:
-                content_replace(response, b"", new_content_type="use_existing")
+        if not continue_processing:
+            # Stop further processing at this point - we would have done this immediately
+            # after do_request_response_transformation but we want other headers to be set.
             return
             
         if do_set_streaming_range:
@@ -803,8 +1031,8 @@ class AsyncResponseFinalizer(ResponseFinalizer):
             await self.do_content_compression(response, request)
         
         # Lastly review content headers.
-        self.do_set_content_headers(response, request)
-        
+        self.do_set_content_headers(response, request)        
+
 
 # Set & initialize response finalizers
 response_finalizer = ResponseFinalizer()

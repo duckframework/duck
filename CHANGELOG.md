@@ -11,7 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Added support for tuple/list as `options` to builtin `Select` HTML component.
+- `Select` component's `options` prop now accepts a `tuple`/`list` of values (in addition to the existing mapping form), rendering each as an `<option>` with matching `value`/label.
+- `FileIOStream.etag` and `FileIOStream.last_modified` — derived from `st_size`/`st_mtime_ns` via a single `os.stat()` call, letting HTTP responses expose stable cache validators without reading file content.
+- Conditional request handling (`If-None-Match`, `If-Modified-Since`) with automatic `304 Not Modified` downgrading for cacheable `GET`/`HEAD` responses, using the new `FileIOStream` validators.
+- `If-Range` support for byte-range (`Range`) requests — a range is only honored when it matches the resource's current strong `ETag` (or `Last-Modified` as fallback); otherwise the full resource is served, preventing corrupted partial downloads against a changed file.
+
+### Changed
+
+- Changed `FileIOStream` to use `os.stat(...).mtime_ns` instead of `os.stat(...).mtime` for caching modification timestamp.
+
+## Fixed 
+
+- Fixed `StreamingRangeHttpResponse` not correctly parsing range header - leading to slightly wrong data.
 
 ---
 
