@@ -14,9 +14,8 @@ from duck.html.components.style import Style
 
 # Default badge content, overridable via kwargs
 DEFAULT_URL = "https://duckframework.com"
-DEFAULT_TEXT = "Made with Duck \U0001F986"
+DEFAULT_TEXT = "Made with Duck"
 DEFAULT_LOGO_SRC = "images/duck-logo.png"
-DEFAULT_ACCENT_COLOR = "#F5C842"
 
 
 class MadeWithDuck(Link, FlexContainer):
@@ -39,8 +38,7 @@ class MadeWithDuck(Link, FlexContainer):
             Static path to the logo image.
         
         accent_color (str, optional):
-            Hover border/glow color. Defaults to `Theme.current.accent_color` when 
-            the project defines one, otherwise falls back to Duck's own accent yellow.
+            Hover border/glow color. Defaults to `Theme.current.accent_color`.
         
         id (str, optional):
             Element id, used to scope the hover styling.
@@ -49,7 +47,7 @@ class MadeWithDuck(Link, FlexContainer):
     def on_create(self) -> None:
         # Resolve link target and text color before Link builds itself
         self.url = self.kwargs.get("url", DEFAULT_URL)
-        self.color = self.kwargs.get("color", "rgba(255, 255, 255, 0.85)")
+        self.color = self.kwargs.get("color", Theme.current.muted_text_color)
         
         # Super create
         super().on_create()
@@ -66,8 +64,8 @@ class MadeWithDuck(Link, FlexContainer):
             "justify-content": "center",
             "padding": "6px 14px 6px 8px",
             "border-radius": "999px",
-            "background": "rgba(255, 255, 255, 0.06)",
-            "border": "1px solid rgba(255, 255, 255, 0.14)",
+            "background": Theme.current.surface_elevated_color,
+            "border": f"1px solid {Theme.current.border_color}",
             "font-size": "0.8rem",
             "font-weight": "500",
             "text-decoration": "none",
@@ -122,7 +120,7 @@ class MadeWithDuck(Link, FlexContainer):
             A configured Label component.
         """
         return Label(
-            text=self.kwargs.get("text", DEFAULT_TEXT),
+            text=self.kwargs.get("text") or DEFAULT_TEXT,
             style={"margin": "0px", "white-space": "nowrap"},
         )
 
@@ -150,11 +148,8 @@ class MadeWithDuck(Link, FlexContainer):
         Returns:
             A Style component containing the badge's css rules.
         """
-        # Explicit kwarg wins, then a project-defined Theme.current.accent_color,
-        # falling back to Duck's own accent yellow
-        accent = self.kwargs.get(
-            "accent_color", getattr(Theme.current, "accent_color", DEFAULT_ACCENT_COLOR)
-        )
+        # Explicit kwarg wins, otherwise fall back to the active theme's accent
+        accent = self.kwargs.get("accent_color", Theme.current.accent_color)
 
         return Style(
             inner_html=f"""
@@ -163,7 +158,7 @@ class MadeWithDuck(Link, FlexContainer):
                 }}
 
                 #{self.id}:hover {{
-                    background: rgba(255, 255, 255, 0.1);
+                    background: {Theme.current.surface_elevated_color};
                     border-color: {accent};
                     transform: translateY(-2px);
                     box-shadow: 0 6px 18px color-mix(in srgb, {accent} 35%, transparent);

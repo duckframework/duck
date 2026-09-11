@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "duckframework"
 dynamic = ["version", "dependencies"]
-description = "Build high-performance, scalable, server-side reactive web applications — without a separate frontend framework or a complex JavaScript stack."
+description = "Build high-performance, flexible, scalable, server-side reactive web applications — without a separate frontend framework or a complex JavaScript stack."
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE", "AUTHORS.md"]

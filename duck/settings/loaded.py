@@ -283,7 +283,7 @@ def get_blueprints() -> List[Blueprint]:
             
             if not isinstance(blueprint_obj, Blueprint):
                 raise SettingsError(
-                    f'Blueprint "{blueprint_path}" must be an instance of Blueprint not {type(blueprint)}'
+                    f'Blueprint "{blueprint_path}" must be an instance of Blueprint not {type(blueprint_obj)}'
                 )
             
             if not blueprint_obj.is_builtin:

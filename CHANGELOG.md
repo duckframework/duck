@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Changed HTML components `add_to_registry` to be not strict about `request` for ownership assignment. If not provided, the error will lazily be flagged on `Lively` event dispatch.
+- Improved `Footer` component positioning for mobile responsiveness and improved the whole footer UI logic.
 - Changed `FileIOStream` to use `os.stat(...).mtime_ns` instead of `os.stat(...).mtime` for caching modification timestamp.
 
 ## Fixed 

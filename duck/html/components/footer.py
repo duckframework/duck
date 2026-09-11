@@ -4,6 +4,7 @@ Footer component module.
 from datetime import datetime
 from typing import Any
 
+from duck.meta import Meta
 from duck.html.components import (
     Component,
     InnerComponent,
@@ -11,12 +12,11 @@ from duck.html.components import (
 )
 from duck.html.components.theme import Theme
 from duck.html.components.duck import MadeWithDuck
-from duck.html.components.container import FlexContainer
+from duck.html.components.container import GridContainer, FlexContainer
 from duck.html.components.style import Style
 from duck.html.components.link import Link
 from duck.html.components.span import Span
 from duck.html.components.heading import Heading
-from duck.meta import Meta
 
 
 # Duck project links used by the "made with Duck" badge
@@ -129,7 +129,7 @@ class FooterHeading(Heading):
             "letter-spacing": "0.04em",
             "text-transform": "uppercase",
             "margin-bottom": "6px",
-            "color": self.kwargs.get("heading_color") or "rgba(255, 255, 255, 0.55)",
+            "color": self.kwargs.get("heading_color") or Theme.current.text_color,
         })
 
 
@@ -162,6 +162,7 @@ class FooterBlock(FlexContainer):
             "flex-direction": "column",
             "gap": "10px",
             "min-width": "100px",
+            "justify-self": "start",
         })
 
         # Build the heading and items together, in construction order
@@ -261,7 +262,7 @@ class SocialLinks(FlexContainer):
         )
 
 
-class FooterItems(FlexContainer):
+class FooterItems(GridContainer):
     """
     Main container laying out footer blocks in a responsive grid.
 
@@ -278,9 +279,9 @@ class FooterItems(FlexContainer):
         self.klass = "footer-items"
         self.style.update({
             "gap": "32px",
-            "padding": Theme.current.padding,
-            "flex-wrap": "wrap",
-            "justify-content": "flex-start",
+            "grid-template-columns": "repeat(auto-fit, minmax(100px, max-content))",
+            "justify-content": "space-around",
+            "align-content": "start",
         })
 
         # Build one block per configured heading
@@ -326,28 +327,31 @@ class Footer(InnerComponent):
             Whether to show the "made with Duck" badge. Defaults to True.
         
         accent (str):
-            Accent color for the top divider glow. Defaults to Theme.current.accent_color.
-
-    Template Usage:
-
-    ```django
-    {% Footer %}
-        tagline = "Discover what's happening tonight, across Zimbabwe.",
-        footer_items = {
+            Accent color for the top divider glow. Defaults to `Theme.current.accent_color`.
+        
+        background (str):
+            The background for footer. Defaults to `Theme.current.surface_color`
+            
+    Example Usage:
+    
+    ```python
+    Footer(
+        tagline="Something here",
+        footer_items={
             "Company": [
-                '{% Link %}text="About Us", url="{% resolve "about" fallback_url="#" %}"{% endLink %}',
-                '{% Link %}text="Contact Us", url="{% resolve "contact" fallback_url="#" %}"{% endLink %}',
+                Link(text="About Us", url="/about"),
+                Link(text="Contact Us", url="/contact"),
             ],
             "Legal": [
-                '{% Link %}text="Privacy Policy", url="{% resolve "privacy" fallback_url="#" %}"{% endLink %}',
-                '{% Link %}text="Terms & Conditions", url="{% resolve "tos" fallback_url="#" %}"{% endLink %}',
+                Link(text="Privacy Policy", url="/privacy"),
+                Link(text="Terms & Conditions", url="/terms"),
             ],
         },
-        social_links = [
-            {"platform": "instagram", "url": "https://instagram.com/duckframework"},
-            {"platform": "twitter", "url": "https://twitter.com/duckframework"},
+        social_links=[
+            {"platform": "instagram", "url": "https://instagram.com/example"},
+            {"platform": "twitter", "url": "https://twitter.com/example"},
         ],
-    {% endFooter %}
+    )
     ```
     """
 
@@ -364,12 +368,8 @@ class Footer(InnerComponent):
             "width": "100%",
             "font-size": "0.85rem",
             "position": "relative",
-            "padding-top": Theme.current.padding,
-            "background": self.kwargs.get(
-                "background",
-                "linear-gradient(180deg, rgba(10, 10, 16, 0.0) 0%, "
-                "rgba(10, 10, 16, 0.97) 18%, #0a0a10 100%)",
-            ),
+            "padding": Theme.current.padding,
+            "background": self.kwargs.get("background", self.build_default_background()),
         })
 
         # Optional tagline above the footer columns
@@ -387,6 +387,25 @@ class Footer(InnerComponent):
         # Scoped stylesheet
         self.add_child(self.build_style())
 
+    def build_default_background(self) -> str:
+        """
+        Builds the footer's default gradient background from the active theme.
+
+        Fades from transparent into the theme's surface color, so the
+        footer blends into whatever sits above it.
+
+        Returns:
+            A CSS linear-gradient string.
+        """
+        surface = Theme.current.surface_color
+
+        return (
+            "linear-gradient(180deg, "
+            f"color-mix(in srgb, {surface} 0%, transparent) 0%, "
+            f"color-mix(in srgb, {surface} 97%, transparent) 18%, "
+            f"{surface} 100%)"
+        )
+
     def build_tagline(self) -> Component:
         """
         Builds the short tagline paragraph shown above the footer columns.
@@ -400,7 +419,7 @@ class Footer(InnerComponent):
             klass="footer-tagline",
             style={
                 "padding": f"{Theme.current.padding} {Theme.current.padding} 0",
-                "color": "rgba(255, 255, 255, 0.5)",
+                "color": Theme.current.muted_text_color,
                 "max-width": "480px",
             },
         )
@@ -435,8 +454,8 @@ class Footer(InnerComponent):
                 "flex-wrap": "wrap",
                 "gap": "12px",
                 "padding": Theme.current.padding,
-                "border-top": "1px solid rgba(255, 255, 255, 0.08)",
-                "margin-top": "8px",
+                "border-top": f"1px solid {Theme.current.border_color}",
+                "margin-top": "20px",
             },
             children=children,
         )
@@ -477,7 +496,7 @@ class Footer(InnerComponent):
             tag="p",
             klass="footer-copyright",
             style={
-                "color": "rgba(255, 255, 255, 0.45)",
+                "color": Theme.current.muted_text_color,
                 "margin": "0",
                 "text-align": "center",
             },
@@ -515,14 +534,14 @@ class Footer(InnerComponent):
                     width: 36px;
                     height: 36px;
                     border-radius: 50%;
-                    background: rgba(255, 255, 255, 0.06);
-                    color: rgba(255, 255, 255, 0.7);
+                    background: {Theme.current.surface_elevated_color};
+                    color: {Theme.current.muted_text_color};
                     transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
                 }}
 
                 footer .footer-social-icon:hover {{
                     background: {accent};
-                    color: #0a0a10;
+                    color: {Theme.current.surface_color};
                     transform: translateY(-2px);
                 }}
 
@@ -532,7 +551,7 @@ class Footer(InnerComponent):
 
                 @media (max-width: 768px) {{
                     footer.site-footer {{
-                        font-size: 0.8rem;
+                        font-size: 0.8rem !important;
                     }}
 
                     footer .footer-items {{

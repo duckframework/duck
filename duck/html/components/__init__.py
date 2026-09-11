@@ -257,9 +257,11 @@ class HtmlComponent:
     - If the Lively Component System is active, each component is lazily registered.
           A component is only added to the component registry after `render()` or `to_string()` 
           has been called.
+          
     - To improve performance and reduce re-rendering overhead, heavy components can be 
           pre-rendered. Once pre-rendered, subsequent renders are faster due to internal caching. You 
           can do this by using method `pre_render`.
+          
     - All Lively components are validated before any event is sent to the server, this is disabled by adding prop `data-validate=false` in props.
           Empty props without `data-validate=false`, default is validation.
           You can even toggle this by using method `toggle_validation`.
@@ -350,6 +352,7 @@ class HtmlComponent:
         self._on_root_finalized_called = False
         self._must_validate_on_event = True
         self._ignore_setting_data_validate_if_true = True # Ignore setting data-validate prop if its True
+        self._skipped_registration_error = None # Error that might have caused add_to_registry to fail, might be raised by Lively websocket event handler.
         self._component_attr_protection = True # Whether to protect attributes referring to Component instance from modification.
         self._component_attr_protection_targets = {} # Target attributes to protect, will be set automatically when __setattr__ is called.  
         self._component_attr_protection_exceptions = [

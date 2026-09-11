@@ -2,7 +2,7 @@
 
 **Duck Framework** is an open-source Python web framework and web server with a built-in reactive UI engine and real-time WebSocket support.
 
-Build high-performance, scalable, server-side reactive web applications — without a separate frontend framework or a complex JavaScript stack.
+Build high-performance, flexible, scalable, server-side reactive web applications — without a separate frontend framework or a complex JavaScript stack.
 
 [![Python >=3.10](https://img.shields.io/badge/python->=3.10-blue.svg)](https://www.python.org/downloads/release/python-3100/)
 [![GitHub stars](https://img.shields.io/github/stars/duckframework/duck?style=social)](https://github.com/duckframework/duck/stargazers)

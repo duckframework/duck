@@ -33,4 +33,8 @@ class Link(InnerComponent):
         
         # Themeable defaults, callers can still override via style=
         self.style.setdefault("text-decoration", "none")
-        self.style.setdefault("color", getattr(Theme.current, "link_color", "inherit"))
+        
+        link_color = getattr(Theme.current, "link_color", None)
+        
+        if link_color is not None:
+            self.style.setdefault("color",  link_color)

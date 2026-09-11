@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /search/      # Blocks internal search results
+Disallow: /login/       # Blocks login pages
+Disallow: /admin/       # Blocks administrative areas
+Allow: /                # Allows everything else
+

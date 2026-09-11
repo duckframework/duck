@@ -10,7 +10,7 @@ Documentation
 
 **Duck Framework** is an open-source Python web framework and web server that replaces JavaScript frontends entirely.  
 
-Build real-time, reactive web applications with pure Python — no React, no Vue, no JavaScript framework needed.
+Build real-time, flexible, reactive web applications with pure Python — no React, no Vue, no JavaScript framework needed.
 
 Github
 -----------

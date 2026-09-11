@@ -5,5 +5,5 @@ testing/assets/
 .ducksight
 .ipc
 dist/
-build/
+/build/
 .duck/

@@ -96,7 +96,7 @@ class Theme(metaclass=ThemeMeta):
     DEFAULTS: ClassVar[dict[str, str]] = {
         "accent_color": "#F5C842",
         "surface_color": "#111318",
-        "link_color": "inherit",
+        "link_color": "#8AB4F8",
         "surface_elevated_color": "#1C1F26",
         "text_color": "#F5F5F5",
         "muted_text_color": "rgba(245, 245, 245, 0.6)",

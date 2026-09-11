@@ -258,21 +258,32 @@ class LivelyComponentSystem:
                     f"be the root component, got {component!r}."
                 )
 
-            try:
-                request = component.get_request_or_raise()
-            except RequestNotFoundError as e:
-                raise ComponentSystemError(
-                    f"Root component {component!r} has no request bound. "
-                    f"A request is required to issue its Lively owner token."
-                ) from e
-                
-            # Get existing token or generate new owner token
-            existing = request.COOKIES.get(cls.OWNER_COOKIE_KEY)
-            owner_token = existing or secrets.token_urlsafe(cls.OWNER_TOKEN_NBYTES)
+            # Initialize request and owner token
+            request = None
+            owner_token = None
             
-            if not existing:
-                # Set the owner token in request's meta
-                request.META[cls.OWNER_TOKEN_REQUEST_KEY] = owner_token
+            try:
+                # Try get the owner from the component
+                request = component.get_request_or_raise()
+            
+            except RequestNotFoundError as e:
+                # Registration is skipped for standalone components. Record the
+                # error so the Lively WebSocket event handler can report it later
+                # if the component attempts to participate in a live event.
+                component._skipped_registration_error = ComponentSystemError(
+                    f"Couldn't register root component {component!r} with Lively: "
+                    "no request is bound to the component. A request is required "
+                    "to establish Lively ownership."
+                )
+                
+            if request:
+                # Get existing token or generate new owner token
+                existing = request.COOKIES.get(cls.OWNER_COOKIE_KEY)
+                owner_token = existing or secrets.token_urlsafe(cls.OWNER_TOKEN_NBYTES)
+            
+                if not existing:
+                    # Set the owner token in request's meta
+                    request.META[cls.OWNER_TOKEN_REQUEST_KEY] = owner_token
             
             # Typing helpers
             root_registry: Dict[str, Component] = {}
@@ -284,9 +295,7 @@ class LivelyComponentSystem:
                 existing_component = root_registry.get(uid)
                 
                 if existing_component is component:
-                    raise AlreadyInRegistry(
-                        f"Root component already registered under uid={uid!r}."
-                    )
+                    raise AlreadyInRegistry(f"Root component already registered under uid={uid!r}.")
 
         # Assign component UID in registry
         root_registry[uid] = component

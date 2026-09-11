@@ -425,6 +425,14 @@ class EventHandler:
         owner_token = LivelyComponentSystem.get_owner(root_uid, entry=entry)
         presented_token = self.ws_view.request.COOKIES.get(LivelyComponentSystem.OWNER_COOKIE_KEY)
         
+        # Retrieve the component
+        component = resolved_component = entry[1].get(uid, None)
+        
+        # Check if there was any registration errors for the component.
+        if component._skipped_registration_error:
+            logger.log(f"Skipped dispatch for component `{uid}`: {component._skipped_registration_error}.\n", level=logger.WARNING)
+            return
+            
         if not owner_token or not presented_token or not secrets.compare_digest(owner_token, presented_token):
             if SETTINGS['DEBUG']:
                 logger.log(
@@ -439,11 +447,7 @@ class EventHandler:
         if root_uid not in self.ws_view.bound_root_uids:
             self.ws_view.bound_root_uids.add(root_uid)
             LivelyComponentSystem.mark_connected(root_uid)
-
-        # Retrieve the component and then dispatch the event.
-        _, data, _ = entry
-        component = resolved_component = data.get(uid, None)
-        
+            
         if not component:
             msg = (
                 f"Component with UID `{uid}` at root UID `{root_uid}` requested by WS client not found."
