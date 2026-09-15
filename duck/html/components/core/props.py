@@ -68,7 +68,7 @@ class PropertyStore(dict):
         if isinstance(value, bool):
             if not value:
                 if k in self:
-                    self.__delitem__(k, call_on_delete_item_handler)
+                    self.__delitem__(k, call_on_delete_item_handler=True)
                 return
             value = ""
     

@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Added argument `failsafe` to `duck.utils.email.collection.collect_email`. This logs the exception but doesn't really raise it.
+- Added `Spacemail` provider to `duck.utils.email` module for easy sending of emails through spacemail.
+- Added `duck.html.html_minify` module and enabled html minify by default for HTML components that accept inner HTML.
+- Added HTML components `text` property support newline character `\n`, this will be rendered as `<b>` element as HTML.
 - `Select` component's `options` prop now accepts a `tuple`/`list` of values (in addition to the existing mapping form), rendering each as an `<option>` with matching `value`/label.
 - `FileIOStream.etag` and `FileIOStream.last_modified` — derived from `st_size`/`st_mtime_ns` via a single `os.stat()` call, letting HTTP responses expose stable cache validators without reading file content.
 - Conditional request handling (`If-None-Match`, `If-Modified-Since`) with automatic `304 Not Modified` downgrading for cacheable `GET`/`HEAD` responses, using the new `FileIOStream` validators.

@@ -102,8 +102,8 @@ class Request:
         self.__user: Any = None
         
         # Some important attributes
-        self.client_socket: xsocket = None # client socket which made this request
-        self.client_address: Tuple[str, int] = None # client remote address
+        self.client_socket: xsocket = None # Client socket which made this request
+        self.client_address: Tuple[str, int] = None # Client remote address
         self.application = None
         self.method: str = ""
         self.path: str = ""

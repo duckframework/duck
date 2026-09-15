@@ -426,10 +426,10 @@ class EventHandler:
         presented_token = self.ws_view.request.COOKIES.get(LivelyComponentSystem.OWNER_COOKIE_KEY)
         
         # Retrieve the component
-        component = resolved_component = entry[1].get(uid, None)
+        component = resolved_component = entry[1].get(uid, None) if entry else None
         
         # Check if there was any registration errors for the component.
-        if component._skipped_registration_error:
+        if component and component._skipped_registration_error:
             logger.log(f"Skipped dispatch for component `{uid}`: {component._skipped_registration_error}.\n", level=logger.WARNING)
             return
             

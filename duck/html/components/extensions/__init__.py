@@ -184,19 +184,26 @@ class BasicExtension(Extension):
         """
         from duck.html import escape
         from duck.html.components import InnerComponent
-
-        if not isinstance(self, InnerComponent):
-            raise ExtensionError(f"Property `text` can only be used on inner components with `inner_html`, not {type(self)}")
-
-        if not isinstance(text, (str, int, float)):
-            raise ExtensionError(f"Text must be a valid string, integer or float, not {type(text)}")
         
-        if not self.escape_on_text:
-            text = str(text) if not isinstance(text, str) else text # Convert data to right format
+        if not isinstance(self, InnerComponent):
+            raise ExtensionError(
+                f"Property `text` can only be used on inner components with "
+                f"`inner_html`, not {type(self)}"
+            )
+        
+        if not isinstance(text, (str, int, float)):
+            raise ExtensionError(
+                f"Text must be a valid string, integer or float, not {type(text)}"
+            )
+        
+        # Convert to text
+        text = str(text)
+        
+        if self.escape_on_text:
             text = escape(text)
-             
-        # Set escaped text.
-        self.inner_html = text
+        
+        # Convert newlines last so the inserted `<br>` tags are never escaped
+        self.inner_html = text.replace("\n", "<br>")
 
     @property
     def bg_color(self) -> Optional[str]:

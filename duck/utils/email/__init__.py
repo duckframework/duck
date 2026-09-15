@@ -178,7 +178,9 @@ class Email:
         if aiosmtplib is None:
             raise ImportError("aiosmtplib is required for async email sending. Install with 'pip install aiosmtplib'.")
 
+        # Build message
         msg, all_recipients = self._build_message()
+        
         smtp_kwargs = dict(
             hostname=self.smtp_host,
             port=self.smtp_port,
@@ -223,18 +225,24 @@ class Gmail(Email):
     You must still provide your Gmail address and app password.
 
     Example:
-        gmail = Gmail(
-            username="your@gmail.com",
-            password="your_app_password",
-            from_addr="your@gmail.com",
-            name="Your Name",
-            to="recipient@example.com",
-            subject="Hello from Gmail",
-            body="<b>Welcome!</b>",
-        )
-        gmail.send()
-        # or for async:
-        await gmail.async_send()
+    
+    ```python
+    gmail = Gmail(
+        username="your@gmail.com",
+        password="your_app_password",
+        from_addr="your@gmail.com",
+        name="Your Name",
+        to="recipient@example.com",
+        subject="Hello from Gmail",
+        body="<b>Welcome!</b>",
+    )
+    
+    # Synchronous sending
+    gmail.send()
+    
+    # Asynchronous sending
+    await gmail.async_send()
+    ```
     """
 
     def __init__(
@@ -269,7 +277,85 @@ class Gmail(Email):
         """
         super().__init__(
             smtp_host="smtp.gmail.com",
-            smtp_port=465,
+            smtp_port=465 if use_ssl else 587,
+            username=username,
+            password=password,
+            from_addr=from_addr,
+            name=name,
+            to=to,
+            subject=subject,
+            body=body,
+            recipients=recipients,
+            use_bcc=use_bcc,
+            use_ssl=use_ssl,
+            reply_to=reply_to,
+        )
+
+
+class Spacemail(Email):
+    """
+    Compose and send emails specifically via Spacemail's SMTP server.
+
+    This is a convenience subclass of Email that pre-fills Spacemail's SMTP
+    configuration. You must still provide your Spacemail address and mailbox
+    password — Spacemail has no separate app-password/token system, so this
+    is the same password used to log into webmail.
+
+    Example:
+
+    ```python
+    spacemail = Spacemail(
+        username="hello@yourdomain.com",
+        password="your_mailbox_password",
+        from_addr="hello@yourdomain.com",
+        name="Your Name",
+        to="recipient@example.com",
+        subject="Hello from Spacemail",
+        body="<b>Welcome!</b>",
+    )
+
+    # Synchronous sending
+    spacemail.send()
+
+    # Asynchronous sending
+    await spacemail.async_send()
+    ```
+    """
+
+    def __init__(
+        self,
+        username: str,
+        password: str,
+        from_addr: str,
+        name: str,
+        to: str,
+        subject: str,
+        body: str,
+        recipients: Optional[List[str]] = None,
+        use_bcc: bool = True,
+        use_ssl: bool = True,
+        reply_to: Optional[str] = None,
+    ):
+        """
+        Initialize a Spacemail email instance with Spacemail's SMTP settings.
+
+        Args:
+            username: Full Spacemail address.
+            password: Spacemail mailbox password.
+            from_addr: Spacemail address (same as username).
+            name: Sender's display name.
+            to: Main recipient's email address.
+            subject: Subject of the email.
+            body: HTML content of the email.
+            recipients: List of additional recipient emails (optional).
+            use_bcc: If True, use BCC for recipients; otherwise, use CC.
+            use_ssl: Whether to use SSL (default True → port 465). Set
+                False to use STARTTLS on port 587 instead.
+            reply_to: An email for users to reply to when they hit 'Reply'. Defaults to None, uses default from_addr.
+        """
+        super().__init__(
+            smtp_host="mail.spacemail.com",
+            smtp_port=465 if use_ssl else 587,
             username=username,
             password=password,
             from_addr=from_addr,

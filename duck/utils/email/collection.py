@@ -57,20 +57,33 @@ Respecting user privacy builds trust and helps you stay compliant with global re
 """
 from typing import Callable, Optional, Awaitable, Union, List, Tuple
 from duck.contrib.sync import iscoroutinefunction
+from duck.logging import logger
 
 
-def collect_email(email: str, category: Optional[str] = None):
+def collect_email(email: str, category: Optional[str] = None, failsafe: bool = False):
     """
     Shortcut to collect an email synchronously.
     """
-    EmailCollector.collect_email(email, category)
+    try:
+        EmailCollector.collect_email(email, category)
+    except Exception as e:
+        if failsafe:
+            logger.log_exception(e)
+        else:
+            raise
+            
 
-
-async def async_collect_email(email: str, category: Optional[str] = None):
+async def async_collect_email(email: str, category: Optional[str] = None, failsafe: bool = False):
     """
     Shortcut to collect an email asynchronously.
     """
-    await EmailCollector.async_collect_email(email, category)
+    try:
+        await EmailCollector.async_collect_email(email, category)
+    except Exception as e:
+        if failsafe:
+            logger.log_exception(e)
+        else:
+            raise
 
 
 class EmailCollector:
@@ -96,6 +109,7 @@ class EmailCollector:
             AssertionError: If callback is not callable.
         """
         assert callable(callback), "Argument `callback` must be a callable."
+        
         if iscoroutinefunction(callback):
             cls._async_callback = callback
         else:
@@ -115,8 +129,10 @@ class EmailCollector:
         """
         if cls._sync_callback is None:
             raise TypeError("Synchronous email collection callback not set. Please use `register` to register a new synchronous callback.")
+        
         if iscoroutinefunction(cls._sync_callback):
             raise RuntimeError("Email collection callback must be synchronous. Use `async_collect_email` for async callbacks.")
+        
         cls._emails.append((email, category))
         cls._sync_callback(email, category)
 
@@ -134,8 +150,10 @@ class EmailCollector:
         """
         if cls._async_callback is None:
             raise TypeError("Asynchronous email collection callback not set. Please use `register` to register a new async callback.")
+        
         if not iscoroutinefunction(cls._async_callback):
             raise RuntimeError("Email collection callback must be asynchronous. Use `collect_email` for sync callbacks.")
+        
         cls._emails.append((email, category))
         await cls._async_callback(email, category)
 

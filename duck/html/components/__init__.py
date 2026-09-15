@@ -385,6 +385,7 @@ class HtmlComponent:
         self.kwargs = kwargs
         self.escape_on_text = kwargs.get('escape_on_text', True) # Whether to escape if modifying component text prop
         self.disable_lively = kwargs.get('disable_lively', False) # Whether to disable lively for this component
+        self.minify_html = kwargs.get("minify_html", True)
         
         # Update inner html if available
         if inner_html:
@@ -594,6 +595,8 @@ class HtmlComponent:
         Args:
             inner_html (Union[str, int, float]): This can be a string, int or float. 
         """
+        from duck.html.html_minify import minify_inner_html, WHITESPACE_SENSITIVE_TAGS
+        
         # NOTE: We supported LiveResult as input but it's causing problems when we are 
         # are caching component outputs, any modifications that can result in LiveResult to change can't
         # be detected so this may skip on_mutation handler being called leading to 
@@ -614,6 +617,9 @@ class HtmlComponent:
         # Convert data to right format
         inner_html = str(inner_html) if not isinstance(inner_html, str) else inner_html
         
+        if self.minify_html and self.element not in WHITESPACE_SENSITIVE_TAGS:
+            inner_html = minify_inner_html(inner_html)
+            
         if self.__inner_html != inner_html:
             self.__inner_html = inner_html
             on_mutation(self, Mutation(target=self, code=MutationCode.SET_INNER_HTML, payload={"inner_html": inner_html}))
@@ -721,7 +727,15 @@ class HtmlComponent:
                     )
                                                   
             # Add component to the registry
-            if LivelyComponentSystem.is_active() and component.add_to_registry:
+            root = component.get_raw_root()
+            
+            if (
+                not component.disable_lively
+                and LivelyComponentSystem.is_active()
+                and component.add_to_registry
+                and not root.disable_lively
+                and root.add_to_registry
+            ):
                 try:
                     LivelyComponentSystem.add_to_registry(uid, component)
                 except AlreadyInRegistry:
