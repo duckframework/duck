@@ -125,14 +125,14 @@ class HttpProxyResponse(StreamingHttpResponse):
             content_obj (Optional[Content]): The initial partial content object, if available.
             chunk_size (int): The size (in bytes) of each chunk to stream. Defaults to STREAM_CHUNK_SIZE.
         """
+        super().__init__(stream=[]) # This just makes the response compatible but most fields set will be unused.
+        
+        # Set some attributes
         self.target_socket = target_socket
         self.payload_obj = payload_obj
         self.content_obj = content_obj
         self.chunk_size = chunk_size
         self.more_data = bytearray(b'')  # List Buffer for additional data received during streaming
-        
-        # No need to call super() or set stream because we are directly modifying iter methods like iter_content/async_iter_content 
-        # rather than using the default ones wihich requires a stream
         
     def iter_content(self) -> Generator[bytes, None, None]:
         """
@@ -468,6 +468,7 @@ class AsyncHttpProxyHandler(HttpProxyHandler):
         """
         # Connect to the target server
         target_socket = await self.connect_to_target()
+        
         try:
             # Forward the client's request to the target server
             await self.forward_request_to_target(request, client_socket, target_socket)
