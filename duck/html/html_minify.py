@@ -7,10 +7,12 @@ whole document.
 """
 
 import re
+
 from html.parser import HTMLParser
 
+
 # Whitespace inside these tags is significant and must never be touched
-WHITESPACE_SENSITIVE_TAGS = frozenset({"pre", "textarea", "script", "style"})
+WHITESPACE_SENSITIVE_TAGS = frozenset({"pre", "textarea", "script", "style", "code"})
 
 # A run of whitespace collapses to exactly one space — never to nothing,
 # since removing it entirely can visually merge adjacent inline content

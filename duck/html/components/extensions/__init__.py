@@ -201,9 +201,16 @@ class BasicExtension(Extension):
         
         if self.escape_on_text:
             text = escape(text)
+            
+        # Tags to ignore for replacing linebreak with <br>
+        linebreak_replace_ignore_tags = {"pre", "code", "style", "script", "textarea"}
         
-        # Convert newlines last so the inserted `<br>` tags are never escaped
-        self.inner_html = text.replace("\n", "<br>")
+        if self.element not in linebreak_replace_ignore_tags:
+            # Convert newlines last so the inserted `<br>` tags are never escaped
+            text = text.replace("\n", "<br>")
+            
+        # Set text
+        self.inner_html = text
 
     @property
     def bg_color(self) -> Optional[str]:
