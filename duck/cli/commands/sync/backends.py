@@ -298,8 +298,8 @@ class PythonBackend(PackageBackend):
     
         Args:
             package:
-                Package requirement string, e.g. ``"django>=5.0"`` or
-                ``"requests[socks]"``.
+                Package requirement string, e.g. `"django>=5.0"` or
+                `"requests[socks]"`.
     
         Returns:
             True if the package is installed and satisfies the requirement.
@@ -351,26 +351,26 @@ class CustomBackend(PackageBackend):
     """
     Escape hatch for package managers not natively supported by Duck Sync.
 
-    Accepts any install command string such as ``"nix-env -iA nixpkgs"`` or
-    ``"some_command -i"``. The package name is appended as a trailing
+    Accepts any install command string such as `"nix-env -iA nixpkgs"` or
+    `"some_command -i"`. The package name is appended as a trailing
     positional argument when :meth:`install` is called.
 
-    ``is_installed`` always returns ``False`` so every package is attempted
-    on every run. Override ``is_installed`` by subclassing if you need a
+    `is_installed` always returns `False` so every package is attempted
+    on every run. Override `is_installed` by subclassing if you need a
     smarter check.
 
     Args:
         command:
-            Shell-style install command prefix, e.g. ``"brew install"``
-            or ``"some_command -i"``. Split with :func:`shlex.split`.
+            Shell-style install command prefix, e.g. `"brew install"`
+            or `"some_command -i"`. Split with :func:`shlex.split`.
         
         use_sudo:
-            Whether to prepend ``sudo`` to the resolved command. Only
-            applied when :attr:`sudo_capable` is ``True`` on this instance.
+            Whether to prepend `sudo` to the resolved command. Only
+            applied when :attr:`sudo_capable` is `True` on this instance.
         
         sudo_capable:
             Whether the custom command supports sudo. Defaults to
-            ``True`` so callers can opt in or out explicitly.
+            `True` so callers can opt in or out explicitly.
     """
     name = "custom"
 
@@ -393,7 +393,7 @@ class CustomBackend(PackageBackend):
             package: Package name (unused; always returns False).
 
         Returns:
-            Always ``False``; the custom backend never skips an install.
+            Always `False`; the custom backend never skips an install.
         """
         return False
 
@@ -424,12 +424,12 @@ def get_backend(name: str, use_sudo: bool = True, **backend_kwargs) -> PackageBa
         get_backend("brew")                # built-in BrewBackend
         get_backend("some_command -i")     # CustomBackend("some_command -i")
         get_backend("nix-env -iA nixpkgs") # CustomBackend("nix-env -iA nixpkgs")
-    ```
+    ``
     
     Args:
         name:
-            Backend identifier (``"apt"``, ``"brew"`` …) **or** a
-            shell-style install command prefix (``"some_command -i"``).
+            Backend identifier (`"apt"`, `"brew"` …) **or** a
+            shell-style install command prefix (`"some_command -i"`).
         
         use_sudo:
             Whether install commands should be prefixed with sudo.

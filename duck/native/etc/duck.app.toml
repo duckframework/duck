@@ -1,0 +1,40 @@
+# duck.app.toml — application configuration
+# Defines application identity and platform-specific runtime settings.
+
+[app]
+# Application name displayed to users.
+name = "My Duck App"
+
+# Unique application/package identifier.
+package = "com.example.myduckapp"
+
+# Application version.
+version = "1.0.0"
+
+
+[android]
+# Android SDK configuration.
+min_sdk = 23
+target_sdk = 35
+compile_sdk = 35
+
+# Screen orientation.
+# Supported values: portrait, landscape, unspecified
+orientation = "portrait"
+
+
+[android.permissions]
+# Android permissions required by the application.
+permissions = [
+    "camera",
+    "location",
+    "microphone",
+]
+
+
+[android.application]
+# Android application settings.
+fullscreen = false
+
+# Keep the screen awake while the application is active.
+keep_screen_on = false

@@ -257,7 +257,13 @@ def monitor(interval, process, pid, cpu_warning, ram_warning):
         'or a raw install command, e.g. --backend "some_command -i".'
     ),
 )
-def sync(with_dev, dev, dry_run, config, pip_args, system_args, sudo, backend):
+@click.option(
+    "--native",
+    is_flag=True,
+    default=False,
+    help="Enable native application configuration from duck.toml.",
+)
+def sync(with_dev, dev, dry_run, config, pip_args, system_args, sudo, backend, native):
     """
     Run a full dependency sync using duck.toml.
     """
@@ -270,6 +276,7 @@ def sync(with_dev, dev, dry_run, config, pip_args, system_args, sudo, backend):
         system_args=system_args,
         sudo=sudo,
         backend=backend,
+        native=native,
     )
 
 

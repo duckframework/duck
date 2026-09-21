@@ -165,7 +165,7 @@ class FileIOStream(io.IOBase):
 
         Args:
             filepath: Path to the file to be streamed.
-            chunk_size: Maximum number of bytes to read or write at once. Defaults to 2 MB.
+            chunk_size: Maximum number of bytes to read/write at once. Defaults to 2 MB.
             open_now: Whether to open the file immediately. Defaults to False.
             mode: File open mode. Defaults to `'rb'`.
             disable_path_traversal (bool): Whether to remove `..` in paths to avoid path traversal. Defaults to True.
@@ -296,67 +296,97 @@ class FileIOStream(io.IOBase):
     def read(self, size: int = -1) -> bytes:
         """
         Synchronously read data from the file.
-
+    
         Results are served from the LRU cache when the file has not been
-        modified since the last read. On a cache miss the file is read
-        normally and the result is stored in the cache for future calls.
-
+        modified since the last read. On a cache miss the file is read in
+        `chunk_size` pieces until `size` bytes are collected or the file ends,
+        and the result is stored in the cache for future calls.
+    
         Fires all `on_read` hooks after a successful read.
-
+    
         Args:
-            size: Number of bytes to read. `-1` reads all content.
-
+            size: Number of bytes to read. A negative value reads all content.
+    
         Returns:
-            File data as bytes.
+            File data as bytes. Shorter than `size` only at end of file.
         """
         self.raise_if_in_async_context(
             "This method must be used in a synchronous environment. "
             "Consider using `AsyncFileIOStream.read` instead."
         )
-
+    
         if not self.is_open():
             raise ValueError("File not opened. Call `open()` first.")
-
+    
         # Serve from cache when the file is unchanged
         cached = self.cache_get(size)
-        
+    
         if cached is not None:
             self.increment_pos(len(cached))
             self._accumulate_read_bytes(cached)
             self.fire_hooks(self._on_read_hooks, cached)
             return cached
-
+    
         # Capture position before advancing so cache_set uses the read start offset
         read_pos = self.get_pos()
-
+    
         # Cache miss — read from the actual file descriptor
-        data = self._file.read() if size == -1 else self._file.read(min(size, self.chunk_size))
+        data = self.read_chunked(size)
         self.increment_pos(len(data))
         self._accumulate_read_bytes(data)
-
+    
         # Store in cache keyed by the offset this read started at
         self.cache_set(read_pos, size, data)
-        
-        # Fire hooks
+    
+        # Fire hooks once with the full result
         self.fire_hooks(self._on_read_hooks, data)
-        
-        # Return data
+    
         return data
-
+    
+    def read_chunked(self, size: int) -> bytes:
+        """
+        Read up to `size` bytes from the file in `chunk_size` pieces.
+    
+        Args:
+            size: Number of bytes requested. A negative value reads all content.
+    
+        Returns:
+            Up to `size` bytes; fewer only if the file ends first.
+        """
+        # Read everything in one call
+        if size < 0:
+            return self._file.read()
+    
+        # Read chunk by chunk until satisfied or end of file
+        chunks: list[bytes] = []
+        remaining = size
+    
+        while remaining > 0:
+            chunk = self._file.read(min(remaining, self.chunk_size))
+    
+            # An empty read means end of file
+            if not chunk:
+                break
+    
+            chunks.append(chunk)
+            remaining -= len(chunk)
+    
+        return b"".join(chunks)
+        
     def write(self, data: bytes) -> int:
         """
         Synchronously write data to the file.
-
-        The written bytes are flushed to disk immediately, then stored in
-        the cache under the full-read key (`size=-1`) with the post-write
-        mtime. This means the next full read is served from cache without a
-        disk round-trip.
-
+    
+        The data is written in `chunk_size` pieces until all of it is written,
+        then flushed to disk immediately. Every cached entry overlapping the
+        written region is patched with the post-write mtime, so the next read
+        of that region is served from cache without a disk round-trip.
+    
         Fires all `on_write` hooks after a successful write.
-
+    
         Args:
             data: Data to write.
-
+    
         Returns:
             Number of bytes written.
         """
@@ -364,28 +394,67 @@ class FileIOStream(io.IOBase):
             "This method must be used in a synchronous environment. "
             "Consider using `AsyncFileIOStream.write` instead."
         )
-
+    
         if not self.is_open():
             raise ValueError("File not opened. Call `open()` first.")
-
-        # Write to actual FD
-        written = self._file.write(data)
-
+    
         # Record the write start position before advancing _pos
         write_pos = self.get_pos()
+    
+        # Write to the actual file descriptor
+        written = self.write_chunked(data)
         self.increment_pos(written)
-
+    
         # Flush so the OS updates mtime before we re-stat in cache_patch_on_write
         self._file.flush()
-
+    
+        # Only cache and report what actually reached the file
+        written_data = data if written == len(data) else data[:written]
+    
         # Patch all cached entries that overlap the written region
-        self.cache_patch_on_write(write_pos, data)
-        
-        # Fire hooks
-        self.fire_hooks(self._on_write_hooks, data)
-        
-        # Return written data.
+        self.cache_patch_on_write(write_pos, written_data)
+    
+        # Fire hooks once with the full result
+        self.fire_hooks(self._on_write_hooks, written_data)
+    
         return written
+    
+    def write_chunked(self, data: bytes) -> int:
+        """
+        Write `data` to the file in `chunk_size` pieces.
+    
+        Args:
+            data: Data to write.
+    
+        Returns:
+            Number of bytes written; less than `len(data)` if the file stops
+            accepting data part-way.
+    
+        Raises:
+            OSError: If the very first chunk fails. Later failures return the
+                partial count instead, so position and cache stay accurate.
+        """
+        view = memoryview(data)
+        total = 0
+    
+        while total < len(view):
+            chunk = view[total : total + self.chunk_size]
+    
+            try:
+                written = self._file.write(chunk)
+            except OSError:
+                # Report progress made so far; only fail if nothing was written
+                if total == 0:
+                    raise
+                break
+    
+            # No progress means the file cannot accept more data
+            if not written:
+                break
+    
+            total += written
+    
+        return total
 
     def seek(self, offset: int, whence: int = os.SEEK_SET) -> None:
         """
@@ -741,98 +810,164 @@ class AsyncFileIOStream(FileIOStream):
     async def read(self, size: int = -1) -> bytes:
         """
         Asynchronously read from the file.
-
+    
         Results are served from the LRU cache when the file has not been
         modified since the last read. On a cache miss the file is read in a
-        thread and the result is stored in the cache.
-
+        thread, in `chunk_size` pieces, until `size` bytes are collected or
+        the file ends, and the result is stored in the cache.
+    
         Fires all `on_read` hooks after a successful read.
-
+    
         Args:
-            size: Max bytes to read. `-1` reads full content.
-
+            size: Max bytes to read. A negative value reads full content.
+    
         Returns:
-            Data read from file.
+            Data read from file. Shorter than `size` only at end of file.
         """
         if not self.is_open():
             raise ValueError("File not opened. Call `open()` first.")
-            
+    
         async with self._lock:
             # Serve from cache when the file is unchanged
             cached = self.cache_get(size)
-            
+    
             if cached is not None:
                 self.increment_pos(len(cached))
                 self._accumulate_read_bytes(cached)
                 await self.fire_hooks_async(self._on_read_hooks, cached)
                 return cached
-                
+    
             # Seek is very fast, no need to make it async
             self._file.seek(self.get_pos())
-
+    
             # Capture position before advancing so cache_set uses the read start offset
             read_pos = self.get_pos()
-
-            if size == -1:
-                data = await ensure_async(self._file.read)()
-            else:
-                data = await ensure_async(self._file.read)(
-                    min(size, self.chunk_size)
-                )
-
+    
+            # Cache miss — read from the actual file descriptor
+            data = await self.async_read_chunked(size)
             self.increment_pos(len(data))
             self._accumulate_read_bytes(data)
-
+    
             # Store in cache keyed by the offset this read started at
             self.cache_set(read_pos, size, data)
-            
-            # Fire hooks
+    
+            # Fire hooks once with the full result
             await self.fire_hooks_async(self._on_read_hooks, data)
-            
-            # Return the final data.
+    
             return data
-
+    
+    async def async_read_chunked(self, size: int) -> bytes:
+        """
+        Read up to `size` bytes from the file in `chunk_size` pieces.
+    
+        Args:
+            size: Number of bytes requested. A negative value reads all content.
+    
+        Returns:
+            Up to `size` bytes; fewer only if the file ends first.
+        """
+        # Read everything in one call
+        if size < 0:
+            return await ensure_async(self._file.read)()
+    
+        # Read chunk by chunk until satisfied or end of file
+        chunks: list[bytes] = []
+        remaining = size
+    
+        while remaining > 0:
+            read_size = min(remaining, self.chunk_size)
+            chunk = await ensure_async(self._file.read)(read_size)
+    
+            # An empty read means end of file
+            if not chunk:
+                break
+    
+            chunks.append(chunk)
+            remaining -= len(chunk)
+    
+        return b"".join(chunks)
+    
     async def write(self, data: bytes) -> int:
         """
         Asynchronously write data to the file.
-
-        The written bytes are flushed to disk then stored in the cache
-        under the full-read key with the post-write mtime, so the next
-        full read is served from cache without a disk round-trip.
-
+    
+        The data is written in `chunk_size` pieces until all of it is written,
+        then flushed to disk. Every cached entry overlapping the written region
+        is patched with the post-write mtime, so the next read of that region
+        is served from cache without a disk round-trip.
+    
         Fires all `on_write` hooks after a successful write.
-
+    
         Args:
             data: Bytes to write.
-
+    
         Returns:
             Number of bytes written.
         """
         if not self.is_open():
             raise ValueError("File not opened. Call `open()` first.")
-            
+    
         async with self._lock:
             # Seek mustn't be async, it's very fast
             self._file.seek(self.get_pos())
-            
-            # Do the actual write
-            written = await ensure_async(self._file.write)(data)
-
+    
             # Record the write start position before advancing _pos
             write_pos = self.get_pos()
+    
+            # Do the actual write
+            written = await self.async_write_chunked(data)
             self.increment_pos(written)
-
+    
             # Flush so the OS updates mtime before we re-stat
             await ensure_async(self._file.flush)()
-
+    
+            # Only cache and report what actually reached the file
+            written_data = data if written == len(data) else data[:written]
+    
             # Patch all cached entries that overlap the written region
-            self.cache_patch_on_write(write_pos, data)
-            
-            # Fire hooks
-            await self.fire_hooks_async(self._on_write_hooks, data)
-            
-            # Return written
+            self.cache_patch_on_write(write_pos, written_data)
+    
+            # Fire hooks once with the full result
+            await self.fire_hooks_async(self._on_write_hooks, written_data)
+    
             return written
+    
+    async def async_write_chunked(self, data: bytes) -> int:
+        """
+        Write `data` to the file in `chunk_size` pieces.
+    
+        Args:
+            data: Data to write.
+    
+        Returns:
+            Number of bytes written; less than `len(data)` if the file stops
+            accepting data part-way.
+    
+        Raises:
+            OSError: If the very first chunk fails. Later failures return the
+                partial count instead, so position and cache stay accurate.
+        """
+        view = memoryview(data)
+        total = 0
+    
+        while total < len(view):
+            chunk = view[total : total + self.chunk_size]
+    
+            try:
+                written = await ensure_async(self._file.write)(chunk)
+            except OSError:
+                # Report progress made so far; only fail if nothing was written
+                if total == 0:
+                    raise
+                break
+    
+            # No progress means the file cannot accept more data
+            if not written:
+                break
+    
+            total += written
+    
+        return total
 
     async def close(self) -> None:
         """

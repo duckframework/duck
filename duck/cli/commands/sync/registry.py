@@ -82,6 +82,14 @@ SYSTEM_PACKAGE_REGISTRY: dict[str, dict[str, str]] = {
         "choco": "redis-64",
         "termux": "redis",
     },
+    "proj": {
+        "apt": "libproj-dev proj-bin",
+        "brew": "proj",
+        "dnf": "proj proj-devel",
+        "pacman": "proj",
+        "choco": "proj",
+        "termux": "proj",
+    },
     "gdal": {
         "apt": "gdal-bin libgdal-dev",
         "brew": "gdal",
@@ -162,11 +170,45 @@ SYSTEM_PACKAGE_REGISTRY: dict[str, dict[str, str]] = {
         "choco": "postfix",
         "termux": "postfix",
     },
+    "gradle": {
+        "apt": "gradle",
+        "brew": "gradle",
+        "dnf": "gradle",
+        "pacman": "gradle",
+        "choco": "gradle",
+        "termux": "gradle",
+    },
+    "kotlin": {
+        "apt": "kotlin",
+        "brew": "kotlin",
+        "dnf": "kotlin",
+        "pacman": "kotlin",
+        "choco": "kotlin",
+        "termux": "kotlin",
+    },
+    "java": {
+        "apt": "default-jdk",
+        "brew": "openjdk",
+        "dnf": "java-latest-openjdk",
+        "pacman": "jdk-openjdk",
+        "choco": "openjdk",
+        "termux": "openjdk-21",
+    },
+    "android-sdk": {
+        "apt": "android-sdk",
+        "brew": "android-commandlinetools",
+        "dnf": "android-tools",
+        "pacman": "android-sdk",
+        "choco": "android-sdk",
+        "termux": "android-tools",
+    },
 }
 
 
 def resolve_package_name(
-    generic_name: str, backend: str, overrides: dict[str, dict[str, str]]
+    generic_name: str,
+    backend: str,
+    overrides: dict[str, dict[str, str]],
 ) -> str:
     """
     Finds the correct package name for a given backend.

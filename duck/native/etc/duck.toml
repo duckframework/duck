@@ -1,0 +1,32 @@
+[native]
+# Native application targets.
+# Currently supported: android
+platforms = ["android"]
+
+
+[native.android]
+# Android dependencies required for building and running the app.
+#
+# These are automatically added to the global [dependencies].system
+# and [development].system dependency lists.
+deps = [
+    "gradle",
+]
+
+# Android dependencies required only during development.
+#
+# These are automatically added to the global [development].system
+# dependency list.
+dev_deps = [
+    "kotlin",
+]
+
+# All global Duck Sync configuration remains supported.
+#
+# [dependencies] -> Production dependencies
+# [development]  -> Development-only dependencies
+# [sync]         -> Sync settings
+# [overrides]    -> System package manager overrides
+#
+# Native dependencies extend these existing settings rather than
+# replacing them.

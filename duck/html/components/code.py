@@ -536,6 +536,7 @@ class CodeBlock(InnerComponent):
             "overflow-x": "auto",
             "overflow-y": "hidden",
             "white-space": "pre",
+            "box-shadow": "none",
             "color": getattr(Theme.current, "text_color", "white"),
             **(self.kwargs.get("code_style") or {}),
         }

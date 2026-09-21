@@ -10,7 +10,7 @@ import datetime
 # METADATA
 DUCK_HOMEPAGE = "https://duckframework.com"
 DUCK_DOCS_URL = "https://docs.duckframework.com"
-DUCK_DOCS_LATEST_VERSION = "main"
+DUCK_DOCS_MAIN_URL = f"{DUCK_DOCS_URL}/main"
 DUCK_PACKAGE_RELATIVE_PATH = "../../duck"
 
 # Metadata for sitemap generation
@@ -21,18 +21,6 @@ DOCS_SOURCE_DIRS = ( "source", "source/api")
 DUCK_INIT_PATH = (
     pathlib.Path(__file__).resolve().parent / DUCK_PACKAGE_RELATIVE_PATH / "__init__.py"
 )
-
-# Sitemap index configuration
-SITEMAP_INDEX_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
-<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-{entries}
-</sitemapindex>
-"""
-SITEMAP_INDEX_ENTRY_TEMPLATE = """  <sitemap>
-    <loc>{loc}</loc>
-    <lastmod>{lastmod}</lastmod>
-  </sitemap>"""
-
 
 # This must be called before any use of the duck.settings module e.g. through duck.app
 os.environ["DUCK_SETTINGS_MODULE"] = "duck.etc.structures.projects.testing.web.settings"
@@ -88,21 +76,20 @@ def read_metadata_from_init(init_path):
     return metadata
 
 
-def sitemap_sort_key(url: str, base_url: str) -> tuple[int, str]:
+def sitemap_sort_key(url: str) -> tuple[int, str]:
     """
     Sort sitemap URLs so that top-level pages appear before nested pages.
 
     Args:
         url: Absolute documentation URL.
-        base_url: Base URL of the version this sitemap is being built for.
 
     Returns:
         A tuple used for sorting.
     """
-    relative = url.removeprefix(f"{base_url}/")
+    relative = url.removeprefix(f"{DUCK_DOCS_MAIN_URL}/")
 
     # Root page always comes first.
-    if relative == base_url or url == base_url:
+    if relative == DUCK_DOCS_MAIN_URL or url == DUCK_DOCS_MAIN_URL:
         return (0, "")
 
     # Pages without subdirectories come before nested pages.
@@ -120,26 +107,15 @@ def generate_sitemap(outdir: str) -> None:
     automatically supports nested directories and future documentation
     structure changes without requiring updates.
 
-    sphinx-multiversion builds each version into its own subdirectory and
-    fires build-finished once per version, with `app.outdir` pointing at that
-    version's own output folder -- so the version being built is read from
-    `outdir`'s name rather than assumed. Each build writes a sitemap scoped to
-    that version, saved inside the version's own output directory (served at
-    `/<version>/sitemap.xml`), then rebuilds the root sitemap index from
-    every version folder that has one -- see generate_sitemap_index.
-
     Args:
-        outdir: Path to the generated HTML output directory for the version
-            currently being built (typically `app.outdir`).
+        outdir: Path to the generated HTML output directory (typically `app.outdir`).
     """
     from duck.contrib.sitemap import SitemapBuilder
     from duck.logging import console
     from duck.utils.path import joinpaths
 
-    # Initialize the output directory, version, and URL collection.
+    # Initialize the output directory and URL collection.
     outdir = pathlib.Path(outdir)
-    version_name = outdir.name
-    version_base_url = f"{DUCK_DOCS_URL}/{version_name}"
     urls = set()
 
     # Scan all generated HTML files.
@@ -152,20 +128,20 @@ def generate_sitemap(outdir: str) -> None:
 
         # Resolve the documentation URL.
         if relative == pathlib.Path("index.html"):
-            # Root page for this version.
-            url = version_base_url
+            # Root documentation page.
+            url = DUCK_DOCS_MAIN_URL
 
         elif relative.name == "index.html":
             # Directory index page.
             url = "/".join([
-                version_base_url,
+                DUCK_DOCS_MAIN_URL,
                 relative.parent.as_posix(),
             ])
 
         else:
             # Regular documentation page.
             url = "/".join([
-                version_base_url,
+                DUCK_DOCS_MAIN_URL,
                 relative.with_suffix("").as_posix(),
             ])
 
@@ -173,78 +149,24 @@ def generate_sitemap(outdir: str) -> None:
         # Add URL to list.
         urls.add(url)
 
-    # Sort URLs
-    sorted_urls = sorted(
-        urls, key=lambda url: sitemap_sort_key(url, version_base_url)
+    # Build the sitemap.
+    build_html_dir = outdir.parent
+    sitemap_filepath = joinpaths(build_html_dir, "sitemap.xml")
+
+    # Initialize the sitemap builder.
+    builder = SitemapBuilder(
+        server_url=DUCK_DOCS_MAIN_URL,
+        save_to_file=True,
+        filepath=sitemap_filepath,
+        extra_urls=sorted(urls, key=sitemap_sort_key),
     )
 
-    # Build the version-specific sitemap, served at /<version>/sitemap.xml.
-    version_sitemap_path = joinpaths(outdir, "sitemap.xml")
+    # Generate and save the sitemap.
+    builder.build()
     
-    # Build sitemap
-    SitemapBuilder(
-        server_url=version_base_url,
-        save_to_file=True,
-        filepath=version_sitemap_path,
-        extra_urls=sorted_urls,
-    ).build()
-
     # Show a debug message.
     console.log(
-        f"Sitemap has been saved at {version_sitemap_path}",
-        level=console.DEBUG,
-    )
-
-    # Rebuild the root sitemap index now that this version's sitemap exists.
-    generate_sitemap_index(outdir.parent)
-
-
-def generate_sitemap_index(build_html_dir: pathlib.Path) -> None:
-    """
-    Rebuild the root sitemap index from every built version's sitemap.xml.
-
-    The index itself carries no page URLs -- each <sitemap> entry just
-    points at that version's own sitemap.xml, which is the real source of
-    truth for that version's pages. A version's entry disappears on its own
-    once its output folder (or sitemap.xml) is gone, so nothing about
-    dropped or renamed versions needs separate tracking here.
-
-    Args:
-        build_html_dir: Directory containing one subdirectory per built
-            version, each already holding its own sitemap.xml.
-    """
-    from duck.logging import console
-    from duck.utils.path import joinpaths
-
-    versions = sorted(
-        child.name
-        for child in build_html_dir.iterdir()
-        if child.is_dir() and (child / "sitemap.xml").exists()
-    )
-    
-    # Latest version listed first, the rest alphabetically.
-    versions.sort(key=lambda v: (v != DUCK_DOCS_LATEST_VERSION, v))
-
-    # Build date
-    today = datetime.date.today().isoformat()
-    
-    # Build entries
-    entries = "\n".join(
-        SITEMAP_INDEX_ENTRY_TEMPLATE.format(
-            loc=f"{DUCK_DOCS_URL}/{version}/sitemap.xml",
-            lastmod=today,
-        )
-        for version in versions
-    )
-    
-    # Build index path
-    index_path = joinpaths(build_html_dir, "sitemap.xml")
-    
-    with open(index_path, "w", encoding="utf-8") as fh:
-        fh.write(SITEMAP_INDEX_TEMPLATE.format(entries=entries))
-
-    console.log(
-        f"Sitemap index rebuilt at {index_path} ({len(versions)} version(s))",
+        f"Sitemap has been saved at {sitemap_filepath}",
         level=console.DEBUG,
     )
 
@@ -261,19 +183,19 @@ email = metadata.get("__email__", "digreatbrian@gmail.com")
 favicon_url = DUCK_HOMEPAGE + "/favicon.ico"
 
 
-# General configuration
+# -- General configuration ---------------------------------------------------
 extensions = [
-    "autodocx", # Use sphinx-autodocx for documentation
-    "myst_parser", # For parsing MyST markdown
-    "sphinx.ext.viewcode",  # Add links to source code
-    "sphinx.ext.todo", # Include TODOs in documentation
-    "sphinx.ext.mathjax",  # For rendering LaTeX math
-    "sphinx.ext.intersphinx", # For linking to other projects
-    "sphinx.ext.autosummary", # Automatically generate summary tables
-    "sphinx_design", # Useful components for building beautiful docs
-    "sphinx_tabs.tabs", # Tab functionality for documentation
-    "sphinx_search.extension", # Add search functionality
-    "sphinx_autodoc_typehints", # Show type hints in descriptions
+    "autodocx",                     # Use sphinx-autodocx for documentation
+    "myst_parser",                  # For parsing MyST markdown
+    "sphinx.ext.viewcode",          # Add links to source code
+    "sphinx.ext.todo",              # Include TODOs in documentation
+    "sphinx.ext.mathjax",           # For rendering LaTeX math
+    "sphinx.ext.intersphinx",       # For linking to other projects
+    "sphinx.ext.autosummary",       # Automatically generate summary tables
+    "sphinx_design",                # Useful components for building beautiful docs
+    "sphinx_tabs.tabs",             # Tab functionality for documentation
+    "sphinx_search.extension",      # Add search functionality
+    "sphinx_autodoc_typehints",     # Show type hints in descriptions
     "sphinx_multiversion", # For docs multiversioning
 ]
 
@@ -318,9 +240,9 @@ autodocx_docstring_sections = True
 # Exclude specific folders from autodocx
 autodocx_exclude = [
     "*/projects/*/backend/django/*",  # Exclude Django backend from all projects
-    "*/tests/*",  # Exclude test folders
-    "*/migrations/*", # Exclude Django migrations
-    "*/experimental/*", # Exclude experimental code
+    "*/tests/*",                      # Exclude test folders
+    "*/migrations/*",                  # Exclude Django migrations
+    "*/experimental/*",                # Exclude experimental code
 ]
 
 

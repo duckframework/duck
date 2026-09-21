@@ -512,7 +512,7 @@ class MCPView(View):
         return capability_handler
         
     @csrf_exempt
-    async def run(self) -> Optional[JsonResponse]:
+    async def run(self, *_, **__) -> Optional[JsonResponse]:
         """
         Entry point, required by the routing dispatch convention. Delegates to `handle_rpc()`.
         """

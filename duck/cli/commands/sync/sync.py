@@ -5,6 +5,8 @@ diff installed vs required dependencies, then install what is missing.
 
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -13,7 +15,16 @@ from duck.cli.commands.sync.config import DependencyGroup, DuckSyncConfig, load_
 from duck.cli.commands.sync.exceptions import InstallationError
 from duck.cli.commands.sync.platform_utils import detect_backend_name, is_root
 from duck.cli.commands.sync.registry import resolve_package_name
+from duck.cli.commands.sync.native.native_config import (
+    DuckNativeConfig,
+    load_config as load_native_config,
+)
 from duck.logging import console
+
+
+VERSION_PATTERN = re.compile(
+    r"^\s*([A-Za-z0-9_.+-]+)\s*(==|>=|<=|>|<|=)?\s*(.+)?\s*$"
+)
 
 
 @dataclass
@@ -72,9 +83,14 @@ class DuckSync:
         force_backend:
             Override auto-detection with a specific backend.
             Accepts any value recognised by :func:`~duck_sync.backends.get_backend`:
-            a known identifier (``"apt"``, ``"brew"``, ``"pacman"`` …) **or** a
-            raw shell-style install command (``"some_command -i"``).
+            a known identifier (`"apt"`, `"brew"`, `"pacman"` …) **or** a
+            raw shell-style install command (`"some_command -i"`).
             When omitted, the backend is detected from the host platform.
+    
+        native:
+            Whether to load and use the native application configuration.
+            When False, a warning is shown if native configuration is
+            detected in duck.toml.
     """
 
     def __init__(
@@ -87,6 +103,7 @@ class DuckSync:
         system_extra_args: list[str] | None = None,
         use_sudo: bool | None = None,
         force_backend: str | None = None,
+        native: bool = False,
     ) -> None:
         
         # Setup some hooks
@@ -96,8 +113,23 @@ class DuckSync:
             "on_install_failed": self.on_install_failed,
         }
         
+        # Load the appropriate configuration
+        if native:
+            self.config: DuckNativeConfig = load_native_config(config_path)
+        else:
+            self.config: DuckSyncConfig = load_config(config_path)
+            
+            # Warn when native configuration is present but native mode
+            # was not explicitly requested.
+            if self.config.native:
+                console.log(
+                    "Native configuration detected in duck.toml. "
+                    "Pass --native to command for to install native dependencies\n",
+                    level=console.WARNING,
+                )
+        
         # Set some attributes
-        self.config: DuckSyncConfig = load_config(config_path)
+        self.native = native
         self.include_dev = include_dev
         self.dev_only = dev_only
         self.dry_run = dry_run
@@ -236,33 +268,46 @@ class DuckSync:
         # Return final args
         return args
         
-    def sync_system_package(self, generic_name: str, report: SyncReport) -> None:
+    def sync_system_package(self, package: str, report: SyncReport) -> None:
         """
         Ensures a single system package is installed, updating report in place.
 
         Args:
-            generic_name: Name as written in duck.toml, e.g. "gdal".
+            package: The full package as written in duck.toml, e.g. "gdal" or "gdal=..." (for version included).
             report: Report accumulator for this sync run.
         """
+        match = VERSION_PATTERN.match(package)
+
+        if not match:
+            generic_name = package
+            operator = ""
+            version = ""
+        else:
+            generic_name, operator, version = match.groups()
+            operator = operator or ""
+            version = version or ""
+            
+        # Resolve package name per platform
         resolved_name = resolve_package_name(generic_name, self.system_backend_name, self.config.overrides)
+        final_package = resolved_name + operator + version
         
-        if self.system_backend.is_installed(resolved_name):
-            report.already_satisfied.append(generic_name)
+        if self.system_backend.is_installed(final_package):
+            report.already_satisfied.append(final_package)
             return
 
         try:
             # Install the system level package
             self.system_backend.install(
-                resolved_name,
+                final_package,
                 extra_args=self.system_args_for(generic_name),
                 dry_run=self.dry_run,
             )
             
             # Append package to installed packages
-            report.installed.append(generic_name)
+            report.installed.append(final_package)
             
         except InstallationError as error:
-            report.failed[generic_name] = error.reason
+            report.failed[final_package] = error.reason
 
     def sync_python_package(self, package: str, report: SyncReport) -> None:
         """

@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `read_chunked()`, `write_chunked()` and their async counterparts `async_read_chunked()`, `async_write_chunked()` helpers.
+- First stage towards `Duck Native`. 
+- File `duck.toml` now supports packages with versions.
 - Added argument `failsafe` to `duck.utils.email.collection.collect_email`. This logs the exception but doesn't really raise it.
 - Added `Spacemail` provider to `duck.utils.email` module for easy sending of emails through spacemail.
 - Added `duck.html.html_minify` module and enabled html minify by default for HTML components that accept inner HTML.
@@ -29,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Fixed 
 
+- `FileIOStream.read()` / `AsyncFileIOStream.read()` now honor the requested `size`. Reads larger than `chunk_size` are collected chunk by chunk until `size` bytes or EOF. Previously they returned at most one chunk, and that short result was cached under the full-size key.
+- `FileIOStream.write()` / `AsyncFileIOStream.write()` now write in `chunk_size` pieces until all data is written. The cache is patched and `on_write` hooks fire with the bytes actually written, so a short write can no longer leave the cache holding data that never reached the file.
+- A write that fails after some chunks were written now returns the partial byte count, so stream position and cache stay accurate. A failure on the first chunk still raises `OSError`.
+- Negative `size` values now read the whole file, matching Python's file API. Previously only `-1` did.
+- Fixed MCPView's `run()` bug.
 - Fixed `BasicExtension` linebreak replace bug in property `inner_html` setter.
 - Fixed `StreamingRangeHttpResponse` not correctly parsing range header - leading to slightly wrong data.
 
@@ -51,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- **Security:** closed a WebSocket authorization gap in the Lively Component System that let one connected client trigger event handlers on and read state from another user's live component; root UIDs are now cryptographically random and no longer usable across connections without authorization. Thanks to [**@jankesec**](https://github.com/jankesec) for responsibly disclosing this critical vulnerability (GHSA-2xr9-r4w3-jx36) 🙏
+- **Security:** closed a WebSocket authorization gap in the Lively Component System that let one connected client trigger event handlers on and read state from another user's live component; root UIDs are now cryptographically random and no longer usable across connections without authorization. Thanks to [**@jankesec**](https://github.com/jankesec) & [**@2REBCat**](https://github.com/2REBCat) for responsibly disclosing this critical vulnerability (GHSA-2xr9-r4w3-jx36) 🙏
 - Fixed HttpRequest's `extract_url_queries` decoding `+` as a literal plus instead of a space, which caused blank filter selections (e.g. `location=+`) to be treated as real search values and match nothing.
 - SVGs are now correctly created in the SVG namespace on partial page navigation.
 - Explicit HTML component props/style now take precedence over those defined in `on_create()`.

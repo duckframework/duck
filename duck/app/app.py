@@ -1252,9 +1252,17 @@ class App(BaseApp):
             logger.Logger.redirect_console_output()
     
         # Log the active settings module
-        logger.log_raw(f'{bold_start}PROJECT{bold_end} "{self.project_name}"')
-        logger.log_raw(f'{bold_start}USING SETTINGS{bold_end} "{settings_mod}" \n')
+        logger.log_raw(f'{bold_start}PROJECT{bold_end} {self.project_name}')
+        logger.log_raw(f'{bold_start}USING SETTINGS{bold_end} {settings_mod}')
         
+        if SETTINGS['NATIVE_ENABLED']:
+            native_config = SETTINGS['NATIVE_CONFIG']
+            logger.log_raw(f'{bold_start}NATIVE ENABLED{bold_end} true')
+            logger.log_raw(f'{bold_start}NATIVE CONFIG{bold_end} {native_config}\n')
+            
+        else:
+            logger.log_raw("")
+            
         # Log warnings and start event loop.
         self.log_startup_warnings()
         self.start_background_event_loop()

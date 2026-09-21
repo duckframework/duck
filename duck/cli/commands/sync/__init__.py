@@ -31,6 +31,7 @@ class SyncCommand:
         config: str,
         is_root: bool,
         py_version: str,
+        native: bool,
     ) -> None:
         """
         Prints the detected system environment and selected backend.
@@ -42,7 +43,12 @@ class SyncCommand:
             config: The config path or name relative to cwd.
             is_root: Whether we are in root environment.
             py_version: The python version.
+            native: Whether native application configuration is enabled.
         """
+        if native:
+            console.log(" Native application mode: enabled", level=console.DEBUG, custom_color=console.Fore.MAGENTA)
+            
+        # Log other header data
         console.log(f" Python version: {py_version}", level=console.DEBUG)
         console.log(f" Environment: {distro}", level=console.DEBUG)
         console.log(f" Root: {is_root}", level=console.DEBUG)
@@ -127,6 +133,7 @@ class SyncCommand:
         system_args: str = "",
         sudo: bool | None = None,
         backend: str = "",
+        native: bool = False,
     ):
         """
         Run a full dependency sync using duck.toml.
@@ -159,9 +166,12 @@ class SyncCommand:
             
             backend:
                 Override the auto-detected system package manager. Accepts
-                a known identifier (``apt``, ``brew``, ``pacman`` …) or a raw
-                install command such as ``"some_command -i"``. Left empty, the
+                a known identifier (`apt`, `brew`, `pacman` …) or a raw
+                install command such as `"some_command -i"`. Left empty, the
                 backend is detected from the host platform.
+        
+            native:
+                Whether native application configuration is enabled.
         """
         from duck.cli.commands.sync.config import CONFIG_FILENAME
         
@@ -177,6 +187,7 @@ class SyncCommand:
                 system_extra_args=shlex.split(system_args),
                 use_sudo=sudo,
                 force_backend=backend or None,
+                native=native,
             )
             
             # Print header first
@@ -192,6 +203,7 @@ class SyncCommand:
                 config=config_path or CONFIG_FILENAME,
                 is_root=is_root(),
                 py_version=python_version,
+                native=native,
             )
             
             # Generate report
