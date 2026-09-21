@@ -141,7 +141,12 @@ def generate_sitemap(outdir: str) -> None:
     version_name = outdir.name
     version_base_url = f"{DUCK_DOCS_URL}/{version_name}"
     urls = set()
-
+    
+    if str(outdir).endswith("build/html"):
+        # We are in build/html
+        # No need for sitemap generation
+        return
+        
     # Scan all generated HTML files.
     for html_file in outdir.rglob("*.html"):
         relative = html_file.relative_to(outdir)
