@@ -17,6 +17,12 @@ _JS_REGEX_PRECEDING_KEYWORDS = {
     "throw", "case", "do", "else", "yield", "await",
 }
 
+# Characters a space next to which is never needed: none of them combine
+# with an adjacent character to form a different token (unlike, say, two
+# "+" characters merging into "++", or two identifier characters merging
+# into one longer identifier).
+_JS_SAFE_SPACE_BOUNDARY = set("(){}[],;:")
+
 
 def minify_js(js: str) -> str:
     """
@@ -28,8 +34,17 @@ def minify_js(js: str) -> str:
     -- `return\\n{ a: 1 }` and `return { a: 1 }` behave differently -- so
     merging lines the way a CSS minifier safely can is not safe here.
     This function only drops blank/whitespace-only lines, leading
-    indentation, comments, and redundant runs of spaces/tabs within a
-    line; every newline that separates two lines of real code is kept.
+    indentation, comments, and inline spaces/tabs; every newline that
+    separates two lines of real code is kept.
+
+    A space between two tokens is dropped entirely -- not just collapsed
+    -- whenever either token is a character that never combines with a
+    neighbor to form a different one, such as "(", "{", ",", ";", or ":"
+    (so "function foo() {" becomes "function foo(){"). A space is kept
+    whenever both sides could merge into something else if it were
+    removed -- two identifier/keyword/number characters (`return x` must
+    not become `returnx`), or two operator characters that could combine
+    into a different operator (`a + +b` must not become `a++b`).
 
     String and regex literal contents are left completely untouched.
     Template literals (including their ``${...}`` substitutions) are
@@ -45,7 +60,15 @@ def minify_js(js: str) -> str:
     if not js:
         return js
 
-    return _minify_js_scan(js).strip()
+    return (
+        _minify_js_scan(js)
+        .strip()
+        .replace(";\n", ";")
+        .replace("{\n", "{")
+        .replace("}\n", "}")
+        .replace(")\n", ")")
+        .replace("(\n", "(")
+    )
 
 
 def _minify_js_scan(js: str) -> str:
@@ -66,6 +89,7 @@ def _minify_js_scan(js: str) -> str:
             i = _skip_js_string(js, i)
             output.append(js[start:i])
             last_token = ch
+            
             continue
 
         if ch == "`":
@@ -73,56 +97,83 @@ def _minify_js_scan(js: str) -> str:
             i = _skip_js_template(js, i)
             output.append(js[start:i])
             last_token = ch
+            
             continue
 
         if ch == "/" and i + 1 < length and js[i + 1] == "/":
             j = js.find("\n", i)
             i = length if j == -1 else j
+            
             continue
 
         if ch == "/" and i + 1 < length and js[i + 1] == "*":
             j = js.find("*/", i + 2)
             i = length if j == -1 else j + 2
+            
             continue
 
         if ch == "/" and _js_regex_may_start(last_token):
             end = _skip_js_regex(js, i)
+            
             if end is not None:
                 output.append(js[i:end])
                 last_token = "/"
                 i = end
                 continue
+                
             # Not actually a regex (unterminated) -- fall through and
             # treat it as an ordinary division/punctuation character.
 
         if ch in " \t":
             j = i
+            
             while j < length and js[j] in " \t":
                 j += 1
-            at_line_start = not output or output[-1] == "\n"
-            at_line_end = j >= length or js[j] == "\n"
-            if not at_line_start and not at_line_end:
+
+            # Only keep the space if dropping it could change what the
+            # code means -- i.e. neither side is a character that always
+            # stands alone, and there is a real token on both sides
+            prev_char = output[-1][-1] if output else None
+            next_char = js[j] if j < length else None
+            keep_space = (
+                prev_char is not None
+                and next_char is not None
+                and next_char != "\n"
+                and prev_char not in _JS_SAFE_SPACE_BOUNDARY
+                and next_char not in _JS_SAFE_SPACE_BOUNDARY
+            )
+
+            if keep_space:
                 output.append(" ")
+            
             i = j
+            
             continue
 
         if ch == "\n":
             j = i
+            
             while j < length and js[j] in " \t\r\n":
                 j += 1
+                
             if not output or output[-1] != "\n":
                 output.append("\n")
+            
             i = j
+            
             continue
 
         if ch.isalnum() or ch in "_$":
             j = i
+            
             while j < length and (js[j].isalnum() or js[j] in "_$"):
                 j += 1
+            
             word = js[i:j]
             output.append(word)
             last_token = word
             i = j
+            
             continue
 
         output.append(ch)
@@ -145,11 +196,14 @@ def _skip_js_string(js: str, i: int) -> int:
         if js[j] == "\\":
             j += 2
             continue
+            
         if js[j] == quote:
             return j + 1
+            
         if js[j] == "\n":
             # Unterminated string -- stop here rather than swallow the rest.
             return j
+            
         j += 1
 
     return j
@@ -170,11 +224,14 @@ def _skip_js_template(js: str, i: int) -> int:
         if ch == "\\":
             j += 2
             continue
+            
         if ch == "`":
             return j + 1
+            
         if ch == "$" and j + 1 < length and js[j + 1] == "{":
             j = _skip_js_template_expression(js, j + 2)
             continue
+            
         j += 1
 
     return j
@@ -195,18 +252,24 @@ def _skip_js_template_expression(js: str, i: int) -> int:
         if ch == "\\":
             j += 2
             continue
+            
         if ch in ("'", '"'):
             j = _skip_js_string(js, j)
             continue
+            
         if ch == "`":
             j = _skip_js_template(js, j)
             continue
+            
         if ch == "{":
             depth += 1
+            
         elif ch == "}":
             depth -= 1
+            
             if depth == 0:
                 return j + 1
+                
         j += 1
 
     return j
@@ -231,17 +294,23 @@ def _skip_js_regex(js: str, i: int) -> int:
         if ch == "\\":
             j += 2
             continue
+            
         if ch == "\n":
             return None
+            
         if ch == "[":
             in_class = True
+            
         elif ch == "]":
             in_class = False
+            
         elif ch == "/" and not in_class:
             j += 1
+            
             while j < length and js[j].isalpha():
                 j += 1
             return j
+            
         j += 1
 
     return None
@@ -254,8 +323,10 @@ def _js_regex_may_start(last_token: str) -> bool:
     """
     if not last_token:
         return True
+        
     if last_token[-1] in _JS_REGEX_PRECEDING_PUNCTUATION:
         return True
+        
     return last_token in _JS_REGEX_PRECEDING_KEYWORDS
 
 
@@ -292,9 +363,7 @@ class Script(InnerComponent):
     This will generate the following HTML output:
     ```html
     <script>
-    function showAlert() {
-    alert("Hello, world!");
-    }
+    function showAlert() {alert("Hello, world!");}
     </script>
     ```
 
@@ -322,8 +391,10 @@ class Script(InnerComponent):
         # Set CSP configuration.
         if SETTINGS['ENABLE_HEADERS_SECURITY_POLICY']:
             current_nonce = props.get("nonce")
+            
             if not current_nonce:
                 self.set_csp_nonce()
+                
         return props
 
     def set_csp_nonce(self) -> None:
@@ -347,6 +418,7 @@ class Script(InnerComponent):
 
         if csp_directives and request:
             script_src = set(csp_directives.get("script-src"))
+            
             if csp_nonce_flag in script_src:
                 nonce = csp_nonce(request)
                 # Use _get_raw_props instead to avoid recursion if this method is executed

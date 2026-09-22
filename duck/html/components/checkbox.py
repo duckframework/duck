@@ -2,9 +2,10 @@
 Checkbox component module.
 """
 from duck.html.components.input import Input
+from duck.html.components.button import Clickable
 
 
-class Checkbox(Input):
+class Checkbox(Clickable, Input):
     """
     Basic Checkbox component.
     

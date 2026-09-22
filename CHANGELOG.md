@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Added support for excluding extensions e.g., `Button(exclude_extensions=[HighlightExtension])`
+- Added new HTML component extensions at `duck.html.components.extensions.clickable`. Extensions include `RippleExtension` and `HighlightExtension`.
+- Added `LinkButton` component to `duck.html.components.link`. 
+- Added `IconButton` component to `duck.html.components.icon`.
+- Added `register_default_extension` to `duck.html.components.extensions` module, you can now register an extension globally by component class.
 - `read_chunked()`, `write_chunked()` and their async counterparts `async_read_chunked()`, `async_write_chunked()` helpers.
 - First stage towards `Duck Native`. 
 - File `duck.toml` now supports packages with versions.
@@ -25,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- All clickable components are now automatically extended with the `HighlightExtension`.
 - Refactored the `Code` component to `CodeBlock` and added support for `filename` and `collapsible` arguments.
 - Changed HTML components `add_to_registry` to be not strict about `request` for ownership assignment. If not provided, the error will lazily be flagged on `Lively` event dispatch.
 - Improved `Footer` component positioning for mobile responsiveness and improved the whole footer UI logic.

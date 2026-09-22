@@ -35,6 +35,7 @@ from typing import Any
 from duck.html.components import InnerComponent
 from duck.html.components.theme import Theme
 from duck.html.components.container import FlexContainer
+from duck.html.components.button import Button
 from duck.html.components.script import Script
 from duck.html.components.style import Style
 from duck.html.components.span import Span
@@ -350,7 +351,7 @@ class CodeBlock(InnerComponent):
         idle_icon = self.kwargs.get("idle_icon", DEFAULT_COPY_ICON)
         success_icon = self.kwargs.get("success_icon", DEFAULT_COPY_SUCCESS_ICON)
 
-        return FlexContainer(
+        return Button(
             id="code-copy-btn",
             klass="code-copy-btn",
             props={
@@ -360,12 +361,14 @@ class CodeBlock(InnerComponent):
                 "aria-label": "Copy code",
             },
             style={
+                "display": "flex",
                 "align-items": "center",
                 "justify-content": "center",
                 "width": "28px",
                 "height": "28px",
                 "border-radius": "6px",
                 "cursor": "pointer",
+                "background": "#111",
                 "color": getattr(Theme.current, "icon_color", "rgba(255, 255, 255, 0.7)"),
                 "transition": "background 0.2s ease, color 0.2s ease",
             },
@@ -401,13 +404,13 @@ class CodeBlock(InnerComponent):
         plus a chevron, rather than a bare icon in the header.
 
         Returns:
-            A FlexContainer laying out the collapse footer row.
+            A Button laying out the collapse footer row.
         """
         chevron_icon = self.kwargs.get("chevron_icon", DEFAULT_CHEVRON_ICON)
         expand_label = self.kwargs.get("expand_label", "Show more")
         collapse_label = self.kwargs.get("collapse_label", "Show less")
 
-        return FlexContainer(
+        return Button(
             id="code-collapse-btn",
             klass="code-collapse-footer",
             props={
@@ -417,12 +420,14 @@ class CodeBlock(InnerComponent):
                 "aria-label": "Toggle full code visibility",
             },
             style={
+                "display": "flex",
                 "align-items": "center",
                 "justify-content": "center",
                 "gap": "6px",
                 "cursor": "pointer",
                 "padding": "6px 0 2px",
                 "border-radius": "6px",
+                "background": "#111",
             },
             children=[
                 Span(text=expand_label, klass="code-collapse-label-more"),

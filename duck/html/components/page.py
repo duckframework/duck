@@ -113,6 +113,7 @@ from duck.html.components.style import Style
 from duck.html.components.modal import Modal
 from duck.html.components.paragraph import Paragraph
 from duck.html.components.unsupported_browser import UnsupportedBrowserBanner
+from duck.html.components.theme import Theme
 from duck.contrib.sync import ensure_async
 from duck.utils.lazy import Lazy
 
@@ -164,8 +165,6 @@ gtag('consent', 'default', {{
     ad_personalization: '{ad_personalization}'
 }});
 """
-from duck.html.components.theme import Theme
-
 
 _theme_sentinel = object()
 
@@ -484,8 +483,10 @@ class Page(InnerComponent):
         """
         try:
             del self._document_event_bindings[event]
+            
             # Flag event bindings changed.
             self._event_bindings_changed = True
+        
         except KeyError:
             if not failsafe:
                 raise UnknownEventError(f"Event '{event}' is not bound to the page's document: {self}.")
@@ -582,6 +583,13 @@ class Page(InnerComponent):
         # Add other head components
         self.add_to_head([Style(inner_html=BASE_CSS), *LivelyScripts().children], force_reparent=True)
         
+        # Add default body components
+        self.add_default_body_components()
+        
+    def add_default_body_components(self):
+        """
+        Adds all default page components e.g., adding page progress bar, page snackbar, etc.
+        """
         # Add body components
         # Initialize top page snackbar
         self.page_snackbar = Snackbar(
@@ -621,7 +629,7 @@ class Page(InnerComponent):
         
         # Initialize unsupported browser banner
         self.unsupported_browser_banner = UnsupportedBrowserBanner()
-        
+    
         # Add all body components.
         self.add_to_body([self.page_snackbar, self.page_progress_bar, self.unsupported_browser_banner])
         

@@ -6,9 +6,10 @@ from duck.html.components.input import Input
 from duck.html.components.script import Script
 from duck.html.components.card import Card
 from duck.html.components.label import Label
+from duck.html.components.button import Clickable
 
 
-class FileInput(Input):
+class FileInput(Clickable, Input):
     """
     Basic FileInput component.
     """
@@ -18,7 +19,7 @@ class FileInput(Input):
         self.props.update({"type": "file"})
 
 
-class FileDragAndDrop(Card):
+class FileDragAndDrop(Clickable, Card):
     """
     File Drag N Drop component with capabilities of dropping files rather than selecting only.
 

@@ -7,7 +7,13 @@ from duck.html.components import InnerComponent
 from duck.html.components.theme import Theme
 
 
-class Button(InnerComponent):
+class Clickable:
+    """
+    This is just a flag which tells us if a component is clickable.
+    """
+
+
+class Button(Clickable, InnerComponent):
     """
     Basic button component.
     """
@@ -23,6 +29,7 @@ class Button(InnerComponent):
             "transition": "background-color 0.3s ease",
             "border": "none",
             "border-radius": Theme.current.border_radius,
+            "outline": "none",
         }
         
         # Set default button style.

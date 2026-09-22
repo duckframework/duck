@@ -102,6 +102,29 @@ def home(request):
     return to_response(comp)
 ```
 
+### Note
+
+If an item is clickable, it must inherit from `Clickable` class in `duck.html.components.button`.
+
+For example:
+
+```python
+from duck.html.components.button import Clickable
+from duck.html.components.card import Card
+
+class ClickableCard(Clickable, Card):
+    pass
+```
+
+Multiple inheritance is allowed for combining behavior. 
+Only use it when you fully understand both components, as their styles and props may be merged.
+The final component type is determined by the first inherited component.
+
+```python
+class FlexButton(Button, FlexContainer):
+    pass
+```
+
 ---
 
 ## Component Extensions
@@ -225,7 +248,7 @@ Lively behaves like a **partial diff system**, not a full state replacement syst
 
 ---
 
-## Immediate Syncing (`update_now`)
+## Immediate Syncing (`update_now`) [Forceful]
 
 ```{note}
 Added in version 1.1.0
@@ -253,7 +276,7 @@ btn.bind("click", on_click, update_self=True)
 
 ---
 
-## Diffed Immediate Syncing (`sync_now`)
+## Diffed Immediate Syncing (`sync_now`) [Smarter]
 
 ```{note}
 Added in version 2.3.0

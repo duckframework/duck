@@ -3,6 +3,7 @@ Link component module.
 """
 
 from duck.html.components import InnerComponent
+from duck.html.components.button import Button, Clickable
 from duck.html.components.theme import Theme
 
 
@@ -38,3 +39,9 @@ class Link(InnerComponent):
         
         if link_color is not None:
             self.style.setdefault("color",  link_color)
+
+
+class LinkButton(Link, Button):
+    """
+    Clickable Link component.
+    """

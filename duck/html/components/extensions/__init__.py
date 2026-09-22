@@ -21,7 +21,7 @@ class MyExtension(Extension):
     def apply_extension(self):
         super().apply_extension()
         # Modify something or do something
-        self.style["background-color"] = "red"
+        self.style.update({"background-color", "red"})
 
 class MyButton(MyExtension, Button):
     pass
@@ -31,7 +31,148 @@ btn.style["background-color"] == "red"  # Outputs: True
 ```
 """
 # NOTE: In the future we need to use a max of 2 extensions just to avoid Method Resolution Order (MRO) overhead.
-from typing import Optional, Any, Union
+from typing import (
+    Optional,
+    Any,
+    Union,
+    Tuple,
+    Dict,
+    Type,
+    Iterable,
+    FrozenSet,
+)
+
+
+# Rules for default extensions: (component class, extension) -> rejected classes
+DEFAULT_EXTENSIONS: Dict[Tuple[Type, Type], Tuple[Type, ...]] = {}
+
+# Cache of component classes with their default extensions mixed in
+RESOLVED_CLASSES: Dict[Tuple[Type, FrozenSet[Type]], Type] = {}
+
+
+def register_default_extension(
+    component_class: type,
+    extension: type["Extension"],
+    reject: Iterable[Type] = (),
+) -> None:
+    """
+    Attach an extension to every instance of a component class and its subclasses.
+
+    Registering the same component class and extension again replaces the
+    previous `reject` classes, so calling this more than once is safe.
+
+    Args:
+        component_class (Type): Component class whose instances get the extension.
+        extension (Type[Extension]): Extension mixed in ahead of the component.
+        reject (Iterable[Type]): Component classes that must not get the extension.
+            Subclasses of these classes are rejected as well.
+
+    Raises:
+        ExtensionError: If `reject` contains anything other than classes.
+    
+    Notes:
+        You can only reject other extensions apart from `BasicExtension` and `StyleCompatibiliyExtension` because they 
+        provide base component operations.
+    """
+    # Validate the reject classes before storing them
+    reject = tuple(reject)
+    
+    if not all(isinstance(rejected, type) for rejected in reject):
+        raise ExtensionError("`reject` must only contain component classes.")
+
+    # Record the rule, replacing any earlier one for the same pair
+    DEFAULT_EXTENSIONS[(component_class, extension)] = reject
+
+    # Drop cached classes so the new rule takes effect
+    RESOLVED_CLASSES.clear()
+
+
+def unregister_default_extension(
+    component_class: type,
+    extension: type["Extension"],
+    failsafe: bool = False,
+) -> None:
+    """
+    Remove a previously registered default extension rule.
+
+    Args:
+        component_class (Type): Component class the rule was registered under.
+        extension (Type[Extension]): Extension to stop attaching by default.
+        failsafe (bool): If True, do nothing when the rule was never
+            registered, instead of raising.
+
+    Raises:
+        ExtensionError: If the rule was never registered and `failsafe` is False.
+    
+    Notes:
+        You can only unregister other extensions apart from `BasicExtension` and `StyleCompatibiliyExtension` because they 
+        provide base component operations.
+    """
+    key = (component_class, extension)
+
+    # Bail out early if there's nothing to remove
+    if key not in DEFAULT_EXTENSIONS:
+        if failsafe:
+            return
+        raise ExtensionError(
+            f"No default extension rule registered for {component_class.__name__} "
+            f"with {extension.__name__}."
+        )
+
+    # Remove the rule
+    del DEFAULT_EXTENSIONS[key]
+
+    # Drop cached classes so the removal takes effect
+    RESOLVED_CLASSES.clear()
+
+
+def resolve_component_class(
+    cls: type,
+    exclude_extensions: Iterable[type["Extension"]] = (),
+) -> type:
+    """
+    Resolve a component class with its applicable default extensions mixed in.
+
+    The derived class is built once per (component class, excluded extensions)
+    pair and cached, so repeated instantiations only cost a dictionary lookup.
+
+    Args:
+        cls (Type): Component class being instantiated.
+        exclude_extensions (Iterable[Type[Extension]]): Default extensions to
+            skip for this instance only, even if otherwise applicable.
+
+    Returns:
+        Type: `cls` itself when no extension applies, otherwise a generated
+            subclass with the extensions ahead of `cls` in the MRO.
+    
+    Notes:
+        Only other extensions apart from `BasicExtension` and `StyleCompatibiliyExtension` can be excluded 
+        because these provide base component operations.
+    """
+    # Build the lookup key for this (class, exclusions) pair
+    exclude_extensions = frozenset(exclude_extensions)
+    cache_key = (cls, exclude_extensions)
+
+    # Build the class only once per cache key
+    if cache_key not in RESOLVED_CLASSES:
+        extensions = tuple(
+            extension
+            for (base, extension), reject in DEFAULT_EXTENSIONS.items()
+            if issubclass(cls, base)
+            and not issubclass(cls, reject)
+            and not issubclass(cls, extension)
+            and extension not in exclude_extensions
+        )
+
+        # Mix the extensions in ahead of the component, or keep it unchanged
+        RESOLVED_CLASSES[cache_key] = (
+            type(cls.__name__, (*extensions, cls), {"__module__": cls.__module__})
+            if extensions
+            else cls
+        )
+
+    # Return the cached class
+    return RESOLVED_CLASSES[cache_key]
 
 
 class ExtensionError(Exception):
@@ -57,12 +198,12 @@ class Extension:
     Base class for all component extensions.
 
     Extensions allow reusable behaviors to be added to components via mixins.
-    Override methods like `on_create` or define new ones for extended logic.
+    Override methods like `apply_extension` or define new ones for extended logic.
     """
-    def on_create(self):
-        super().on_create()
-        self.apply_extension() # This applies all extensions in according to MRO
-        
+    def load(self):
+        self.apply_extension() # This applies all extensions according to MRO
+        super().load()
+       
         if not getattr(self, "_base_extension_applied", False):
             raise ExtensionError("Seems like extension method `apply_extension` has been overridden but 'super().apply_extension()' has not been called.")
         

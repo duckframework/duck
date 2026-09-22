@@ -6,6 +6,7 @@ Notes:
 """
 from duck.html.components.link import Link
 from duck.html.components.span import Span
+from duck.html.components.button import Clickable
 
 
 class IconLink(Link):
@@ -20,4 +21,10 @@ class Icon(Span):
     
     Notes:
     - This is just a `<span>` component, provide argument `klass` for the icon class.
+    """
+
+
+class IconButton(Clickable, Span):
+    """
+    An icon button component.
     """

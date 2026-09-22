@@ -274,8 +274,6 @@ body::after {
         max-width: 100%;
         border-radius: 18px;
     }
-    .counterapp-ring-wrap { width: 140px; height: 140px; }
-    .counterapp-ring-svg  { width: 140px; height: 140px; }
     .counterapp-count { font-size: 2.2rem !important; }
     .counterapp-btn-row { gap: 10px; width: 100%; }
     #ca-inc-btn { flex: 1; padding: 13px 16px !important; }

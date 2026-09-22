@@ -78,7 +78,7 @@ This means Lively will **merge updates**, not replace the entire prop/style obje
 btn = Button(text="Click")
 
 # Later in Python (event handler) — this WILL sync
-btn.style["background-color"] = "red"
+btn.style.update({"background-color": "red"})
 ```
 
 ```javascript
@@ -89,7 +89,7 @@ element.style.border = "1px solid blue"
 Even after future updates from Python:
 
 ```python
-btn.style["background-color"] = "green"
+btn.style.update({"background-color": "green"})
 ```
 
 The `border` style will remain untouched because Lively never tracked it.
@@ -117,6 +117,29 @@ All components ultimately inherit from `HtmlComponent`. You will mostly use:
 ```python
 from duck.html.components import InnerComponent, NoInnerComponent
 from duck.html.components.page import Page
+```
+
+### Note
+
+If an item is clickable, it must inherit from `Clickable` class in `duck.html.components.button`.
+
+For example:
+
+```python
+from duck.html.components.button import Clickable
+from duck.html.components.card import Card
+
+class ClickableCard(Clickable, Card):
+    pass
+```
+
+Multiple inheritance is allowed for combining behavior. 
+Only use it when you fully understand both components, as their styles and props may be merged.
+The final component type is determined by the first inherited component.
+
+```python
+class FlexButton(Button, FlexContainer):
+    pass
 ```
 
 ### Key properties on every component

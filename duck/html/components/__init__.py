@@ -169,10 +169,13 @@ from typing import (
 )
 
 from duck.utils.string import smart_truncate
-from duck.contrib.sync import convert_to_async_if_needed
+from duck.contrib.sync import ensure_async
+from duck.html.components.extensions.setup import setup as setup_extensions
 from duck.html.components.extensions import (
+    Extension,
     BasicExtension,
     StyleCompatibilityExtension,
+    resolve_component_class,
 )
 from duck.html.components.core.props import PropertyStore, StyleStore
 from duck.html.components.core.children import ChildrenList
@@ -1009,6 +1012,7 @@ class HtmlComponent:
             # Maybe `ensure_freeze` was called using the FrozenComponent extension.
             # If so, it was called to make component frozen right after load, so lets do just that.
             ensure_freeze_callback = getattr(self, "_ensure_freeze_callback", None)
+            
             if ensure_freeze_callback is not None and not self.is_frozen():
                 ensure_freeze_callback()
                 
@@ -1016,7 +1020,7 @@ class HtmlComponent:
         """
         Load the component asynchronously.
         """
-        await convert_to_async_if_needed(self.load)()
+        await ensure_async(self.load)()
         
     def wait_for_load(self, interval: float = 0.01):
         """
@@ -1763,7 +1767,7 @@ class HtmlComponent:
         """
         Asynchronously render component.
         """
-        return await convert_to_async_if_needed(self.render)()
+        return await ensure_async(self.render)()
         
     def to_vdom(self) -> VDomNode:
         """
@@ -1819,7 +1823,7 @@ class HtmlComponent:
         """
         Asynchronously convert component to `VDOMNode`.
         """
-        return await convert_to_async_if_needed(self.to_vdom)()
+        return await ensure_async(self.to_vdom)()
         
     def force_set_component_attr(self, key: str, value: Any):
         """
@@ -1838,7 +1842,7 @@ class HtmlComponent:
             setattr(self, key, value)
         finally:
             self._component_attr_protection = component_attr_protection
-    
+            
     def __setattr__(self, key: str, value: Any):
         """
         Custom attribute setter that protects component references from being overwritten.
@@ -1927,6 +1931,7 @@ class NoInnerHtmlComponent(
         properties: Dict[str, str] = None,
         props: Dict[str, str] = None,
         style: Dict[str, str] = None,
+        exclude_extensions: Optional[List[Extension]] = None,
         **kwargs,
     ):
         super().__init__(
@@ -1937,6 +1942,11 @@ class NoInnerHtmlComponent(
             style=style,
             **kwargs,
         )
+        
+    def __new__(cls, *args, **kwargs):
+        # Peek only — don't pop, since __init__ gets its own separate kwargs
+        exclude_extensions = kwargs.get("exclude_extensions", ()) or ()
+        return super().__new__(resolve_component_class(cls, exclude_extensions))
 
 
 class InnerHtmlComponent(
@@ -1972,6 +1982,7 @@ class InnerHtmlComponent(
         style: Optional[Dict[str, str]] = None,
         inner_html: Optional[Union[str, str, float]] = None,
         children: Optional[List["HtmlComponent"]] = None,
+        exclude_extensions: Optional[List[Extension]] = None,
         **kwargs,
     ):
         # Initialize the children list
@@ -1993,6 +2004,11 @@ class InnerHtmlComponent(
         for child in children or []:
             # Do not check if component is loaded, esp for lazy components like Pages
             self.__children.on_new_child(child, component_loaded_check=False) # Validate child
+        
+    def __new__(cls, *args, **kwargs):
+        # Peek only — don't pop, since __init__ gets its own separate kwargs
+        exclude_extensions = kwargs.get("exclude_extensions", ()) or ()
+        return super().__new__(resolve_component_class(cls, exclude_extensions))
         
     @property
     def children(self) -> ChildrenList[HtmlComponent]:
@@ -2061,3 +2077,7 @@ Component = HtmlComponent
 InnerComponent = InnerHtmlComponent
 NoInnerComponent = NoInnerHtmlComponent
 ComponentError = HtmlComponentError
+
+
+# Setup other default extensions.
+setup_extensions()

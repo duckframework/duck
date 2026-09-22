@@ -161,10 +161,10 @@ class NavbarToggler(FlatButton):
 
     def on_create(self):
         super().on_create()
-
+        
+        # Set some config
         self.klass = "navbar-toggler"
-        self.bg_color = "transparent"
-        self.style.update({"border": "none", "outline": "none !important"})
+        self.style.update({"border": "none", "outline": "none !important", "padding": "15px"})
         self.props.update({
             "aria-label": "Toggle navigation",
             "aria-expanded": "false",

@@ -34,6 +34,10 @@ _SAFE_PUNCTUATION_RE = re.compile(r"\s*([{};,()])\s*")
 # of .btn itself) mean different things.
 _COLON_TRAILING_SPACE_RE = re.compile(r":\s+")
 
+# A block's last semicolon before its closing "}" is always optional in
+# CSS ("color:red;}" and "color:red}" are identical), so it can be dropped.
+_TRAILING_SEMICOLON_RE = re.compile(r";+(?=\})")
+
 
 def minify_css(css: str) -> str:
     """
@@ -41,6 +45,14 @@ def minify_css(css: str) -> str:
     whitespace, without ever touching whitespace inside quoted strings or
     removing spaces that change meaning (descendant combinators, calc()
     operators, ".btn :hover" style descendant pseudo-selectors).
+
+    A block's last declaration no longer needs a trailing semicolon before
+    the closing "}" ("color:red;}" becomes "color:red}"). This is applied
+    both within a single stretch of CSS and across a comment that used to
+    sit between the semicolon and the brace, but is never applied to
+    anything inside a string, even one whose own content happens to
+    contain ";}" -- see `_drop_cross_chunk_semicolons` for how that's kept
+    safe.
 
     Args:
         css (str): Raw CSS source.
@@ -55,17 +67,26 @@ def minify_css(css: str) -> str:
     last_end = 0
 
     for match in _COMMENT_OR_STRING_RE.finditer(css):
-        chunks.append(_minify_css_chunk(css[last_end:match.start()]))
+        chunks.append((False, _minify_css_chunk(css[last_end:match.start()])))
 
         if match.group("string"):
-            chunks.append(match.group("string"))
-        # comments are dropped entirely
-
+            chunks.append((True, match.group("string")))
+        
+        # comments contribute nothing -- dropped entirely
+        
         last_end = match.end()
 
-    chunks.append(_minify_css_chunk(css[last_end:]))
+    chunks.append((False, _minify_css_chunk(css[last_end:])))
 
-    return "".join(chunks).strip()
+    return (
+        _drop_cross_chunk_semicolons(chunks)
+        .strip()
+        .replace(";\n", ";")
+        .replace("{\n", "{")
+        .replace("}\n", "}")
+        .replace(")\n", ")")
+        .replace("(\n", "(")
+    )
 
 
 def _minify_css_chunk(chunk: str) -> str:
@@ -81,7 +102,41 @@ def _minify_css_chunk(chunk: str) -> str:
     chunk = _WHITESPACE_RUN_RE.sub(" ", chunk)
     chunk = _SAFE_PUNCTUATION_RE.sub(r"\1", chunk)
     chunk = _COLON_TRAILING_SPACE_RE.sub(":", chunk)
+
+    # Safe here specifically because this chunk is guaranteed free of any
+    # string or comment content, so this can never reach into a string.
+    chunk = _TRAILING_SEMICOLON_RE.sub("", chunk)
+    
     return chunk
+
+
+def _drop_cross_chunk_semicolons(chunks: list) -> str:
+    """
+    Joins the processed chunks, dropping a semicolon that only ends up
+    directly before "}" because a comment used to sit between them.
+
+    Args:
+        chunks (list): (is_string, text) pairs in source order. String
+            chunks carry their original quotes and are never rewritten.
+
+    Returns:
+        The joined CSS, with those cross-chunk semicolons removed.
+    """
+    # A string chunk always starts with its own opening quote, never "}",
+    # so checking the next chunk's first character can never reach into
+    # a string's own content.
+    merged = []
+
+    for index, (is_string, text) in enumerate(chunks):
+        if not is_string and index + 1 < len(chunks):
+            next_text = chunks[index + 1][1]
+            
+            if text.endswith(";") and next_text.startswith("}"):
+                text = text.rstrip(";")
+
+        merged.append(text)
+
+    return "".join(merged)
 
 
 class Style(InnerComponent):
@@ -138,7 +193,7 @@ class Style(InnerComponent):
 
         if self.kwargs.get("minify", True) and self.inner_html:
             self.inner_html = minify_css(self.inner_html)
-
+            
     @property
     def properties(self) -> dict:
         from duck.settings import SETTINGS
@@ -149,8 +204,10 @@ class Style(InnerComponent):
         # Set CSP configuration.
         if SETTINGS['ENABLE_HEADERS_SECURITY_POLICY']:
             current_nonce = props.get("nonce")
+            
             if not current_nonce:
                 self.set_csp_nonce()
+                
         return props
 
     def set_csp_nonce(self) -> None:
@@ -163,6 +220,7 @@ class Style(InnerComponent):
         try:
             root = self.get_raw_root()
             request = root.get_request_or_raise()
+        
         except RequestNotFoundError:
             try:
                 request = self.get_request_or_raise()
@@ -174,6 +232,7 @@ class Style(InnerComponent):
 
         if csp_directives and request:
             style_src = set(csp_directives.get("style-src"))
+            
             if csp_nonce_flag in style_src:
                 nonce = csp_nonce(request)
                 # Use _get_raw_props instead to avoid recursion if this method is executed

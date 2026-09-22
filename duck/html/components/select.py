@@ -5,6 +5,7 @@ This module provides reusable `Select` and `Option` components for creating drop
 """
 
 from duck.html.components import ComponentError, InnerComponent
+from duck.html.components.button import Clickable
 from duck.html.components.theme import Theme
 
 
@@ -54,7 +55,7 @@ class Option(InnerComponent):
             self.props["selected"] = True
 
 
-class Select(InnerComponent):
+class Select(Clickable, InnerComponent):
     """
     A reusable HTML `<select>` component for creating dropdown menus.
 

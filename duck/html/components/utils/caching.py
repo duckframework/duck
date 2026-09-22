@@ -71,18 +71,35 @@ def cached_component(
             ```py
             targets = ["some_keyword_arg", <custom_callable>]
             ```
-        cache_backend (Optional[Any]): A custom cache backend which implements methods `get` and `set`. If None, default cache backend is used.
-        expiry (Optional[float]): The expiry for cache keys. Defaults to None.
-        namespace (Optional[Union[str, Callable]]): Optional string or callable returning a namespace prefix for keys. 
+        cache_backend (Optional[Any]):
+            A custom cache backend which implements methods `get` and `set`. If None, default cache backend is used.
+        
+        expiry (Optional[float]):
+            The expiry for cache keys. Defaults to None.
+        
+        namespace (Optional[Union[str, Callable]]):
+            Optional string or callable returning a namespace prefix for keys. 
             Use `namespace` for grouping and easy bulky cache invalidation.  
-        ignore_args (Optional[List[int]]): Indices to ignore in arguments. For example to ignore first argument when caching, `[0]` may be parsed as `ignore_args`.
-        ignore_kwargs (Optional[List[str]]): Keyword arguments keys to ignore when caching.
-        skip_cache_attr (str): Optional component attribute to skip caching (for debugging). This defaults to `skip_cache`, meaning,
+        
+        ignore_args (Optional[List[int]]):
+            Indices to ignore in arguments. For example to ignore first argument when caching, `[0]` may be parsed as `ignore_args`.
+        
+        ignore_kwargs (Optional[List[str]]):
+            Keyword arguments keys to ignore when caching.
+        
+        skip_cache_attr (str):
+            Optional component attribute to skip caching (for debugging). This defaults to `skip_cache`, meaning,
             if `component.skip_cache=True` then, cache is skipped for that component.
-        on_cache_result (Optional[Callable]): This is a callable that can be executed upon receiving a result from cache. If some 
+        
+        on_cache_result (Optional[Callable]):
+            This is a callable that can be executed upon receiving a result from cache. If some 
             data needs to be reinitialized, you can do this here.
-       freeze (bool): Whether to freeze cached components. Defaults to True. This enables fast re-rendering.
-       returns_copy (bool): Whether to return a copy of the original cached component. This enables separation of concerns and avoids ComponentError 
+       
+       freeze (bool):
+           Whether to freeze cached components. Defaults to True. This enables fast re-rendering.
+       
+       returns_copy (bool):
+            Whether to return a copy of the original cached component. This enables separation of concerns and avoids ComponentError 
             when the component wants to be added to a new component tree. Defaults to True. This is only looked at if `freeze=False` and the component class 
             is not a subclass of `Page` component. All static pages (frozen) will not be returned as copies.
     """
@@ -168,7 +185,6 @@ def cached_component(
             except KeyError as e:
                 raise KeyError("Error making cache key: {e}. Try using argument `targets` with simpler keys like 'id' or just utilize the 'namespace' argument.")
              
-            
             # Retrieve existing component from cache.
             resolved = cached = cache_backend.get(cache_key)
              
