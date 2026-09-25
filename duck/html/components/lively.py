@@ -63,9 +63,25 @@ class LivelyScripts(Container):
             ),
         )
         
+        # Decide the lively script to use.
+        lively_script = "lively.min.js"
+        
+        if (
+            SETTINGS['DEBUG']
+            and SETTINGS.get('LIVELY_DEBUG', False)
+            and not SETTINGS['NATIVE_ENABLED']
+        ):
+            lively_script = "lively.js"
+        
+        if SETTINGS['NATIVE_ENABLED']:
+            lively_script = "lively.native.min.js"
+            
+            if SETTINGS['DEBUG'] and SETTINGS.get('LIVELY_DEBUG', False):
+                lively_script = "lively.native.js"
+            
         # Never make the following script async because it will break the app logic.
         self.lively_script = Script(
-            props={"src": static_url.replace("<staticfile>", "lively.min.js")}
+            props={"src": static_url.replace("<staticfile>", lively_script)}
         )
         
         # Add all in required order

@@ -1,5 +1,5 @@
 """
-Setup of default component extensions.
+Setup of default component extensions (including Native ones if setting NATIVE_ENABLED=True).
 """
 
 

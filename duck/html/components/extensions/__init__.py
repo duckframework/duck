@@ -202,10 +202,12 @@ class Extension:
     """
     def load(self):
         self.apply_extension() # This applies all extensions according to MRO
-        super().load()
-       
+        
         if not getattr(self, "_base_extension_applied", False):
             raise ExtensionError("Seems like extension method `apply_extension` has been overridden but 'super().apply_extension()' has not been called.")
+        
+        # Finally, load component.
+        super().load()
         
     def apply_extension(self):
         """
@@ -235,6 +237,7 @@ class BasicExtension(Extension):
         
         for key in keys:
             value = self.kwargs.get(key)
+            
             if value is not None:
                 setattr(self, key, value)
                 
@@ -572,6 +575,7 @@ class StyleCompatibilityExtension(Extension):
             # Add vendor-prefixed versions if applicable
             for compat_key in self.compatibility_keys.get(key, []):
                 self.style.__setitem__(compat_key, val, call_on_set_item_handler=False)
+            
             super_on_set_item(key, val)
             
         def on_style_delitem(key):
@@ -583,6 +587,7 @@ class StyleCompatibilityExtension(Extension):
                 for compat_key in self.compatibility_keys.get(key, []):
                     if compat_key in self.style:
                         self.style.__delitem__(compat_key, call_on_delete_item_handler=False)
+            
             super_on_delete_item(key)
                         
         # Replace the style’s magic methods with our enhanced versions

@@ -280,8 +280,17 @@ class RippleExtension(Extension):
         super().apply_extension()
         
         # Prepare the host box and the ripple options
-        self.apply_host_style()
-        self.apply_options()
+        self.apply_ripple_extension_host_style()
+        self.apply_ripple_extension_options()
+        
+    def load(self):
+        """
+        Load component, modified by RippleExtension.
+        """
+        # Only add script after component has been loaded - by default, apply_extension is called before load()
+        super().load()
+        
+        # Add script to component tree
         self.add_ripple_extension_script()
         
     def add_ripple_extension_script(self):
@@ -300,7 +309,7 @@ class RippleExtension(Extension):
             if not isinstance(target_container, InnerComponent):
                 if target_container.parent is not None:
                     target_container = target_container.parent
-            
+                    
                 if not isinstance(target_container, InnerComponent):
                     raise ExtensionError(
                         f"Ripple requires an InnerComponent, but {type(self).__name__} "
@@ -315,13 +324,14 @@ class RippleExtension(Extension):
             # are both populated.
             if target_container.inner_html:
                 target_container.inner_html += script.render()
+            
             else:
                 target_container.add_child(script)
             
             # Update flag
             self._ripple_extension_script_added = True
         
-    def apply_host_style(self) -> None:
+    def apply_ripple_extension_host_style(self) -> None:
         """
         Mark the component as a ripple host and give it a clipping box.
 
@@ -338,7 +348,7 @@ class RippleExtension(Extension):
             if property_name not in self.style:
                 self.style[property_name] = value
 
-    def apply_options(self) -> None:
+    def apply_ripple_extension_options(self) -> None:
         """
         Apply the ripple options from `kwargs`.
 

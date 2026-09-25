@@ -10,7 +10,7 @@
  * - When using Lively, make sure DOM changes are done within the system as any DOM mutation outside Lively will be detected and an error will be shown.  
  *
  * @author Brian Musakwa <digreatbrian@gmail.com>
- * @version 2.3.1
+ * @version 2.3.2
  */
 
 /**
@@ -677,13 +677,16 @@ class DOMPatcher {
    */
   async animateIn(el, duration = 10, animClass = "patch-fade-in") {
     return new Promise(resolve => {
+      if (!this.isVisualElement(el)) {
+        resolve();
+        return;
+      }
       function handleAnimationEnd() {
         el.classList.remove(animClass);
         if (duration) el.style.animationDuration = "";
         el.removeEventListener('animationend', handleAnimationEnd);
         resolve();
       }
-      if (!this.isVisualElement(el)) return;
       if (duration) el.style.animationDuration = `${duration}ms`;
       el.classList.add(animClass);
       el.addEventListener('animationend', handleAnimationEnd, { once: true });
@@ -700,13 +703,16 @@ class DOMPatcher {
    */
   async animateOut(el, duration = 10, animClass = "patch-fade-out") {
     return new Promise(resolve => {
+      if (!this.isVisualElement(el)) {
+        resolve();
+        return;
+      }
       function handleAnimationEnd() {
         el.classList.remove(animClass);
         if (duration) el.style.animationDuration = "";
         el.removeEventListener('animationend', handleAnimationEnd);
         resolve();
       }
-      if (!this.isVisualElement(el)) return;
       if (duration) el.style.animationDuration = `${duration}ms`;
       el.classList.add(animClass);
       el.addEventListener('animationend', handleAnimationEnd, { once: true });
@@ -745,11 +751,11 @@ class DOMPatcher {
    * Large patch sets are chunked to avoid blocking.
    * 'await new Promise(requestAnimationFrame)' yields to the browser to keep UI smooth.
    * @param {Array} patches
-   * @param {boolean} [animatePatches=False] Whether to animate patches.
+   * @param {boolean} [animatePatches=true] Whether to animate patches.
    * @param {number} [chunkSize=100]
    * @returns {Promise<void>}
    */
-  async applyPatches(patches, animatePatches = false, chunkSize = 100) {
+  async applyPatches(patches, animatePatches = true, chunkSize = 100) {
     for (let i = 0; i < patches.length; i += chunkSize) {
       for (let j = i; j < Math.min(i + chunkSize, patches.length); j++) {
         this.applySinglePatch(patches[j], animatePatches);
@@ -761,9 +767,9 @@ class DOMPatcher {
    * Applies a single patch instruction.
    * All DOM manipulation is batched for optimal performance.
    * @param {Array} patch
-   * @param {boolean} [animatePatch=false] Whether to animate patch.
+   * @param {boolean} [animatePatch=true] Whether to animate patch.
    */
-  applySinglePatch(patch, animatePatch = false) {
+  applySinglePatch(patch, animatePatch = true) {
     const [opcode, uid, payload] = patch;
     const el = this.getElement(uid); // get element from UID map
     
@@ -794,25 +800,29 @@ class DOMPatcher {
       }
       
       case PatchCodes.REPLACE_NODE: {
-        // Build replacement element but don't add to UID Map immediately
+        // Build replacement element but don't add to UID Map immediately.
         const newEl = this.buildElementDom(payload, false);
-        
+      
         if (el && el.parentNode) {
           this.scheduleUpdate(() => {
             if (!el.parentNode) return;
-            // Cleanup old element, meaning its old events so that they wont be passed to newEl
-            // and newEl will have its own new events.
+      
+            // Cleanup old element's events so they aren't passed to newEl.
             // This avoids ElementRegistrationError.
             this.cleanupElement(el, uid, true);
+      
+            // Fire and forget animateOut
+            if (animatePatch) {
+              this.animateOut(el);
+            }
             
-            // Animate outgoing element
-            if (animatePatch) this.animateOut(el);
+            // Replace el
             el.parentNode.replaceChild(newEl, el);
-            
-            // Animate incoming element
-            if (animatePatch) this.animateIn(newEl, 400)
-            
-            // Finally, register new element.
+      
+            // Animate incoming element.
+            if (animatePatch) this.animateIn(newEl, 400);
+      
+            // Register new element.
             this.registerElement(uid, newEl);
           });
         }
@@ -824,7 +834,9 @@ class DOMPatcher {
         if (el && el.parentNode) {
           this.scheduleUpdate(() => {
             if (!el.parentNode) return;
-            if (animatePatch) this.animateOut(el);
+            if (animatePatch) {
+              this.animateOut(el);
+            }
             el.parentNode.removeChild(el);
             this.cleanupElement(el, uid, true);
           });
@@ -2089,7 +2101,7 @@ class LivelyWebSocketClient {
         switch (opcode) {
           case EventOpCodes.APPLY_PATCH:
             // Wait for patch application to complete.
-            await this.patcher.applyPatches(data[1]);
+            await this.patcher.applyPatches(data[1], true);
             break;
           
           case EventOpCodes.EXECUTE_JS: {

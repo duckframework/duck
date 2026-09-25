@@ -5,8 +5,18 @@ Proxy module to `duck.html.components.Page` with additionals.
 from duck.html.components.page import * 
 from duck.html.components.page import Page
 from duck.html.components.snackbar import Snackbar
-from duck.html.components.progressbar import ProgressBar
-from duck.html.components.unsupported_browser import UnsupportedBrowserBanner
+from duck.html.components.style import Style
+
+
+BASE_CSS = """
+/* Native-feel patching indicator (Arc/Vercel-style blur) */
+[data-patching="true"] {
+  filter: blur(1px);
+  opacity: 0.85;
+  transition: filter 0.15s ease-out, transform 0.15s ease-out, opacity 0.15s ease-out;
+  pointer-events: none;
+}
+"""
 
 
 class AppPage(Page):
@@ -15,18 +25,25 @@ class AppPage(Page):
     component.
     """
     
+    def on_create(self):
+        super().on_create()
+        
+        # Add base.css
+        self.add_to_head(Style(inner_html=BASE_CSS))
+    
     def add_default_body_components(self):
         """
         Add default body components.
         """
-        
         # Add body components
-        # Initialize top page snackbar
-        # Initialize top page snackbar
+        # Initialize bottom page snackbar
         self.page_snackbar = Snackbar(
             id="page-snackbar",
             type="info",
-            variant="solid",
+            variant="filled",
+            style={
+              "bottom": "0px",
+            },
             children=[
                 Label(
                     klass="snackbar-label",
@@ -38,17 +55,5 @@ class AppPage(Page):
             ]
         )
         
-        # Initialize top page progress
-        self.page_progress_bar = ProgressBar(
-            id="page-progress-bar",
-            style={
-                "position": "fixed",
-                "z-index": "50000",
-            }
-        )
-        
-        # Initialize unsupported browser banner
-        self.unsupported_browser_banner = UnsupportedBrowserBanner()
-    
         # Add all body components.
-        self.add_to_body([self.page_snackbar, self.page_progress_bar, self.unsupported_browser_banner])
+        self.add_to_body([self.page_snackbar])

@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * Lively.android.js – Duck Framework Android Native Client Patch & Navigation System
+ * Lively.native.js – Duck Framework Native Client Patch & Navigation System
  * Performance-optimized implementation for patching, navigation, and WebSocket communication.
  * 
  * Notes
@@ -10,7 +10,7 @@
  * - When using Lively, make sure DOM changes are done within the system as any DOM mutation outside Lively will be detected and an error will be shown.  
  *
  * @author Brian Musakwa <digreatbrian@gmail.com>
- * @version 2.3.1
+ * @version 1.0.0
  */
 
 /**
@@ -420,6 +420,9 @@ class DOMPatcher {
       this.buildUidMap(document);
     }
     
+    // Root elements currently doing patches.
+    this.patchInProgressRootElements = new Set();
+    
     // Monitor external DOM changes
     const debug = window?.LIVELY_APPLICATION?.DEBUG || window?.LIVELY_DEBUG || true;
     
@@ -644,7 +647,16 @@ class DOMPatcher {
             // Wait for a short delay
             await new Promise(resolve => setTimeout(resolve, 0));
             this.patchInProgress = false;
+            
+            // Remove root elems patch in progress flag
+            for (const root of this.patchInProgressRootElements) {
+              root.removeAttribute("data-patching");
+            }
+            
+            // Clear patch in progress roots
+            this.clearPatchInProgressRoots();
           }
+          
         })();
       });
     }
@@ -666,7 +678,7 @@ class DOMPatcher {
     // Optionally, more tags can be added as needed
     return !nonVisualTags.includes(element.tagName.toUpperCase());
   }
-
+  
   /**
    * Animates an element entering, returns a Promise resolved after animation.
    * Uses robust cleanup and supports duration override.
@@ -677,13 +689,16 @@ class DOMPatcher {
    */
   async animateIn(el, duration = 10, animClass = "patch-fade-in") {
     return new Promise(resolve => {
+      if (!this.isVisualElement(el)) {
+        resolve();
+        return;
+      }
       function handleAnimationEnd() {
         el.classList.remove(animClass);
         if (duration) el.style.animationDuration = "";
         el.removeEventListener('animationend', handleAnimationEnd);
         resolve();
       }
-      if (!this.isVisualElement(el)) return;
       if (duration) el.style.animationDuration = `${duration}ms`;
       el.classList.add(animClass);
       el.addEventListener('animationend', handleAnimationEnd, { once: true });
@@ -698,15 +713,19 @@ class DOMPatcher {
    * @param {string} animClass - Animation class to apply (default "patch-fade-out").
    * @returns {Promise<void>}
    */
+  
   async animateOut(el, duration = 10, animClass = "patch-fade-out") {
     return new Promise(resolve => {
+      if (!this.isVisualElement(el)) {
+        resolve();
+        return;
+      }
       function handleAnimationEnd() {
         el.classList.remove(animClass);
         if (duration) el.style.animationDuration = "";
         el.removeEventListener('animationend', handleAnimationEnd);
         resolve();
       }
-      if (!this.isVisualElement(el)) return;
       if (duration) el.style.animationDuration = `${duration}ms`;
       el.classList.add(animClass);
       el.addEventListener('animationend', handleAnimationEnd, { once: true });
@@ -741,15 +760,51 @@ class DOMPatcher {
   }
   
   /**
+    * Resolves the root component from list of patches.
+    */
+  resolveRoot(patches, getElement) {
+    const [, firstUid] = patches[0] || [];
+    const el = firstUid != null ? getElement(firstUid) : null;
+    return el?.closest('[data-uid]') || document.body;
+  }
+  
+  /**
+   * Adds the root component to the list of ongoing patches.
+   *
+   * @param {HTMLElement} root - The root component being patched.
+   */
+  addPatchInProgressRoot(root) {
+    if (root) {
+      this.patchInProgressRootElements.add(root);
+    }
+  }
+  
+  /**
+   * Clears all roots from the list of ongoing patches.
+   */
+  clearPatchInProgressRoots() {
+    this.patchInProgressRootElements.clear();
+  }
+  
+  /**
    * Apply a list of patch instructions asynchronously for responsiveness.
    * Large patch sets are chunked to avoid blocking.
    * 'await new Promise(requestAnimationFrame)' yields to the browser to keep UI smooth.
    * @param {Array} patches
-   * @param {boolean} [animatePatches=False] Whether to animate patches.
+   * @param {boolean} [animatePatches=true] Whether to animate patches.
    * @param {number} [chunkSize=100]
    * @returns {Promise<void>}
    */
-  async applyPatches(patches, animatePatches = false, chunkSize = 100) {
+  async applyPatches(patches, animatePatches = true, chunkSize = 100) {
+    // Get root component.
+    const root = this.resolveRoot(patches, (uid) => this.getElement(uid));
+    
+    // Add root component to 
+    this.addPatchInProgressRoot(root);
+    
+    // Add patch flag
+    root.setAttribute('data-patching', 'true');
+    
     for (let i = 0; i < patches.length; i += chunkSize) {
       for (let j = i; j < Math.min(i + chunkSize, patches.length); j++) {
         this.applySinglePatch(patches[j], animatePatches);
@@ -761,9 +816,9 @@ class DOMPatcher {
    * Applies a single patch instruction.
    * All DOM manipulation is batched for optimal performance.
    * @param {Array} patch
-   * @param {boolean} [animatePatch=false] Whether to animate patch.
+   * @param {boolean} [animatePatch=true] Whether to animate patch.
    */
-  applySinglePatch(patch, animatePatch = false) {
+  applySinglePatch(patch, animatePatch = true) {
     const [opcode, uid, payload] = patch;
     const el = this.getElement(uid); // get element from UID map
     
@@ -1642,6 +1697,7 @@ class NavigationHandler {
       // Fallback: if no tagged containers found, scan all descendants
       if (candidates.length === 0) {
         const all = root.querySelectorAll("*");
+        
         for (const el of all) {
           if (el.scrollTop > 0) {
             el.scrollTo({ top: 0, behavior });
@@ -1649,6 +1705,25 @@ class NavigationHandler {
         }
       }
     }
+  
+  
+  /**
+   * Scroll the page to passed coordinates.
+   *
+   * @param {{x?: number, y?: number}} coordinates - The coordinates to scroll
+   * to. Missing coordinates default to 0.
+   * @param {boolean} [smooth=false] - Whether the scroll should be smooth.
+   * Defaults to false for instant scrolling.
+   * @param {HTMLElement|Window} [container=window] - The scrollable container,
+   * or the window.
+   */
+  static scrollTo(coordinates, smooth = false, container = window) {
+      const { x = 0, y = 0 } = coordinates;
+      const behavior = smooth ? "smooth" : "auto";
+      
+      // Scroll to coordinates
+      container.scrollTo({left: x, top: y, behavior});
+  }
   
   /**
    * Sends a navigation request to the WebSocket.
@@ -1659,14 +1734,6 @@ class NavigationHandler {
     const serverTrustedURL = window.LIVELY_WS_URL;
     const parsedUrl = URL(url || "");
     const websocket = window.LIVELY_APPLICATION.websocketClient.socket;
-    const progressBar = window.LIVELY_APPLICATION.PAGE_PROGRESS_BAR;
-    let progress = window.LIVELY_APPLICATION.PAGE_PROGRESS;
-    
-    function updateProgress() {
-      // Update progress bar with transform for perf
-      progress = window.LIVELY_APPLICATION.PAGE_PROGRESS = Math.min(progress + 10, 100);
-      updateProgressBar(progressBar, progress); 
-    }
     
     if (!this.navigationInProgress) {
       this.navigationInProgress = true;
@@ -1680,9 +1747,6 @@ class NavigationHandler {
       return;
     }
     **/
-    
-    // Reset page progress
-    window.LIVELY_APPLICATION.resetPageProgressBar();
     
     // Check if websocket open.
     if (!(websocket && websocket.readyState === WebSocket.OPEN)) {
@@ -1699,9 +1763,6 @@ class NavigationHandler {
     
     // Check if nextPageUid is parsed
     if (nextPageUid) {
-      // Update progress bar with transform for perf
-      updateProgress();
-      
       // Send navigation request
       window.LIVELY_APPLICATION.websocketClient.sendData([
         EventOpCodes.NAVIGATE_TO,
@@ -1725,9 +1786,6 @@ class NavigationHandler {
     
     if (!parsedUrl.domain) {
       // This is a URL path, send navigation request to WebSocket
-      // Update progress bar with transform for perf
-      updateProgress();
-      
       // Send navigation request. 
       window.LIVELY_APPLICATION.websocketClient.sendData([
         EventOpCodes.NAVIGATE_TO,
@@ -1741,9 +1799,6 @@ class NavigationHandler {
       // This is an absolute URL
       if (serverDomain === parsedUrl.domain) {
         // This URL is directed to the right server, send navigation request
-        // Update progress bar with transform for perf
-        updateProgress();
-        
         // Send navigation request.
         window.LIVELY_APPLICATION.websocketClient.sendData([
           EventOpCodes.NAVIGATE_TO,
@@ -1771,18 +1826,11 @@ class NavigationHandler {
     if (fullreload) {
       // This means the server is unable to provide patches for the navigation request
       // but it's asking us just to do a full reload to the urlpath
-      window.LIVELY_APPLICATION.resetPageProgressBar();
       this.doFullPageReload(fullpath, "Server could not provide possible patches");
     }
+    
     else if (this.navigationInProgress) {
       // The server has got patches for us.
-      let progress = window.LIVELY_APPLICATION.PAGE_PROGRESS;
-      let progressBar = window.LIVELY_APPLICATION.PAGE_PROGRESS_BAR;
-      
-      // Update progress bar with transform.
-      progress = window.LIVELY_APPLICATION.PAGE_PROGRESS = Math.min(progress + 10, 95);
-      updateProgressBar(progressBar, progress);
-      
       // Update the page uid
       // Unbind all previous page document-specific events.
       if (window.LIVELY_APPLICATION.PAGE_UID !== nextPageUid) {
@@ -1806,13 +1854,8 @@ class NavigationHandler {
       // Apply new patches
       await window.LIVELY_APPLICATION.patcher.applyPatches(patches, true);
       
-      // Reinitialize progress bar if it has changed (this will get a live result for progress bar)
-      progressBar = window.LIVELY_APPLICATION.PAGE_PROGRESS_BAR;
-      
       // We have received all patches but we might not be done patching the DOM.
       if (isFinal) {
-        const progressBarInner = progressBar.querySelector('.progress-bar-inner');
-        
         // Scroll to top unless the URL contains a valid hash anchor.
         const hasHash = new URL(fullpath, window.location.origin).hash;
         
@@ -1831,52 +1874,24 @@ class NavigationHandler {
         }
         else {
           requestAnimationFrame(() => {
-            this.scrollToTop(true);
+            this.scrollToTop(false);
           });
         }
 
         // Cancel navigation in progress flag.
         this.navigationInProgress = false;
         
-        if (progress === 100) {
-          // Progress already at max.
-          window.LIVELY_APPLICATION.resetPageProgressBar();
-          
-          // Reinitialize the new page.
-          reinitializePage(true);
-          
-          if (this.scrollCoordinates) {
-              window.scrollTo(this.scrollCoordinates);
-              // Reset scroll coordinates
-              this.scrollCoordinates = null;
-            }
-          return;
-        }
+        // Progress already at max.
+        // Reinitialize the new page.
+        reinitializePage(true);
         
-        // Listen for transition end
-        function onTransitionEnd(e) {
-          if (e.propertyName === 'transform') { // or 'width', depending on your CSS
-            window.LIVELY_APPLICATION.resetPageProgressBar();
-            progressBarInner.removeEventListener('transitionend', onTransitionEnd);
+        if (this.scrollCoordinates) {
+            this.scrollTo(this.scrollCoordinates);
             
-            // Reinitialize the new page.
-            reinitializePage(true);
-            
-            if (this.scrollCoordinates) {
-              window.scrollTo(this.scrollCoordinates);
-              
-              // Reset scroll coordinates
-              this.scrollCoordinates = null;
-            }
+            // Reset scroll coordinates
+            this.scrollCoordinates = null;
           }
-        }
-        
-        // Add transition end event.
-        progressBarInner.addEventListener('transitionend', onTransitionEnd);
-        
-        // The function updateProgressBar is defined just below every ProgressBar component.
-        progress = window.LIVELY_APPLICATION.PAGE_PROGRESS = 100;
-        updateProgressBar(progressBar, progress);        
+          
       }
     }
   }
@@ -2048,10 +2063,7 @@ class LivelyWebSocketClient {
     
       // Reset navigation in progress flag.
       NavigationHandler.navigationInProgress = false;
-    
-      // Reset progressbar if present.
-      window.LIVELY_APPLICATION.resetPageProgressBar();
-    
+      
       // Show not connected snackbar - only for a genuine network drop, and only
       // if no reconnect attempt is already showing it.
       if (!this._reconnectInProgress && this._lastCloseWasNetworkDrop) {
@@ -2089,7 +2101,7 @@ class LivelyWebSocketClient {
         switch (opcode) {
           case EventOpCodes.APPLY_PATCH:
             // Wait for patch application to complete.
-            await this.patcher.applyPatches(data[1]);
+            await this.patcher.applyPatches(data[1], true);
             break;
           
           case EventOpCodes.EXECUTE_JS: {
@@ -2165,9 +2177,6 @@ class LivelyWebSocketClient {
       if (window.LIVELY_APPLICATION.DEBUG) {
         console.warn("[Lively] Cannot send message: WebSocket is not open.");
       }
-      
-      // Reset progress bar if present.
-      window.LIVELY_APPLICATION.resetPageProgressBar();
       
       // Show not connected snackbar
       const snackbar = window.LIVELY_APPLICATION.PAGE_SNACKBAR;
@@ -2429,11 +2438,9 @@ class LivelyApp {
     
     // Define Live DOM elements (they always refetch from DOM if the cached elem ID doesn't match the initial ID)
     this.defineLiveElementProperty("PAGE_SNACKBAR", "page-snackbar");
-    this.defineLiveElementProperty("PAGE_PROGRESS_BAR", "page-progress-bar");
     
     // Assign important elem specific attributes
     this.PAGE_SNACKBAR.LABEL = this.PAGE_SNACKBAR.querySelector(".snackbar-label");
-    this.PAGE_PROGRESS = 0;
     
     // Global Flag for allowing execution of lively events - useful when doing full page reload, no need to fire further events.
     this.ALLOW_LIVELY_EVENT_DISPATCH = true;
@@ -2559,17 +2566,6 @@ class LivelyApp {
     
     // Return final event
     return newEvent;
-  }
-  
-  /**
-    * Resets the page progress bar to zero.
-    */
-  resetPageProgressBar() {
-    // Hide progress bar, to avoid transition.
-    hideProgressBar(this.PAGE_PROGRESS_BAR);
-    
-    // Reset navigation progress
-    this.PAGE_PROGRESS = 0;
   }
   
   /**

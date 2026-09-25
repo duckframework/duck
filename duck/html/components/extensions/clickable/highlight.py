@@ -159,8 +159,17 @@ class HighlightExtension(Extension):
             )
 
         # Prepare the host box and the highlight options
-        self.apply_host_style()
-        self.apply_options()
+        self.apply_highlight_extension_host_style()
+        self.apply_highlight_extension_options()
+        
+    def load(self):
+        """
+        Load component, modified by HighlightExtension.
+        """
+        # Only add script after component has been loaded - by default, apply_extension is called before load()
+        super().load()
+        
+        # Add script to component tree
         self.add_highlight_extension_script()
         
     def add_highlight_extension_script(self):
@@ -200,7 +209,7 @@ class HighlightExtension(Extension):
             # Update flag
             self._highlight_extension_script_added = True
             
-    def apply_host_style(self) -> None:
+    def apply_highlight_extension_host_style(self) -> None:
         """
         Mark the component as a highlight host.
 
@@ -217,7 +226,7 @@ class HighlightExtension(Extension):
             if property_name not in self.style:
                 self.style[property_name] = value
 
-    def apply_options(self) -> None:
+    def apply_highlight_extension_options(self) -> None:
         """
         Apply the highlight options from `kwargs`.
 

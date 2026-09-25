@@ -93,12 +93,21 @@ class Snackbar(FlexContainer):
         Initialize the snackbar.
 
         Args:
-            text: Snackbar message text.
-            type: Snackbar type. Must be `info`, `success`, `error`, or `warning`.
-            variant: Visual style. Must be `filled` (solid background) 
+            text:
+              Snackbar message text.
+              
+            type:
+              Snackbar type. Must be `info`, `success`, `error`, or `warning`.
+            
+            variant:
+                Visual style. Must be `filled` (solid background) 
                 or `glacier` (frosted, outlined glass look).
-            timeout: Auto-hide timeout in milliseconds.
-            **kwargs: Additional component keyword arguments.
+            
+            timeout:
+              Auto-hide timeout in milliseconds.
+            
+            **kwargs:
+              Additional component keyword arguments.
 
         Raises:
             ValueError: If the snackbar type or variant is invalid.

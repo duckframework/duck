@@ -73,7 +73,7 @@ def minify_css(css: str) -> str:
             chunks.append((True, match.group("string")))
         
         # comments contribute nothing -- dropped entirely
-        
+
         last_end = match.end()
 
     chunks.append((False, _minify_css_chunk(css[last_end:])))
@@ -130,7 +130,6 @@ def _drop_cross_chunk_semicolons(chunks: list) -> str:
     for index, (is_string, text) in enumerate(chunks):
         if not is_string and index + 1 < len(chunks):
             next_text = chunks[index + 1][1]
-            
             if text.endswith(";") and next_text.startswith("}"):
                 text = text.rstrip(";")
 
@@ -174,7 +173,7 @@ class Style(InnerComponent):
 
     This will generate the following HTML output:
     ```html
-    <style>.custom-popup{background-color:rgba(0, 0, 0, 0.8);color:white;padding:10px;border-radius:5px}</style>
+    <style>.custom-popup{background-color:rgba(0,0,0,0.8);color:white;padding:10px;border-radius:5px}</style>
     ```
 
     **Notes:**
@@ -193,7 +192,7 @@ class Style(InnerComponent):
 
         if self.kwargs.get("minify", True) and self.inner_html:
             self.inner_html = minify_css(self.inner_html)
-            
+
     @property
     def properties(self) -> dict:
         from duck.settings import SETTINGS
@@ -207,7 +206,7 @@ class Style(InnerComponent):
             
             if not current_nonce:
                 self.set_csp_nonce()
-                
+        
         return props
 
     def set_csp_nonce(self) -> None:

@@ -203,7 +203,6 @@ ASYNC_HANDLING: bool = False
 ASYNC_LOOP: str = "asyncio"
 
 
-
 # Enable Lively Component System
 # This enables:
 #    1. HTML components usage in templates.
@@ -214,6 +213,11 @@ ENABLE_COMPONENT_SYSTEM: bool = True
 # Reload On Unknown Components
 # Whether to reload pages when a requested Lively component is not found or expired.
 RELOAD_ON_UNKNOWN_COMPONENTS: bool = True
+
+
+# Lively Debugging
+# Whether to use lively.js instead of lively.min.js (only applies if DEBUG=True)
+LIVELY_DEBUG: bool = False
 
 
 # Template Lively HTML Components

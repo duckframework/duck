@@ -494,7 +494,9 @@ class URL:
            
         if path:
             path, query, fragment = self.split_path_components(path)
-       
+        else:
+            path = "/"
+            
         # Set attributes
         self.scheme, self.netloc, self.path, self.query, self.fragment = (
            scheme, netloc, path, query, fragment)

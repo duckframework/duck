@@ -144,6 +144,7 @@ BASE_CSS = """
 @keyframes fadeOut {
   to { opacity: 0; }
 }
+
 """
 
 GA_SCRIPT = """
@@ -530,7 +531,7 @@ class Page(InnerComponent):
         
         # Core html structure
         self.head = to_component("", "head")
-        self.body = to_component("", "body", style={"display": "flex", "flex-direction": "column"})
+        self.body = to_component("", "body", style={"display": "block"})
         
         # Meta component builder
         meta = lambda **kwargs: to_component("", "meta", no_closing_tag=True, **kwargs)
@@ -567,6 +568,13 @@ class Page(InnerComponent):
             self.title,
         ])
         
+        # Add theme css
+        if self.add_theme_css:
+            self.add_to_head(Theme.current.to_style())
+        
+        # Add base js.
+        self.add_to_head(Style(inner_html=BASE_CSS))
+        
         if self.disable_lively or not LivelyComponentSystem.is_active():
             # Disable Lively scripts and other Lively components.
             return
@@ -576,12 +584,8 @@ class Page(InnerComponent):
         # be able to resolve the Page UID.
         self.add_script(inline=f"window.PAGE_UID=document.getElementById(`{self.id}`).dataset.uid;")
         
-        # Add theme css
-        if self.add_theme_css:
-            self.add_to_head(Theme.current.to_style())
-        
         # Add other head components
-        self.add_to_head([Style(inner_html=BASE_CSS), *LivelyScripts().children], force_reparent=True)
+        self.add_to_head([*LivelyScripts().children], force_reparent=True)
         
         # Add default body components
         self.add_default_body_components()
@@ -667,8 +671,10 @@ class Page(InnerComponent):
         """
         if not self._author_tag:
             self._author_tag = self.add_meta(name="author", content=author)
+        
         else:
             self._author_tag.props.update({"content": author})
+            
             if self._author_tag not in self.head.children:
                 self.add_to_head(self._author_tag)
     
@@ -787,6 +793,7 @@ class Page(InnerComponent):
                 self.prev_link.props.update({"href": prev_url})
                 if self.prev_link not in self.head.children:
                     self.add_to_head(self.prev_link)
+        
         elif self.prev_link:
             if self.prev_link in self.head.children:
                 self.head.remove_child(self.prev_link)
@@ -800,6 +807,7 @@ class Page(InnerComponent):
                 self.next_link.props.update({"href": next_url})
                 if self.next_link not in self.head.children:
                     self.add_to_head(self.next_link)
+        
         elif self.next_link:
             if self.next_link in self.head.children:
                 self.head.remove_child(self.next_link)
@@ -839,6 +847,7 @@ class Page(InnerComponent):
                     props={"property": f"og:{key}", "content": val}
                 )
                 self._opengraph_tags.append(tag)
+        
         self.add_to_head(self._opengraph_tags)
         
     def set_twitter_card(

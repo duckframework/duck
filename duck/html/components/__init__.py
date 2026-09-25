@@ -612,7 +612,7 @@ class HtmlComponent:
         
         if inner_html not in (None, "") and getattr(self, "children", None):
             raise ComponentContentConflictError(
-                "Cannot use 'inner_html' when 'children' are provided. "
+                f"{self} Cannot use 'inner_html' when 'children' are provided. "
                 "A component must use either 'children' or 'inner_html', not both, "
                 "as this can cause inconsistent UI state during Lively updates."
             )
