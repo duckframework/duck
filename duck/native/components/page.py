@@ -43,6 +43,7 @@ class AppPage(Page):
             variant="filled",
             style={
               "bottom": "0px",
+              "height": "20px",
             },
             children=[
                 Label(
