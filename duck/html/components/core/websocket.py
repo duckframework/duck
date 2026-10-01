@@ -272,7 +272,7 @@ class LivelyWebSocketView(WebSocketView):
         
         finally:
             self.execution_futures.pop(uid, None)
-            
+                   
     async def on_open(self):
         """
         On open event.
@@ -325,8 +325,25 @@ class LivelyWebSocketView(WebSocketView):
                 if SETTINGS['DEBUG']:
                     logger.log("Error whilst handling lively operation for ws client: ", level=logger.WARNING)
                     logger.log_exception(e)
-
+    
+    async def ensure_browser_state_synced(self, root_request: HttpRequest):
+        """
+        This ensures that the curent state is synced with the browser. It's responsible for telling the browser that it needs 
+        to do JS fetch() to certain URL so that sensitive data like HTTPONLY cookies are synced to the browser.
+        
+        Args:
+            root_request: The request for the root component. Note that this doesn't mean this websocket's request but 
+                rather the root request e.g. `Page.request`.
+            
+        Notes:
+            This also syncs the root request state from the middlewares e.g. updating request cookies, X- headers (if applicable)
+            This calls `self.event_handler.ensure_browser_state_synced` underneath.
+        """
+        # If SESSION or JWT changed, ensure we tell the browser to update state e.g. Headers/Cookies (if necessary)
+        # This also syncs the root request state from the middlewares e.g. updating request cookies (if applicable)
+        await self.event_handler.ensure_browser_state_synced(root_request)
  
+
 class EventHandler:
     """
     Event handler for incoming WebSocket messages.
@@ -837,6 +854,7 @@ class EventHandler:
                         if isinstance(response, ComponentResponse):
                             # This is easy to diff.
                             next_component = response.component
+                            
                             if not next_component.is_loaded():
                                 await ensure_async(next_component.load)()
                            

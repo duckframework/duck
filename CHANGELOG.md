@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Added `ensure_browser_state_synced` to Lively WebSocket to easily and securely sync cookies, etc with the browser.
 - Added support for excluding extensions e.g., `Button(exclude_extensions=[HighlightExtension])`
 - Added new HTML component extensions at `duck.html.components.extensions.clickable`. Extensions include `RippleExtension` and `HighlightExtension`.
 - Added `LinkButton` component to `duck.html.components.link`. 
