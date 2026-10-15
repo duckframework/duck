@@ -41,21 +41,27 @@ Duck includes everything you need to build your UI, while [Quirl](https://github
 
 ## Documentation
 
-New to Duck? Start with **Getting Started**, then **Understanding the Project** — that's really all you need to build your first app. The rest is there when you need it.
+New to Duck? Start with **Getting Started**, then **Understanding the Project**. You'll have everything you need to build your first app. Explore the other guides as your project grows.
 
-- 🟢 **[Getting Started](./readme/getting-started.md)** — install Duck, create a project, and start the server
-- 🟢 **[Understanding the Project](./readme/understanding-the-project.md)** — what each generated file does: `main.py`, `urls.py`, views, pages, components, templates, static files
-- 🔵 [Django Integration](./readme/django-integration.md) — add Duck's HTTP/2, HTTPS, and security features to an existing Django project
-- 🔵 [Features](./readme/features.md) — full feature breakdown, plus what's coming next
-- 🔵 [AI Guidelines](./readme/ai-guidelines.md) — using Duck with AI assistants / vibe coding
-- ⚪ [About & Links](./readme/about.md) — real-world apps, fun facts, useful links
-- ⚪ [Contributing](./readme/contributing.md) — sponsorship, reporting issues, premium components
-- ⚪ [Official Documentation](https://docs.duckframework.com) — full documentation
+### 1. Start Here
 
-🟢 = start here  
-🔵 = once you're building  
-⚪ = optional reading
+- **[Getting Started](./readme/getting-started.md)** — install Duck, create a project, and start the server.
+- **[Understanding the Project](./readme/understanding-the-project.md)** — understand `main.py`, `urls.py`, views, pages, components, templates, and static files.
+
+### 2. Build with Duck
+
+- **[Native Apps](./readme/native.md)** — get started with Duck Native and native app development.
+- **[Django Integration](./readme/django-integration.md)** — add Duck's HTTP/2, HTTPS, and security features to an existing Django project.
+- **[Features](./readme/features.md)** — explore Duck's capabilities and planned features.
+
+### 3. Resources
+
+- **[AI Guidelines](./readme/ai-guidelines.md)** — use Duck with AI assistants and AI-assisted development.
+- **[About & Links](./readme/about.md)** — discover real-world apps, useful links, and fun facts.
+- **[Contributing](./readme/contributing.md)** — learn about contributing, reporting issues, sponsorship, and premium components.
+- **[Official Documentation](https://docs.duckframework.com)** — explore the full documentation.
 
 ---
+
 
 > **Duck is updated regularly** — check the repo for improvements and bug fixes.

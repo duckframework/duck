@@ -1,3 +1,0 @@
-"""
-Duck Native capabilities.
-"""

@@ -15,4 +15,5 @@ def add_to_pythonpath(path: str):
     
     if not current_pythonpath:
         return path
+        
     return current_pythonpath + os.pathsep + path

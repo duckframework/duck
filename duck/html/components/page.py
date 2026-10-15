@@ -553,6 +553,7 @@ class Page(InnerComponent):
         self.canonical_link = None
         self.prev_link = None
         self.next_link = None
+        self.webmanifest_link = None
         
         # Add head and body to page
         self.add_children([self.head, self.body])
@@ -695,6 +696,27 @@ class Page(InnerComponent):
         """
         self.robots.props["content"] = content
         
+    def set_webmanifest(self, href: str):
+        """
+        Set the web app manifest link, replacing any existing one.
+
+        Args:
+            href (str): URL of the manifest file, e.g., '/manifest.webmanifest'.
+        """
+        if not self.webmanifest_link:
+            self.webmanifest_link = to_component(
+                "",
+                "link",
+                no_closing_tag=True,
+                props={"rel": "manifest", "href": href},
+            )
+        else:
+            self.webmanifest_link.props["href"] = href
+        
+        # Make sure the link is in the head.
+        if self.webmanifest_link not in self.head.children:
+            self.add_to_head(self.webmanifest_link)
+            
     def set_lang(self, lang: str):
         """
         Set HTML lang attribute and Content-Language meta.

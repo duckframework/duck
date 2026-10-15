@@ -1826,14 +1826,14 @@ class NavigationHandler {
         const progressBarInner = progressBar.querySelector('.progress-bar-inner');
         
         // Scroll to top unless the URL contains a valid hash anchor.
-        const hasHash = new URL(fullpath, window.location.origin).hash;
+        const hasHash = fullpath.includes("#");
         
         if (hasHash) {
           // hash may or may not include the leading '#' depending on where it's set upstream —
           // strip it defensively since getElementById wants the raw id.
-          const hashId = hash.startsWith('#') ? hash.slice(1) : hash;
+          const hashId = fullpath.split("#", 2)[1];
           const el = document.getElementById(hashId);
-        
+          
           if (el) {
             requestAnimationFrame(() => {
               el.scrollIntoView();

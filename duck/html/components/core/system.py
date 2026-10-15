@@ -83,13 +83,15 @@ class LivelyComponentSystem:
             """
             Function to serve static files for the component system e.g. serving msgpack.js & lively.js.
             """
-            target_dir = "html/components/core/staticfiles"
+            from duck_native.storage import NATIVE_STORAGE
+            
+            target_dir = joinpaths(duck_storage, "html/components/core/staticfiles")
             
             if SETTINGS['NATIVE_ENABLED']:
-                target_dir = "native/components/staticfiles"
+                target_dir = NATIVE_STORAGE / "components/staticfiles"
                 
             # Build static file
-            staticfile = joinpaths(duck_storage, target_dir, staticfile)
+            staticfile = joinpaths(target_dir, staticfile)
             
             if not os.path.isfile(staticfile):
                 return not_found404(request)

@@ -1,6 +1,7 @@
 include LICENSE
 include AUTHORS.md
 include README.md
+include *.md
 recursive-include duck *
 exclude duck/**/__pycache__
 exclude duck/**/__pycache__/*.pyc

@@ -13,4 +13,4 @@ We love hearing your ideas for new features! To request a feature, please follow
 
 ---
 
-Maintaining and building these features takes time and care. If you find value in our work and would like to support continued development, please consider [sponsoring us](https://duckframework.xyz/sponsorship). Your support keeps us motivated and focused on delivering what matters most to you. 💚
+Maintaining and building these features takes time and care. If you find value in our work and would like to support continued development, please consider [sponsoring us](https://duckframework.com/contribute). Your support keeps us motivated and focused on delivering what matters most to you. 💚

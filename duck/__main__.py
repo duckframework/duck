@@ -24,6 +24,7 @@ from duck.cli.commands.logs import LogsCommand
 from duck.cli.commands.monitor import MonitorCommand
 from duck.cli.commands.sitemap import SitemapCommand
 from duck.cli.commands.sync import SyncCommand
+from duck.cli.commands.native import NativeCommand
 
 
 EXAMPLES = f"""
@@ -303,6 +304,15 @@ def sitemap():
     Create sitemap for Duck.
     """
     pass
+
+
+@cli.command(name="native", help="Execute Native app management commands for your project", context_settings=dict(ignore_unknown_options=True))
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)  # Accept multiple arguments
+def native(args):
+    """
+    Run Native-related commands in your project.
+    """
+    NativeCommand.main()
 
 
 # Register subcommands the duck commands.

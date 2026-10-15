@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Added method `set_webmanifest` to the `Page` component.
+- Added `duck native` command for management of native apps.
 - Added `ensure_browser_state_synced` to Lively WebSocket to easily and securely sync cookies, etc with the browser.
 - Added support for excluding extensions e.g., `Button(exclude_extensions=[HighlightExtension])`
 - Added new HTML component extensions at `duck.html.components.extensions.clickable`. Extensions include `RippleExtension` and `HighlightExtension`.
@@ -39,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Fixed 
 
+- Fixed issues scrolling to element for Lively navigation of URLs with hashes.
 - `FileIOStream.read()` / `AsyncFileIOStream.read()` now honor the requested `size`. Reads larger than `chunk_size` are collected chunk by chunk until `size` bytes or EOF. Previously they returned at most one chunk, and that short result was cached under the full-size key.
 - `FileIOStream.write()` / `AsyncFileIOStream.write()` now write in `chunk_size` pieces until all data is written. The cache is patched and `on_write` hooks fire with the bytes actually written, so a short write can no longer leave the cache holding data that never reached the file.
 - A write that fails after some chunks were written now returns the partial byte count, so stream position and cache stay accurate. A failure on the first chunk still raises `OSError`.

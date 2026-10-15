@@ -1253,13 +1253,23 @@ class App(BaseApp):
     
         # Log the active settings module
         logger.log_raw(f'{bold_start}PROJECT{bold_end} {self.project_name}')
-        logger.log_raw(f'{bold_start}USING SETTINGS{bold_end} {settings_mod}')
+        logger.log_raw(f'{bold_start}SETTINGS{bold_end} {settings_mod}')
         
         if SETTINGS['NATIVE_ENABLED']:
             native_config = SETTINGS['NATIVE_CONFIG']
             logger.log_raw(f'{bold_start}NATIVE ENABLED{bold_end} true')
-            logger.log_raw(f'{bold_start}NATIVE CONFIG{bold_end} {native_config}\n')
             
+            try:
+                from duck_native import __version__
+                
+                logger.log_raw(f'{bold_start}NATIVE VERSION{bold_end} {__version__}')
+                logger.log_raw(f'{bold_start}NATIVE CONFIG{bold_end} {native_config}\n')
+                
+            except ImportError:
+                logger.log_raw("")
+                logger.log("Native not found, install with 'pip install duck-native' ", level=logger.ERROR)
+                return
+                   
         else:
             logger.log_raw("")
             
