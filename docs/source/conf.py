@@ -5,6 +5,7 @@ import json
 import pathlib
 import subprocess
 import datetime
+import re
 
 
 # METADATA
@@ -57,6 +58,7 @@ def on_build_finished(app, exception):
         exception: Exception raised during build, if any.
     """
     generate_sitemap(app.outdir)
+    update_build_index(pathlib.Path("build/html"))
 
 
 def read_metadata_from_init(init_path):
@@ -252,6 +254,59 @@ def generate_sitemap_index(build_html_dir: pathlib.Path) -> None:
         f"Sitemap index rebuilt at {index_path} ({len(versions)} version(s))",
         level=console.DEBUG,
     )
+
+
+def get_latest_release_tag() -> str:
+    """
+    Return the highest stable semantic-version Git tag.
+    """
+    tags = subprocess.check_output(
+        ["git", "tag", "--list"],
+        text=True,
+    ).splitlines()
+
+    versions = []
+
+    for tag in tags:
+        match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", tag)
+        if match:
+            versions.append((tuple(map(int, match.groups())), tag))
+
+    if not versions:
+        raise RuntimeError("No stable release tags found.")
+
+    return max(versions, key=lambda item: item[0])[1]
+
+
+def update_build_index(output_dir: Path) -> None:
+    """
+    Update the existing root index to redirect to the latest release.
+    """
+    version = get_latest_release_tag()
+    target = f"/{version}/"
+
+    index_path = output_dir / "index.html"
+    html = index_path.read_text(encoding="utf-8")
+
+    html = re.sub(
+        r'(<meta http-equiv="refresh" content="0; url=)[^"]*(">)',
+        rf"\g<1>{target}\g<2>",
+        html,
+    )
+    html = re.sub(
+        r'window\.location\.replace\("[^"]*"\);',
+        f'window.location.replace("{target}");',
+        html,
+    )
+    html = re.sub(
+        r'(<a href=")[^"]*(">)',
+        rf"\g<1>{target}\g<2>",
+        html,
+        count=1,
+    )
+
+    index_path.write_text(html, encoding="utf-8")
+
 
 
 # Project information
