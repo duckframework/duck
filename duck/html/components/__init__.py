@@ -350,6 +350,7 @@ class HtmlComponent:
         self._copied_from = None
         self._event_bindings = {}
         self._event_bindings_changed = False # Whether event bindings changed.
+        self._tree_has_event_bindings = False # Whether the tree/component in tree has got event bindings
         self._on_create_check_passed = False
         self._deeply_nested_event_binding_warned = False
         self._on_root_finalized_called = False
@@ -659,11 +660,18 @@ class HtmlComponent:
         computed patches.
         
         Args:
-            action (Callable): A synchronous/asynchronous callable to perform on every patch.
+            action (Callable):
+                A synchronous/asynchronous callable to perform on every patch.
                 The first argument to this must be the patch.
-            old (VDomNode): The previous virtual DOM node.
-            new (VDomNode): The updated virtual DOM node.
-            reverse (bool): Whether to patch children in reverse order. Useful for nodes
+            
+            old (VDomNode):
+                The previous virtual DOM node.
+            
+            new (VDomNode):
+                The updated virtual DOM node.
+            
+            reverse (bool):
+                Whether to patch children in reverse order. Useful for nodes
                 like a Page, where body must be patched before head.
                 
         Returns:
@@ -717,9 +725,13 @@ class HtmlComponent:
                 component.on_root_finalized(component.root)
                 component._on_root_finalized_called = True
                 
+                if component._event_bindings:
+                    component.root._tree_has_event_bindings = True
+                    
             # Check for deep nesting for components with event bindings
             if component._event_bindings and not component._deeply_nested_event_binding_warned:
                  level = uid.count(".")
+                 
                  if level > max_nesting_level:
                      logger.warn(
                          f"The component {component} is deeply nested at level {level} "
@@ -750,7 +762,9 @@ class HtmlComponent:
                 # child's uid unique therefore leading to unneccessary patches.
                 uid = base_uid
                 
+            # Get children
             children = getattr(component, "children", [])
+            
             for index, child in enumerate(children):
                 # Use (.) dot separator to avoid ambiguity in cases index is like the {uid}
                 child_uid = f"{uid}.{index}"
@@ -758,7 +772,19 @@ class HtmlComponent:
                 
         # Record the uid assignment action
         root_component._prev_states["prev_uid_assignment_mutation_version"] = (root_component._children_structure_mutation_version, root_component.uid)
-    
+        
+        # If component tree has got event bindings, let's register DOMContentLoaded event so that the event callback will reload page if expired.
+        if root_component._tree_has_event_bindings and hasattr(root_component, "document_bind") and "DOMContentLoaded" not in root_component._document_event_bindings:
+            
+            def ensure_component_fresh(*_, **__):
+                """
+                This does nothing but ensures Lively to reload page if root component expired/nolonger in registry.
+                """
+                pass
+                
+            # Register refresh event.
+            root_component.document_bind("DOMContentLoaded", ensure_component_fresh, update_self=False)
+        
     def is_loaded(self) -> bool:
         """
         Returns a boolean on whether if the component is loaded.
@@ -1446,8 +1472,10 @@ class HtmlComponent:
         try:
             # Delete event binding
             del self._event_bindings[event]
+            
             # Set that event bindings somehow changed.
             self._event_bindings_changed = True
+        
         except KeyError:
             if not failsafe:
                 raise UnknownEventError(f"Event '{event}' is not bound to this component: {self}.")
@@ -1460,6 +1488,7 @@ class HtmlComponent:
         
         if not event_info:
             raise UnknownEventError(f"Event `{event}` is not bound to this component: {self}.")
+            
         return event_info
         
     def get_component_system_data_props(self) -> Dict[str, str]:
@@ -1837,6 +1866,7 @@ class HtmlComponent:
         allowing internal code to set or overwrite protected attributes.
         """
         component_attr_protection = getattr(self, "_component_attr_protection", False)
+        
         try:
             self._component_attr_protection = False
             setattr(self, key, value)

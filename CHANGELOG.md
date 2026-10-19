@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- All page components automatically refresh when they expire or are no longer registered, ensuring pages always serve fresh, up-to-date content.
 - All clickable components are now automatically extended with the `HighlightExtension`.
 - Refactored the `Code` component to `CodeBlock` and added support for `filename` and `collapsible` arguments.
 - Changed HTML components `add_to_registry` to be not strict about `request` for ownership assignment. If not provided, the error will lazily be flagged on `Lively` event dispatch.
