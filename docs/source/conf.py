@@ -60,7 +60,7 @@ def on_build_finished(app, exception):
         exception: Exception raised during build, if any.
     """
     generate_sitemap(app.outdir)
-    update_build_index(pathlib.Path("build/html"))
+    update_build_index(pathlib.Path(str(app.outdir)))
 
 
 def read_metadata_from_init(init_path):
