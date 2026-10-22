@@ -1,11 +1,13 @@
 import os
+import re
 import ast
 import sys
 import json
 import pathlib
 import subprocess
 import datetime
-import re
+
+from urllib.request import urlopen
 
 
 # METADATA
@@ -256,26 +258,29 @@ def generate_sitemap_index(build_html_dir: pathlib.Path) -> None:
     )
 
 
+
 def get_latest_release_tag() -> str:
     """
-    Return the highest stable semantic-version Git tag.
+    Return the latest stable release version published on PyPI.
+
+    Returns:
+        str: The latest stable version, prefixed with ``v``.
+
+    Raises:
+        RuntimeError: If the package has no stable release available.
+        urllib.error.URLError: If the PyPI request fails.
     """
-    tags = subprocess.check_output(
-        ["git", "tag", "--list"],
-        text=True,
-    ).splitlines()
+    url = "https://pypi.org/pypi/duckframework/json"
 
-    versions = []
+    with urlopen(url, timeout=10) as response:
+        data = json.load(response)
 
-    for tag in tags:
-        match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", tag)
-        if match:
-            versions.append((tuple(map(int, match.groups())), tag))
+    version = data["info"]["version"]
 
-    if not versions:
-        raise RuntimeError("No stable release tags found.")
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        raise RuntimeError(f"Latest PyPI version is not stable: {version}")
 
-    return max(versions, key=lambda item: item[0])[1]
+    return f"v{version}"
 
 
 def update_build_index(output_dir: Path) -> None:
