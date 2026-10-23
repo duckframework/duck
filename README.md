@@ -1,6 +1,6 @@
 <div align="center">
 
-# Duck Framework
+![Duck Wordmark](https://cdn.jsdelivr.net/gh/duckframework/duck@main/assets/images/duck-wordmark.png)
 
 **Duck Framework** is an open-source Python web framework and web server with a built-in reactive UI engine and real-time WebSocket support.
 
