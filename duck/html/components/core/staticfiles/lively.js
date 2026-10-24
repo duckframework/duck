@@ -439,12 +439,13 @@ class DOMPatcher {
    *
    * @param {string} uid - The unique identifier for the element.
    * @param {HTMLElement} el - The DOM element to register.
+   * @returns {void}
    * @throws {ElementRegistrationError} - Thrown when element with provided UID already exists. 
    *   Take this time to cleanup element and unregister before re-registering.
    */
   registerElement(uid, el) {
     if (this.uidMap.has(uid)) {
-      throw new ElementRegistrationError("Element with the provided UID already exists. Cleanup and unregister this element first.");
+      throw new ElementRegistrationError(`Element with the provided UID ${uid} already registered. Cleanup and unregister this element first.`);
     }
     this.uidMap.set(uid, el);
     this.ensureElementCacheDataInitialized(el);
@@ -453,6 +454,7 @@ class DOMPatcher {
   /**
    * Unregisters a DOM element with a UID from the map.
    * @param {string} uid UID of the element
+   * @returns {void}
    */
   unregisterElement(uid) {
     this.uidMap.delete(uid);
@@ -594,7 +596,7 @@ class DOMPatcher {
     // Add elements to UID map.
     elements.forEach((el) => {
       const uid = el.dataset.uid;
-      const events = (el.dataset.events || "").split(',');
+      const events = (el.dataset.events || "").trim() ? el.dataset.events.split(',') : [];
       
       // Register element to UID Map.
       this.registerElement(uid, el);
@@ -605,6 +607,8 @@ class DOMPatcher {
     
     // Bind document specific events
     const pageUid = window?.PAGE_UID || window?.LIVELY_APPLICATION?.PAGE_UID || null;
+
+    // Auto bind document events for the page element.
     this.autobindDocumentEvents(pageUid, true);
   }
   
@@ -859,8 +863,8 @@ class DOMPatcher {
         if (el) {
           const cachedProps = this.getElementCachedProps(el);
           const newProps = payload;
-          const currentEvents = (cachedProps["data-events"] || "").split(',').filter(Boolean);
-          const newEvents = (newProps["data-events"] || "").split(',').filter(Boolean);
+          const currentEvents = (cachedProps["data-events"] || "").trim().split(',').filter(Boolean);
+          const newEvents = (newProps["data-events"] || "").trim().split(',').filter(Boolean);
           const currentUid = (cachedProps["data-uid"] || "").trim();
           const newUid = (newProps["data-uid"] || "").trim();
           
@@ -1087,7 +1091,7 @@ class DOMPatcher {
       const events = props["data-events"];
       
       if (events && uid) {
-        const eventTypes = events.trim().split(",");
+        const eventTypes = events.split(',').map(e => e.trim()).filter(Boolean);
         this.bindEvents(el, uid, eventTypes); // bind events.
       }
       
@@ -1235,7 +1239,7 @@ class DOMPatcher {
     if (!pageEl) throw new LivelyError(`Page element with UID '${pageUid}' could not be resolved.`);
     
     // Bind page document events.
-    const documentEvents = (pageEl.dataset.documentEvents || "").split(',');
+    const documentEvents = (pageEl.dataset.documentEvents || "").split(',').map(e => e.trim()).filter(Boolean);
     
     // Finally bind document events.
     if (documentEvents) {
@@ -1369,7 +1373,7 @@ class DOMPatcher {
   cleanupElement(el, uid, removeFromUidMap = true) {
     const cachedProps = this.getElementCachedProps(el);
     const oldEvents = (cachedProps["data-events"] || "").split(",").filter(Boolean);
-    const oldDocumentEvents = (cachedProps["data-document-events"] || "").split(",").filter(Boolean);
+    const oldDocumentEvents = (cachedProps["data-document-events"] || "").trim().split(",").filter(Boolean);
     
     // Unbind element events.
     if (oldEvents) this.unbindEvents(el, oldEvents);
@@ -2003,7 +2007,7 @@ class LivelyWebSocketClient {
         const pageUid = window.LIVELY_APPLICATION.PAGE_UID;
         const pageEl = this.patcher.getElement(pageUid);
         const cachedProps = this.patcher.getElementCachedProps(pageEl);
-        const documentEvents = (cachedProps["data-document-events"] || "").split(",").filter(Boolean);
+        const documentEvents = (cachedProps["data-document-events"] || "").trim().split(",").filter(Boolean);
         
         if (documentEvents) {
           for (const event of documentEvents) {
@@ -2720,23 +2724,31 @@ if (!window.LIVELY_APPLICATION) {
   // Only one app per client.
   window.LIVELY_SCRIPT_COMPATIBLE = true;
 
+  // Initialize Lively only once, even if this script is loaded multiple times.
+  let livelyInitialized = false;
+
   function initLively() {
-    if (!window.LIVELY_APPLICATION) {
-      // Avoid multiple apps here also.
-      // Override window.open
-      overrideWindowOpen();
-      window.LIVELY_APPLICATION = new LivelyApp();
-      window.LIVELY_APPLICATION.init();
+    if (livelyInitialized || window.LIVELY_APPLICATION) {
+      return;
     }
+
+    // Initialize the Lively application.
+    livelyInitialized = true;
+
+    // Override window.open to use duckNavigate for same-tab navigation.
+    overrideWindowOpen();
+
+    // Initialize the Lively application.
+    window.LIVELY_APPLICATION = new LivelyApp();
+    window.LIVELY_APPLICATION.init();
   }
-  
-  // Bind event to DOMContentLoaded event.
+
+  // Initialize Lively when the DOM is fully loaded.
   window.addEventListener("DOMContentLoaded", initLively);
 
-  // Fires on every page show, including bfcache restores
+  // Reinitialize Lively when the page is restored from the bfcache (back/forward cache).
   window.addEventListener("pageshow", (event) => {
     if (event.persisted) {
-      // Page was restored from bfcache — re-run init logic
       initLively();
     }
   });
