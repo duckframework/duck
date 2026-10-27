@@ -767,18 +767,6 @@ class HtmlComponent:
                 try:
                     LivelyComponentSystem.add_to_registry(uid, component)
 
-                    # If component tree has got event bindings, let's register DOMContentLoaded event so that the event callback will reload page if expired.
-                    if root_component._tree_has_event_bindings and hasattr(root_component, "document_bind") and "DOMContentLoaded" not in root_component._document_event_bindings:
-                        
-                        def ensure_component_fresh(*_, **__):
-                            """
-                            This does nothing but ensures Lively to reload page if root component expired/nolonger in registry.
-                            """
-                            pass
-                            
-                        # Register refresh event.
-                        root_component.document_bind("DOMContentLoaded", ensure_component_fresh, update_self=False) # pyright: ignore[reportAttributeAccessIssue]
-                        
                 except AlreadyInRegistry:
                     pass
                     
@@ -798,7 +786,19 @@ class HtmlComponent:
                 
         # Record the uid assignment action
         root_component._prev_states["prev_uid_assignment_mutation_version"] = (root_component._children_structure_mutation_version, root_component.uid)
-        
+
+        # If component tree has got event bindings, let's register DOMContentLoaded event so that the event callback will reload page if expired.
+        if root_component._tree_has_event_bindings and hasattr(root_component, "document_bind") and "DOMContentLoaded" not in root_component._document_event_bindings:
+            
+            async def ensure_component_fresh(target, _, __, ws):
+                """
+                This ensures Lively to reload page if root component expired/nolonger in registry.
+                """
+                await ws.ensure_browser_state_synced(target.request) # Ensure state synced
+            
+            # Register refresh event.
+            root_component.document_bind("DOMContentLoaded", ensure_component_fresh, update_self=False) # pyright: ignore[reportAttributeAccessIssue]
+                                
     def is_loaded(self) -> bool:
         """
         Returns a boolean on whether if the component is loaded.

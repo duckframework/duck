@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Components JS/CSS/HTML minification is now only enabled by default in production mode and can be altered in by settings `COMPONENTS_MINIFY_JS`, `COMPONENTS_MINIFY_CSS` and `COMPONENTS_MINIFY_HTML` in `settings` file. To force minification in debug you can add a prefix `COMPONENTS_FORCE` to settings mentioned e.g., `COMPONENTS_FORCE_MINIFY_JS`.
+Component JS, CSS, and HTML minification is now enabled by default only in production mode. Configure `COMPONENTS_MINIFY_JS`, `COMPONENTS_MINIFY_CSS`, and `COMPONENTS_MINIFY_HTML` in your settings file to control minification. To force minification in debug mode, use the `COMPONENTS_FORCE_` prefix, e.g., `COMPONENTS_FORCE_MINIFY_JS`.
 - All page components automatically refresh when they expire or are no longer registered, ensuring pages always serve fresh, up-to-date content.
 - All clickable components are now automatically extended with the `HighlightExtension`.
 - Refactored the `Code` component to `CodeBlock` and added support for `filename` and `collapsible` arguments.
@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Fixed 
 
+- Fixed infinite `session expired` states upon components/page auto recovery.
 - Fixed issues scrolling to element for Lively navigation of URLs with hashes.
 - `FileIOStream.read()` / `AsyncFileIOStream.read()` now honor the requested `size`. Reads larger than `chunk_size` are collected chunk by chunk until `size` bytes or EOF. Previously they returned at most one chunk, and that short result was cached under the full-size key.
 - `FileIOStream.write()` / `AsyncFileIOStream.write()` now write in `chunk_size` pieces until all data is written. The cache is patched and `on_write` hooks fire with the bytes actually written, so a short write can no longer leave the cache holding data that never reached the file.
