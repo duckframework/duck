@@ -297,6 +297,8 @@ class HtmlComponent:
         Raises:
             HtmlComponentError: If 'element' is not a string or 'inner_html' is set but 'accept_inner_html' is False.
         """
+        from duck.settings import SETTINGS
+        
         # Note: id, bg_color, color is handled by the BasicExtension
         element = element or self.get_element()
         
@@ -330,10 +332,9 @@ class HtmlComponent:
         # Set some private attributes
         self.__properties = PropertyStore() # Basic properties
         self.__style = StyleStore()  # Properties for CSS styling
-        self.__parent = None
+        self.__parent: Optional['HtmlComponent'] = None
         self.__root = self
-        self.__render_done = False
-        self.__uid = None
+        self.__uid: Optional[str] = None
         self.__is_loading = False
         self.__loaded = False
         self.__inner_html = ""
@@ -389,8 +390,20 @@ class HtmlComponent:
         self.kwargs = kwargs
         self.escape_on_text = kwargs.get('escape_on_text', True) # Whether to escape if modifying component text prop
         self.disable_lively = kwargs.get('disable_lively', False) # Whether to disable lively for this component
-        self.minify_html = kwargs.get("minify_html", True)
-        
+        self.minify_html = (
+            kwargs.get("minify_html", True)
+            and (
+                (
+                    SETTINGS["DEBUG"]
+                    and SETTINGS.get("COMPONENTS_MINIFY_HTML", True)
+                )
+                or (
+                    not SETTINGS["DEBUG"]
+                    and SETTINGS.get("COMPONENTS_FORCE_MINIFY_HTML", True)
+                )
+            )
+        )
+
         # Update inner html if available
         if inner_html:
             self.inner_html = inner_html
@@ -753,6 +766,19 @@ class HtmlComponent:
             ):
                 try:
                     LivelyComponentSystem.add_to_registry(uid, component)
+
+                    # If component tree has got event bindings, let's register DOMContentLoaded event so that the event callback will reload page if expired.
+                    if root_component._tree_has_event_bindings and hasattr(root_component, "document_bind") and "DOMContentLoaded" not in root_component._document_event_bindings:
+                        
+                        def ensure_component_fresh(*_, **__):
+                            """
+                            This does nothing but ensures Lively to reload page if root component expired/nolonger in registry.
+                            """
+                            pass
+                            
+                        # Register refresh event.
+                        root_component.document_bind("DOMContentLoaded", ensure_component_fresh, update_self=False) # pyright: ignore[reportAttributeAccessIssue]
+                        
                 except AlreadyInRegistry:
                     pass
                     
@@ -772,18 +798,6 @@ class HtmlComponent:
                 
         # Record the uid assignment action
         root_component._prev_states["prev_uid_assignment_mutation_version"] = (root_component._children_structure_mutation_version, root_component.uid)
-        
-        # If component tree has got event bindings, let's register DOMContentLoaded event so that the event callback will reload page if expired.
-        if root_component._tree_has_event_bindings and hasattr(root_component, "document_bind") and "DOMContentLoaded" not in root_component._document_event_bindings:
-            
-            def ensure_component_fresh(*_, **__):
-                """
-                This does nothing but ensures Lively to reload page if root component expired/nolonger in registry.
-                """
-                pass
-                
-            # Register refresh event.
-            root_component.document_bind("DOMContentLoaded", ensure_component_fresh, update_self=False)
         
     def is_loaded(self) -> bool:
         """
@@ -975,7 +989,7 @@ class HtmlComponent:
                 if node.accept_inner_html and node.children:
                     queue.extend(node.children)
 
-    def traverse_ancestors(self, func: callable, include_self: bool = True) -> None:
+    def traverse_ancestors(self, func: Callable, include_self: bool = True) -> None:
         """
         Traverses upward from this component to the root, executing a callable on each ancestor.
     

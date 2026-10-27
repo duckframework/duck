@@ -338,18 +338,23 @@ class Script(InnerComponent):
     It can be used to define inline scripts that interact with other components.
 
     Args:
-        inner_html (str): The raw JavaScript to embed.
-        minify (bool): Optional. Whether to minify the JavaScript. Defaults to True.
+        inner_html (str):
+            The raw JavaScript to embed.
+
+        minify_js (bool):
+            Optional. Whether to minify the JavaScript. Defaults to True.
+            If True, the script will be minified in production mode. In debug mode, minification can be forced with `COMPONENTS_FORCE_MINIFY_JS`.
+            In production mode, minification can be disabled with `COMPONENTS_MINIFY_JS`.
 
     **Features:**
     - Supports inline JavaScript execution.
     - Can be dynamically added to any component.
     - Provides flexibility for defining custom client-side logic.
-    - Minifies the embedded script by default (comments, indentation, and
-      blank lines only -- see `minify_js`), pass `minify=False` to disable.
+    - Minifies the embedded script by default, in production mode (comments, indentation, and
+      blank lines only -- see `minify_js`), pass `minify_js=False` to disable.
 
     **Example Usage:**
-    ```py
+    ```python
     script = Script(
         inner_html='''
             function showAlert() {
@@ -370,15 +375,31 @@ class Script(InnerComponent):
     **Notes:**
     - **Automatic Nonce Addition**: When `ENABLE_HEADERS_SECURITY_POLICY=True` and `csp_nonce_flag` is set in `CSP_TRUSTED_SOURCES`, the `nonce` property is automatically added.
     - **Request Resolution Required**: For the `nonce` to be set automatically, the request must be resolved. This is achieved by calling `get_request_or_raise` on the component root (or the current component if the root is `None`).
+    - **JS Minification**: The minification is only done if `minify_js` is set to True and the settings allow it. In debug mode, minification can be forced with `COMPONENTS_FORCE_MINIFY_JS`. In production mode, minification can be disabled with `COMPONENTS_MINIFY_JS`.
     """
 
     def on_create(self) -> None:
         """
         Initializes the component and, unless disabled, minifies the embedded script.
         """
+        from duck.settings import SETTINGS
+
         super().on_create()
 
-        if self.kwargs.get("minify", True) and self.inner_html:
+        if (
+            self.kwargs.get("minify_js", True)
+            and self.inner_html
+            and (
+                (
+                    SETTINGS["DEBUG"]
+                    and SETTINGS.get("COMPONENTS_FORCE_MINIFY_JS", False)
+                )
+                or (
+                    not SETTINGS["DEBUG"]
+                    and SETTINGS.get("COMPONENTS_MINIFY_JS", True)
+                )
+            )
+        ):
             self.inner_html = minify_js(self.inner_html)
 
     @property

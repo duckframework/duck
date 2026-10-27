@@ -146,18 +146,23 @@ class Style(InnerComponent):
     It can be used to dynamically style elements without needing an external stylesheet.
 
     Args:
-        inner_html (str): The raw CSS to embed.
-        minify (bool): Optional. Whether to minify the CSS. Defaults to True.
+        inner_html (str):
+            The raw CSS to embed.
+
+        minify_css (bool):
+            Optional. Whether to minify the CSS. Defaults to True.
+            If True, the CSS will be minified in production mode. In debug mode, minification can be forced with `COMPONENTS_FORCE_MINIFY_CSS`.
+            In production mode, minification can be disabled with `COMPONENTS_MINIFY_CSS`.
 
     **Features:**
     - Supports inline CSS.
     - Can be dynamically added to any component.
     - Enables styling customization for other components.
-    - Minifies the embedded CSS by default (comments and redundant
-      whitespace only — see `minify_css`), pass `minify=False` to disable.
+    - Minifies the embedded CSS by default, in production mode.(comments and redundant
+      whitespace only — see `minify_css`), pass `minify_css=False` to disable.
 
     **Example Usage:**
-    ```py
+    ```python
     style = Style(
         inner_html='''
             .custom-popup {
@@ -180,17 +185,33 @@ class Style(InnerComponent):
     - **Automatic Nonce Addition**: When `ENABLE_HEADERS_SECURITY_POLICY=True` and `csp_nonce_flag` is set in `CSP_TRUSTED_SOURCES`, the `nonce` property is automatically added.
     - **Request Resolution Required**: For the `nonce` to be set automatically, the request must be resolved. This is achieved by calling `get_request_or_raise` on the component root (or the current component if the root is `None`).
     - The `inner_html` parameter must contain valid CSS code.
-    - This component is intended for **inline styles** and does not support linking to external CSS files.
+    - This component is intended for **inline block styles** and does not support linking to external CSS files.
     - Styles defined within this component will apply globally unless scoped using class or ID selectors.
+    - **CSS Minification**: The minification process is only applied when `SETTINGS["DEBUG"]` is `True` and `SETTINGS.get("COMPONENTS_MINIFY_CSS", True)` is also `True`. In production mode, minification can be disabled with `SETTINGS.get("COMPONENTS_MINIFY_CSS", False)`.
     """
 
     def on_create(self) -> None:
         """
         Initializes the component and, unless disabled, minifies the embedded CSS.
         """
+        from duck.settings import SETTINGS
+
         super().on_create()
 
-        if self.kwargs.get("minify", True) and self.inner_html:
+        if (
+            self.kwargs.get("minify_css", True)
+            and self.inner_html
+            and (
+                (
+                    SETTINGS["DEBUG"]
+                    and SETTINGS.get("COMPONENTS_FORCE_MINIFY_CSS", False)
+                )
+                or (
+                    not SETTINGS["DEBUG"]
+                    and SETTINGS.get("COMPONENTS_MINIFY_CSS", True)
+                )
+            )
+        ):
             self.inner_html = minify_css(self.inner_html)
 
     @property

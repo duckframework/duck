@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Components JS/CSS/HTML minification is now only enabled by default in production mode and can be altered in by settings `COMPONENTS_MINIFY_JS`, `COMPONENTS_MINIFY_CSS` and `COMPONENTS_MINIFY_HTML` in `settings` file. To force minification in debug you can add a prefix `COMPONENTS_FORCE` to settings mentioned e.g., `COMPONENTS_FORCE_MINIFY_JS`.
 - All page components automatically refresh when they expire or are no longer registered, ensuring pages always serve fresh, up-to-date content.
 - All clickable components are now automatically extended with the `HighlightExtension`.
 - Refactored the `Code` component to `CodeBlock` and added support for `filename` and `collapsible` arguments.
