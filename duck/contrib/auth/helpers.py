@@ -113,42 +113,107 @@ def set_default_auth_backend(backend: str) -> None:
     DEFAULT_AUTH_BACKEND = backend
 
 
-def authenticate(request: Any, username: str, password: str) -> Any:
+def authenticate(
+    request: Any,
+    username: str | None = None,
+    password: str | None = None,
+    *,
+    explicit_username: bool = False,
+    **fields: str,
+) -> Any:
     """
     Verify credentials against the User model and return the user if valid.
 
-    Looks up the user by the model's ``USERNAME_FIELD``, then verifies the
+    Identify the user with exactly one of: ``username`` (looked up by the
+    model's ``USERNAME_FIELD``, or by the field literally named ``username``
+    when ``explicit_username`` is true), or a single explicit field passed as
+    a keyword argument, e.g. ``email="brian@example.com"``. Then verifies the
     password using Django's hasher. Does not touch the session or any auth
     state — that is ``login``'s responsibility.
 
     Args:
-        request: The Duck request object.
-        username: The username or email to look up.
-        password: The plain-text password to verify.
+        request:
+            The Duck request object.
+        
+        username:
+            The value to look up. Matched against ``USERNAME_FIELD``, or
+            against the ``username`` field when ``explicit_username`` is true.
+            Cannot be combined with an explicit field.
+            
+        password:
+            The plain-text password to verify.
+            
+        explicit_username:
+            If true, look ``username`` up using the model's
+            ``username`` field instead of ``USERNAME_FIELD``.
+            
+        **fields:
+            A single explicit lookup, e.g. ``email="brian@example.com"``.
+            The field must be a unique field on the User model.
 
     Returns:
         The matching User instance on success.
 
     Raises:
-        AuthenticationError: If the user does not exist, is inactive, or the
+        ValueError:
+            If ``password`` is missing, if no identifier or more than
+            one identifier is given, if ``explicit_username`` is set without
+            ``username``, or if the field does not exist or is not unique.
+        
+        AuthenticationError:
+            If the user does not exist, is inactive, or the
             password does not match.
 
     Example:
     ```py
-    user = authenticate(request, "brian@example.com", "secret")
+    user = authenticate(request, "brian_or_brian@gmail.com", "secret")
+    user = authenticate(request, "brian", "secret", explicit_username=True)
+    user = authenticate(request, password="secret", email="brian@example.com")
     login(request, user)
     ```
     """
+    if password is None:
+        raise ValueError("'password' is required.")
+
     User = get_user_model()
-    username_field = User.USERNAME_FIELD
+
+    # The flag only changes how 'username' is resolved, so it needs a value
+    if explicit_username and username is None:
+        raise ValueError("'explicit_username' requires 'username' to be provided.")
+
+    # Enforce a single identifier: the implicit username or one explicit field
+    if username is not None and fields:
+        raise ValueError("Provide either 'username' or an explicit field, not both.")
+
+    if username is not None:
+        lookup_field = "username" if explicit_username else User.USERNAME_FIELD
+        value = username
+    
+    elif len(fields) == 1:
+        lookup_field, value = next(iter(fields.items()))
+    
+    else:
+        raise ValueError(
+            "Provide exactly one identifier: 'username' or a single explicit field."
+        )
+
+    # Reject unknown or non-unique fields to avoid ambiguous or unsafe lookups
+    try:
+        model_field = User._meta.get_field(lookup_field)
+    except FieldDoesNotExist as exc:
+        raise ValueError(f"Invalid lookup field: {lookup_field!r}") from exc
+
+    if not getattr(model_field, "unique", False):
+        raise ValueError(f"Lookup field {lookup_field!r} must be unique.")
 
     try:
-        # Fetch user by the model's primary lookup field
-        user = User.objects.get(**{username_field: username})
+        # Fetch user by the explicit field, or the model's primary lookup field
+        user = User.objects.get(**{lookup_field: value})
+    
     except User.DoesNotExist as exc:
         # Constant-time fallback to prevent user enumeration via timing
         django_check_password(password, "!")
-        raise AuthenticationError(f"Authentication failed: {exc}") from exc
+        raise AuthenticationError("Authentication failed: invalid credentials.") from exc
 
     # Reject inactive accounts before touching the password
     if not user.is_active:
@@ -418,27 +483,60 @@ async def async_get_user_id(request, backend: str | None = None):
 
 async def async_authenticate(
     request: Any,
-    username: str,
-    password: str,
+    username: str | None = None,
+    password: str | None = None,
+    *,
+    explicit_username: bool = False,
+    **fields: str,
 ) -> Any:
     """
     Async version of ``authenticate``.
 
     Wraps the sync ORM calls via ``ensure_async`` so the event loop is
     never blocked.
-
+    
     Args:
-        request: The Duck request object.
-        username: The username or email to look up.
-        password: The plain-text password to verify.
+        request:
+            The Duck request object.
+        
+        username:
+            The value to look up. Matched against ``USERNAME_FIELD``, or
+            against the ``username`` field when ``explicit_username`` is true.
+            Cannot be combined with an explicit field.
+            
+        password:
+            The plain-text password to verify.
+            
+        explicit_username:
+            If true, look ``username`` up using the model's
+            ``username`` field instead of ``USERNAME_FIELD``.
+            
+        **fields:
+            A single explicit lookup, e.g. ``email="brian@example.com"``.
+            The field must be a unique field on the User model.
 
     Returns:
         The matching User instance on success.
 
     Raises:
-        AuthenticationError: Propagated from ``authenticate``.
+        ValueError:
+            If ``password`` is missing, if no identifier or more than
+            one identifier is given, if ``explicit_username`` is set without
+            ``username``, or if the field does not exist or is not unique.
+        
+        AuthenticationError:
+            If the user does not exist, is inactive, or the
+            password does not match.
+
+    Example:
+    ```py
+    user = authenticate(request, "brian_or_brian@gmail.com", "secret")
+    user = authenticate(request, "brian", "secret", explicit_username=True)
+    user = authenticate(request, password="secret", email="brian@example.com")
+    login(request, user)
+    ```
     """
-    return await ensure_async(authenticate)(request, username, password)
+    return await ensure_async(authenticate)(request, username, password, explicit_username=explicit_username, **fields)
 
 
 async def async_login(
