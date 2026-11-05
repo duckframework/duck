@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## Unreleased
+
+### Added
+
+- Nothing yet
+
+### Fixed
+
+- Fixed `FileInput` component having a `Clickable` subclass which caused an error.
+
+---
+
 ## [2.4.0] - October 27, 2026
 
 ### Added

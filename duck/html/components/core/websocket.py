@@ -449,13 +449,27 @@ class EventHandler:
         if component and component._skipped_registration_error:
             logger.log(f"Skipped dispatch for component `{uid}`: {component._skipped_registration_error}.\n", level=logger.WARNING)
             return
-            
-        if not owner_token or not presented_token or not secrets.compare_digest(owner_token, presented_token):
-            if SETTINGS['DEBUG']:
+
+        # Check if the connection is the owner of the root component.
+        if not owner_token:
+            reason = "root component has no registered owner token"
+
+        elif not presented_token:
+            reason = "connection did not present an owner token"
+
+        elif not secrets.compare_digest(owner_token, presented_token):
+            reason = "presented owner token does not match the registered owner"
+        
+        else:
+            reason = None
+
+        if reason:
+            if SETTINGS["DEBUG"]:
                 logger.log(
-                    f"Rejected dispatch for root_uid `{root_uid}`: connection is not the owner.\n",
+                    f"Rejected dispatch for root_uid `{root_uid}`: {reason}.\n",
                     level=logger.WARNING,
                 )
+
             await self.ws_view.send_data([EventOpCode.COMPONENT_UNKNOWN, [uid, False]])
             return
     

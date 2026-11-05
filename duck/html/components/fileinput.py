@@ -9,7 +9,7 @@ from duck.html.components.label import Label
 from duck.html.components.button import Clickable
 
 
-class FileInput(Clickable, Input):
+class FileInput(Input):
     """
     Basic FileInput component.
     """
