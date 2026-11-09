@@ -57,7 +57,7 @@ class DashboardPage(Page):
         self.set_robots("noindex, nofollow")
 
         # Inject dashboard stylesheet
-        self.add_stylesheet(static("dashboard/css/dashboard.css"))
+        self.add_stylesheet(static("duck-dashboard/css/dashboard.css"))
 
         # Fetch initial data snapshots
         snapshot = get_full_snapshot()

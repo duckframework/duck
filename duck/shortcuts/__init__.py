@@ -99,6 +99,7 @@ def csrf_token(request) -> str:
     return token
 
 
+@lru_cache(maxsize=1024)
 def static(resource_path: str, absolute: bool = True) -> str:
     """
     Returns the static URL for the provided resource path.
@@ -117,6 +118,7 @@ def static(resource_path: str, absolute: bool = True) -> str:
     if not is_good_url_path(resource_path):
         raise TypeError(f"Please provide valid URL path in form '/some/path' not {resource_path}")
     
+    # Build some URL's
     resource_path = sanitize_path_segment(resource_path)
     static_url = URL(SETTINGS["STATIC_URL"])
     
@@ -127,6 +129,7 @@ def static(resource_path: str, absolute: bool = True) -> str:
     # Serve directly from server
     try:
         root_url = "/" if not absolute else Meta.get_absolute_server_url()
+    
     except Exception:
         root_url = "/"
     
@@ -135,6 +138,7 @@ def static(resource_path: str, absolute: bool = True) -> str:
     return URL.urljoin(static_url_str, resource_path)
 
 
+@lru_cache(maxsize=1024)
 def media(resource_path: str, absolute: bool = True) -> str:
     """
     Returns the media URL for the provided resource path.
@@ -152,9 +156,10 @@ def media(resource_path: str, absolute: bool = True) -> str:
     """
     if not is_good_url_path(resource_path):
         raise TypeError(
-            f"Please provide valid url path in form '/some/path' not {resource_path}"
+            f"Please provide valid URL path in form '/some/path' not {resource_path}"
         )
     
+    # Build some resources
     resource_path = sanitize_path_segment(resource_path)
     media_url = URL(SETTINGS["MEDIA_URL"])
     
@@ -165,6 +170,7 @@ def media(resource_path: str, absolute: bool = True) -> str:
     # Serve directly from server
     try:
         root_url = "/" if not absolute else Meta.get_absolute_server_url()
+    
     except Exception:
         root_url = "/"
     
@@ -188,6 +194,10 @@ def static_filepath(relative_filepath: str, blueprint: Optional[Blueprint] = Non
     favicon = static_filepath('images/favicon.ico')
     print(favicon) # May print something like /usr/home/myproject/web/ui/static/images/favicon.ico
     ```
+    
+    Notes:
+        This doesn't confirm whether the static file exists but only joins staticfile plus the resolved static dir.
+        This doesn't iterate through static directories to resolve the correct path unlike `dev_find_staticfile` in `StaticFiles` blueprint.
     """
     if target_static_dir and blueprint:
         raise TypeError("Please provide either 'target_static_dir' or 'blueprint', not both.")
@@ -197,7 +207,10 @@ def static_filepath(relative_filepath: str, blueprint: Optional[Blueprint] = Non
     
     if SETTINGS['DEBUG']:
         if blueprint:
-            file = joinpaths(blueprint.root_directory, blueprint.static_dir, relative_filepath)
+            if not blueprint_static_dir_is_absolute:
+                file = joinpaths(blueprint.root_directory, blueprint.static_dir, relative_filepath)
+            else:
+                file = joinpaths(blueprint.static_dir, relative_filepath)
             return file
         else:
             global_static_dirs = SETTINGS['GLOBAL_STATIC_DIRS']
@@ -207,16 +220,21 @@ def static_filepath(relative_filepath: str, blueprint: Optional[Blueprint] = Non
             
             # Choose target static directory and return the final filepath
             target_static_dir = global_static_dirs[0]
-            return joinpaths(target_static_dir, relative_filepath)  
+            return joinpaths(target_static_dir, relative_filepath)
+            
     else:
         # We are in production.
-        target_static_dir = SETTINGS['STATIC_ROOT']
+        target_static_dir = target_static_dir or SETTINGS['STATIC_ROOT']
         
         if blueprint:
             # Convert staticdir to relative path
-            abs_static_dir = joinpaths(blueprint.root_directory, blueprint.static_dir)
-            relative_static_dir = pathlib.Path(abs_static_dir).relative_to(pathlib.Path(blueprint.location).parent)
+            if not blueprint.static_dir_is_absolute:
+                abs_static_dir = joinpaths(blueprint.root_directory, blueprint.static_dir)
+                relative_static_dir = pathlib.Path(abs_static_dir).relative_to(pathlib.Path(blueprint.location).parent)
             
+            else:
+                return joinpaths(target_static_dir, blueprint.name, relative_filepath)
+                
             # The blueprint stripped_staticdir is a dir with removed staticdir name from it
             # so that function static() can resolve files correctly in production.
             parts = pathlib.Path(relative_static_dir).parts
@@ -707,9 +725,13 @@ def resolve(name: str, absolute: bool = True, fallback_url: Optional[str] = None
             else:
                 root_url = Meta.get_absolute_server_url()
 
-            # Return absolute url
+            # Build absolute url
             abs_url = build_absolute_uri(root_url, url, normalization_ignore_chars=["*", "<", ">"])
+            
+            # Return the absolute URL
             return abs_url
+        
+        # Return the URL
         return "/" + url if not url.startswith("/") else url
 
     except RouteNotFoundError:
@@ -738,9 +760,13 @@ def to_response(value: Any, **kwargs) -> Union[BaseResponse, HttpResponse]:
 
     if not isinstance(value, BaseResponse):
         if not any([isinstance(value, t) for t in allowed_types]):
-            raise TypeError(f"Value '{value}' cannot be converted to http response. Consider these types: {allowed_types}")
+            raise TypeError(f"Value '{value}' cannot be converted to HTTP response. Consider these types: {allowed_types}")
+        
         if isinstance(value, Component):
             value = ComponentResponse(value, **kwargs)
+        
         else:
             value = HttpResponse("%s" % value if not isinstance(value, bytes) else value, **kwargs)
+    
+    # Return final http response
     return value

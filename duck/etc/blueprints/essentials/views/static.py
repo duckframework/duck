@@ -18,7 +18,7 @@ from duck.routes import (
     blueprint_joinpath,
 )
 from duck.settings import SETTINGS
-from duck.shortcuts import not_found404
+from duck.shortcuts import not_found404, static_filepath
 from duck.http.request import HttpRequest
 from duck.http.response import FileResponse
 from duck.utils.path import joinpaths
@@ -44,18 +44,27 @@ def dev_find_staticfile(staticfile: str) -> Optional[str]:
     # Try finding static file in global static dirs
     for static_dir in global_static_dirs:
         staticfile = joinpaths(str(static_dir), original_staticfile)
+        
         if os.path.isfile(staticfile):
             return staticfile
     
     # Try again finding static file in blueprints static dirs.
     for static_dir, blueprint in blueprint_static_dirs:
         try:
-            staticfile = blueprint_joinpath(static_dir, original_staticfile, blueprint)
+            if blueprint.static_dir_is_absolute:
+                file = str(original_staticfile).replace("\\", "/").lstrip('/').lstrip(blueprint.name)
+                staticfile = joinpaths(static_dir, file)
+                
+            else:
+                # Try resolving static filepath
+                staticfile = blueprint_joinpath(static_dir, original_staticfile, blueprint)
+                
         except (BlueprintJoinPathError, BlueprintJoinPathNameNoMatch, ValueError):
             # Raised if maybe staticfile could not be resolved.
             continue
             
         if os.path.isfile(staticfile):
+            # Return is only the static file is found.
             return staticfile
 
 

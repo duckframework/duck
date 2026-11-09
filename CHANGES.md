@@ -1,0 +1,2 @@
+- `Blueprints` now support absolute/external static and template directories.
+- Changed default `Dashboard` blueprint name from `dashboard` to `duck-dashboard`.

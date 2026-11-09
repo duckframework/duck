@@ -82,7 +82,7 @@ class DashboardTopbar(InnerComponent):
         )
 
         # Resolve the logout URL from the blueprint route name
-        logout_url = resolve("dashboard.logout")
+        logout_url = resolve("duck-dashboard.logout")
         logout_link = Link(
             url=logout_url,
             text="Logout",

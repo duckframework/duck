@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Nothing yet
 
+### Changed
+
+- `authenticate` now accepts a single explicit lookup field as a keyword (e.g. `email="..."`) and a keyword-only `explicit_username` flag to look up by the `username` field instead of `USERNAME_FIELD`; combining multiple identifiers raises `ValueError`.
+
 ### Fixed
 
 - Fixed `FileInput` component having a `Clickable` subclass which caused an error.

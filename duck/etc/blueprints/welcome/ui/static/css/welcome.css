@@ -180,6 +180,31 @@ body::before {
   gap: 0.25rem;
 }
 
+/* Closed state: no transition, so closing is instant */
+.wc-nav-links {
+    transform: translateY(-100%);
+    opacity: 0;
+    visibility: hidden;
+    transition: none;
+}
+
+/* Open state: animates in only */
+.wc-nav-open .wc-nav-links {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+    transition: transform .2s ease, opacity .2s ease;
+}
+
+/* Burger bars: same idea */
+.wc-burger-bar {
+    transition: none;
+}
+
+.wc-nav-open .wc-burger-bar {
+    transition: transform .2s ease, opacity .2s ease;
+}
+
 .wc-nav-link {
   font-family: var(--mono);
   font-size: 0.7rem;

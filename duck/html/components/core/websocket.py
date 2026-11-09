@@ -401,7 +401,7 @@ class EventHandler:
             queue_browser_state_response(root_request, dummy_response)
             
             # Now tell the client to sync browser state using fetch().
-            fetch_url = resolve("lively-browser-sync") + f"?rid={root_request.ID}"
+            fetch_url = resolve("lively.browser-sync") + f"?rid={root_request.ID}"
             await self.ws_view.send_data([EventOpCode.SYNC_BROWSER_STATE, fetch_url])
             
     async def dispatch(self, opcode: EventOpCode, data: List[Any]):

@@ -18,7 +18,7 @@ def resolve_dashboard_url() -> str | None:
         is registered in the current project.
     """
     from duck.shortcuts import resolve
-    return resolve("dashboard.index", fallback_url="") or None
+    return resolve("duck-dashboard.index", fallback_url="") or None
 
 
 class NavBar(InnerComponent):
@@ -43,8 +43,11 @@ class NavBar(InnerComponent):
         and the inline toggle script.
         """
         super().on_create()
-        self.props["class"] = "wc-nav"
-
+        
+        # Set class
+        self.klass = "wc-nav"
+        
+        # Add children
         self.add_children([
             self.build_brand(),
             self.build_links(),
@@ -83,6 +86,7 @@ class NavBar(InnerComponent):
             ("Site", "https://duckframework.com"),
             ("Contribute", "https://duckframework.com/contribute"),
         ]
+        
         links_html = "".join(
             f'<a class="wc-nav-link" href="{url}" target="_blank" '
             f'rel="noopener noreferrer">{label}</a>'
@@ -91,6 +95,7 @@ class NavBar(InnerComponent):
 
         # Append a highlighted dashboard link when one is registered
         dashboard_url = resolve_dashboard_url()
+        
         if dashboard_url:
             links_html += (
                 f'<a class="wc-nav-link wc-nav-link-cta" href="{dashboard_url}">'
@@ -107,7 +112,7 @@ class NavBar(InnerComponent):
         """
         Returns the hamburger button shown only on mobile.
 
-        Clicking it toggles the ``wc-nav-open`` class on the nav,
+        Clicking it toggles the `wc-nav-open` class on the nav,
         which slides the link drawer into view and animates the
         burger bars into an X.
 
@@ -117,12 +122,13 @@ class NavBar(InnerComponent):
         return Container(
             element="button",
             klass="wc-nav-burger",
+            id="wc-nav-burger",
             props={
-                "id": "wc-nav-burger",
                 "aria-label": "Toggle navigation",
                 "aria-expanded": "false",
                 "aria-controls": "wc-nav-links",
                 "type": "button",
+                "style": "touch-action:manipulation;-webkit-tap-highlight-color:transparent;",
             },
             inner_html=(
                 '<span class="wc-burger-bar"></span>'
@@ -136,7 +142,7 @@ class NavBar(InnerComponent):
         Returns an inline script that wires the burger button toggle.
 
         The script is intentionally tiny — it just flips the
-        ``wc-nav-open`` class and syncs ``aria-expanded``. All visual
+        `wc-nav-open` class and syncs ``aria-expanded``. All visual
         logic lives in CSS.
 
         Returns:
@@ -148,7 +154,8 @@ class NavBar(InnerComponent):
                 "(function(){"
                 "var btn=document.getElementById('wc-nav-burger');"
                 "var nav=btn&&btn.closest('.wc-nav');"
-                "if(!btn||!nav)return;"
+                "if(!btn||!nav||btn.dataset.bound)return;"
+                "btn.dataset.bound='1';"
                 "btn.addEventListener('click',function(){"
                 "var open=nav.classList.toggle('wc-nav-open');"
                 "btn.setAttribute('aria-expanded',open);"
@@ -201,8 +208,11 @@ class Footer(InnerComponent):
         Builds the footer brand label and link row.
         """
         super().on_create()
-        self.props["class"] = "wc-footer"
-
+        
+        # Set class
+        self.klass = "wc-footer"
+        
+        # Add children
         self.add_children([
             self.build_brand(),
             self.build_links(),
@@ -236,6 +246,7 @@ class Footer(InnerComponent):
             ("Documentation", "https://docs.duckframework.com"),
             ("Contribute", "https://duckframework.com/contribute"),
         ]
+        
         links_html = "".join(
             f'<a class="wc-footer-link" href="{url}" target="_blank" '
             f'rel="noopener noreferrer">{label}</a>'
@@ -244,7 +255,9 @@ class Footer(InnerComponent):
 
         # Append the dashboard link when one is registered
         dashboard_url = resolve_dashboard_url()
+        
         if dashboard_url:
             links_html += f'<a class="wc-footer-link" href="{dashboard_url}">Dashboard</a>'
-
+        
+        # Return the final container
         return Container(klass="wc-footer-links", inner_html=links_html)

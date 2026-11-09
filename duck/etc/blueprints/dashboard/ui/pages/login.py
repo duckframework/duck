@@ -44,7 +44,7 @@ class LoginPage(Page):
         self.set_robots("noindex, nofollow")
 
         # Inject dashboard stylesheet for shared tokens + login styles
-        self.add_stylesheet(static("dashboard/css/dashboard.css"))
+        self.add_stylesheet(static("duck-dashboard/css/dashboard.css"))
 
         # Build the error label — updated reactively on bad credentials
         self.error_label = Paragraph(
@@ -282,7 +282,9 @@ class LoginPage(Page):
         await async_login(request=self.request, user_id=DASHBOARD_USER_ID, backend="jwt")
         
         # Redirect to the dashboard on successful login
-        dashboard_url = resolve("dashboard.index")
+        dashboard_url = resolve("duck-dashboard.index")
+        
+        # Open dashboard
         await ws.execute_js(f"window.open('{dashboard_url}');")
 
     async def _show_error_async(self, message: str, ws) -> None:

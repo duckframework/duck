@@ -70,42 +70,6 @@ class LivelyComponentSystem:
     """
     
     @classmethod
-    def get_urlpatterns(cls) -> List[URLPattern]:
-        """
-        Returns the appropriate URL patterns for the whole system.
-        """
-        from duck.html.components.core.browser_state import sync_browser_state
-        from duck.html.components.lively_utils.file_request import receive_ws_file
-        
-        ws_view_cls = cls.get_websocket_view_cls()
-        
-        def serve_staticfiles(request, staticfile: str) -> HttpResponse:
-            """
-            Function to serve static files for the component system e.g. serving msgpack.js & lively.js.
-            """
-            target_dir = joinpaths(duck_storage, "html/components/core/staticfiles")
-            
-            if SETTINGS['NATIVE_ENABLED']:
-                from duck_native.storage import NATIVE_STORAGE
-                
-                target_dir = NATIVE_STORAGE / "components/staticfiles"
-                
-            # Build static file
-            staticfile = joinpaths(target_dir, staticfile)
-            
-            if not os.path.isfile(staticfile):
-                return not_found404(request)
-            
-            return FileResponse(staticfile)
-            
-        return ([
-            path("/ws/lively/", ws_view_cls, name="lively-component-system"),
-            path("/lively/static/<staticfile>", serve_staticfiles, name="lively-staticfiles"),
-            path("/lively/sync", sync_browser_state, name="lively-browser-sync"),
-            path("/lively/ws-file", receive_ws_file, name="lively-receive-ws-file"),
-        ])
-        
-    @classmethod
     def get_websocket_view_cls(cls) -> Type:
         """
         Returns the WebSocket view class responsible for handling communication

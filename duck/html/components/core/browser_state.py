@@ -43,7 +43,7 @@ def queue_browser_state_response(component_request: HttpRequest, response: HttpR
 
 def sync_browser_state(request):
     """
-    This syncs the browser state like updating sensitive HTTPONLY cookies.
+    This view syncs the browser state like updating sensitive HTTPONLY cookies.
     
     Notes:
         This will be called within Lively on client side using `fetch()`.

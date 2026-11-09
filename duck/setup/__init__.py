@@ -15,7 +15,6 @@ from duck.routes import register_blueprints, register_urlpatterns
 from duck.logging import logger
 from duck.settings import SETTINGS
 from duck.settings.loaded import SettingsLoaded
-from duck.html.components.core.system import LivelyComponentSystem
 from duck.env import is_testing_environment
 
 
@@ -155,19 +154,16 @@ def setup(make_app_dirs: bool = True, use_threads_for_heavy_work: bool = True):
     # Try preparing Django backend
     try:
         prepare_django(True)
+        
     except Exception as e:
         logger.warn(f"Django setup failed: {e}", DjangoSetupWarning)
+        
         if SETTINGS['DEBUG']:
             logger.log_exception(e)
             
     # Register some urlpatterns
     register_urlpatterns(SettingsLoaded.URLPATTERNS)
     register_blueprints(SettingsLoaded.BLUEPRINTS)
-    
-    # Register Lively component system urlpattern
-    if LivelyComponentSystem.is_active():
-        lively_urlpatterns = LivelyComponentSystem.get_urlpatterns()
-        register_urlpatterns(lively_urlpatterns) # register lively component system urlpatterns.
     
     if base_dir not in sys.path:
         # Add project directory to path

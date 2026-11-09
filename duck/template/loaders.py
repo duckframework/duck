@@ -4,6 +4,7 @@ Custom template loaders for Duck.
 import os
 
 from functools import lru_cache
+from pathlib import Path
 from typing import (
     List,
     Optional,
@@ -38,7 +39,11 @@ class BaseLoader:
         
         for blueprint in SettingsLoaded.BLUEPRINTS:
             if blueprint.enable_template_dir:
-                template_dir = joinpaths(blueprint.root_directory, blueprint.template_dir)
+                template_dir = joinpaths(
+                    blueprint.root_directory,
+                    blueprint.template_dir,
+                ) if not blueprint.template_dir_is_absolute else blueprint.template_dir
+                
                 yield (blueprint, template_dir)
                 
     def global_template_dirs(self) -> List[str]:
@@ -68,9 +73,11 @@ class Jinja2FileSystemLoader(BaseLoader, Jinja2BaseLoader):
             try:
                 with open(template_path, "r") as fd:
                     source = fd.read()
+                    
             except FileNotFoundError:
                 # Template not found anymore, maybe deleted
                 raise TemplateNotFound(f"Template `{template}` doesn't exist anymore.")
+            
             return (source, template_path, lambda: mtime == os.path.getmtime(template_path))
         
         # First lookup for template in global_template_dirs
@@ -111,7 +118,10 @@ class DjangoFileSystemLoader(BaseLoader, DjangoBaseLoader):
             try:
                 with open(origin.name, encoding=self.engine.file_charset) as fd:
                     contents = fd.read()
+                
+                # Return file contents
                 return contents
+                
             except FileNotFoundError:
                 # File not found anymore, may be deleted.
                 raise TemplateDoesNotExist(f"Template `{origin.name}` doesn't exist anymore.")

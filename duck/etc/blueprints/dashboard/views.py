@@ -31,6 +31,7 @@ async def dashboard(request: HttpRequest):
     """
     try:
         user_id = get_user_id(request, backend="jwt")
+    
     except (JWTInvalid, JWTExpired):
         user_id = None
         request.JWT.reset()
@@ -55,10 +56,13 @@ async def logout(request: HttpRequest):
     # Logout user
     try:
         await async_logout(request, backend="jwt")
+    
     except (JWTInvalid, JWTExpired):
         request.JWT.reset()
         pass
         
     # Redirect user to dashboard URL
-    dashboard_url = resolve("dashboard.index")
+    dashboard_url = resolve("duck-dashboard.index")
+    
+    # Redirect to Dashboard
     return redirect(dashboard_url)

@@ -249,9 +249,14 @@ def get_triggers_and_automations(
                 trigger.check_trigger()  # check if this method is implemented
             except NotImplementedError:
                 raise SettingsError("Method 'check_trigger' not implemented")
+            
+            # Add automation plus it's trigger'
             automations.append((trigger, automation))
+    
     except Exception as e:
         raise SettingsError(f"Error loading automations: {e}")
+    
+    # Return final automations
     return automations
 
 
@@ -268,13 +273,21 @@ def get_blueprints() -> List[Blueprint]:
     
     welcome_blueprint = "duck.etc.blueprints.welcome.blueprint.Welcome"
     dashboard_blueprint = "duck.etc.blueprints.dashboard.blueprint.Dashboard"
+    lively_blueprint = "duck.etc.blueprints.lively.blueprint.Lively"
     
     # Initialize some data
     blueprints = [*SETTINGS["BLUEPRINTS"]]
     blueprint_objs = []
     builtin_blueprints_only = True
     
-    if SETTINGS['ENABLE_DASHBOARD'] and is_dashboard_securely_configured() and dashboard_blueprint not in blueprints:
+    if SETTINGS["ENABLE_COMPONENT_SYSTEM"] and lively_blueprint not in blueprints:
+        blueprints.append(lively_blueprint)
+    
+    if (SETTINGS['ENABLE_DASHBOARD']
+        and is_dashboard_securely_configured()
+        and lively_blueprint in blueprints
+        and dashboard_blueprint not in blueprints
+    ):
         blueprints.append(dashboard_blueprint)
         
     try:

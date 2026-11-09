@@ -9,6 +9,7 @@ from duck.routes import Blueprint
 from duck.urls import path
 from duck.logging import logger
 from duck.security.dashboard import get_dashboard_security_issues, InsecureDashboardWarning
+from duck.settings import SETTINGS
 
 from . import views
 
@@ -19,10 +20,13 @@ issues = get_dashboard_security_issues()
 if issues:
     logger.warn(InsecureDashboardWarning, f"Dashboard is not securely configured [{len(issues)} issue(s) found]")
 
+if not SETTINGS["ENABLE_COMPONENT_SYSTEM"]:
+    logger.log("Lively Component System is disabled yet the Dashboard requires it", level=logger.WARNING)
+
 
 Dashboard = Blueprint(
     location=__file__,
-    name="dashboard",
+    name="duck-dashboard",
     urlpatterns=[
         path(
             "/",

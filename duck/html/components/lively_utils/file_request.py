@@ -211,7 +211,7 @@ async def ws_request_file(
     file_future = event_loop.create_future()
     file_started_future = event_loop.create_future()
     allowed_mimes = allowed_mimes or []
-    upload_url = resolve("lively-receive-ws-file")
+    upload_url = resolve("lively.receive-ws-file")
     auth_secret = generate_csrf_secret()
     auth_token = mask_cipher_secret(auth_secret)
     fire_on_progress = bool(on_progress)

@@ -56,8 +56,8 @@ class Blueprint:
             name (str): A valid string representing the blueprint's name.
             urlpatterns (Optional[List[URLPattern]]): List of urlpatterns created using duck.urls.path or re_path.
             prepend_name_to_urls (bool): Whether to prepend name to urlpatterns. Defaults to True.
-            static_dir (str): The location of static files within the blueprint base directory.
-            template_dir (str): The template directory for the blueprint.
+            static_dir (str): The location of static files within the blueprint base directory or any absolute directory path.
+            template_dir (str): The template directory for the blueprint (absolute or relative paths allowed).
             enable_static_dir (bool): Boolean on whether to enable commands like `duck collectstatic` to access the blueprint staticfiles.
             enable_template_dir (bool): Expose the template dir for template resolving.
             is_builtin (bool): Flag the route blueprint as an internal builtin blueprint, Defaults to False (optional).
@@ -85,6 +85,11 @@ class Blueprint:
         self.enable_template_dir = enable_template_dir
         self.is_builtin = is_builtin
         
+        # Compute some computations
+        self.static_dir_is_absolute = pathlib.Path(static_dir).is_absolute()
+        self.template_dir_is_absolute = pathlib.Path(template_dir).is_absolute()
+        
+        # Initialize urlpatterns
         urlpatterns = urlpatterns or []
 
         try:

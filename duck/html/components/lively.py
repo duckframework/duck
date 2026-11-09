@@ -12,6 +12,7 @@ Notes:
 - Scripts are injected in the order: msgpack, lively, then inline connect.
 """
 from duck.exceptions.all import RouteNotFoundError
+from duck.utils.path import joinpaths
 from duck.html.components import ComponentError
 from duck.html.components.container import Container
 from duck.html.components.script import Script
@@ -43,8 +44,8 @@ class LivelyScripts(Container):
         try:
             # When resolving urls, the result should be absolute as absolute LIVELY_WS_URL may be needed by
             # the Lively client to resolve server domain.
-            ws_url = resolve("lively-component-system")
-            static_url = resolve("lively-staticfiles")
+            ws_url = resolve("lively.ws")
+            
         except RouteNotFoundError:
             raise ComponentError(
                 "This component can only be initialized after Duck setup. "
@@ -53,7 +54,7 @@ class LivelyScripts(Container):
             
         # Include required external scripts
         self.msgpack_script = Script(
-            props={"src": static_url.replace("<staticfile>", "msgpack.min.js"), "async": "true"}
+            props={"src": static("lively/msgpack.min.js"), "async": "true"}
         )
         
         self.prepare_script = Script(
@@ -81,7 +82,7 @@ class LivelyScripts(Container):
             
         # Never make the following script async because it will break the app logic.
         self.lively_script = Script(
-            props={"src": static_url.replace("<staticfile>", lively_script)}
+            props={"src": static(joinpaths("lively", lively_script))}
         )
         
         # Add all in required order

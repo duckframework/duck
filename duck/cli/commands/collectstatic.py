@@ -125,7 +125,8 @@ class CollectStaticCommand:
                 static_dir = joinpaths(
                     blueprint.root_directory,
                     blueprint.static_dir,
-                )
+                ) if not blueprint.static_dir_is_absolute else blueprint.static_dir
+                
                 if pathlib.Path(static_dir).is_dir():
                      yield (static_dir, blueprint)
     
