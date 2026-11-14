@@ -66,8 +66,9 @@ import time
 import asyncio
 import datetime
 import threading
+from typing import Callable, Optional
 
-from duck.contrib.sync import convert_to_async_if_needed
+from duck.contrib.sync import ensure_async
 from duck.utils.dateutils import build_readable_date, datetime_difference
 from duck.utils.asyncio import create_task
 from duck.utils.asyncio.eventloop import get_or_create_loop_manager
@@ -134,14 +135,14 @@ class Automation:
 
     def __init__(
         self,
-        callback: callable = None,
-        name: str = None,
+        callback: Optional[Callable] = None,
+        name: Optional[str] = None,
         threaded: bool = True,
         async_: bool = False,
         start_time: datetime.datetime | str = "immediate",
         schedules: int = 1,
-        interval: float | int = None,
-        description: str = None,
+        interval: Optional[float | int] = None,
+        description: Optional[str] = None,
     ):
         """
         Initialize the Automation class.
@@ -287,7 +288,7 @@ class Automation:
             raise AutomationError(
                 "The automation was never started so the time it started cannot be given."
             )
-        return self.__started_at
+        return self.__started_at # type: ignore
 
     @property
     def finished_at(self) -> datetime.datetime:
@@ -300,7 +301,7 @@ class Automation:
             raise AutomationError(
                 "The automation was never started so the time it finished cannot be given."
             )
-        return self.__finished_at
+        return self.__finished_at # type: ignore
         
     @property
     def finished(self):
@@ -466,15 +467,18 @@ class Automation:
         if self.threaded:
             # Use multithreading
             thread = self.get_thread()
+
             if thread.is_alive():
                 raise AutomationError(
                     "Automation is already running in another Thread, cannot start automation."
                 )
+            
             thread.start()
         
         elif self.async_:
             # Use asynchronous execution
             task = getattr(self, "_async_task", None)
+
             if task and not task.done():
               raise AutomationError(
                     "Automation is already running in another async Task, cannot start automation."
@@ -482,7 +486,7 @@ class Automation:
                 
             async def async_task_wrapper():
                 task = create_task(self._async_start())
-                self._async_task = task
+                self._async_task = task # type: ignore
             
             # Execute asynchronous task
             loop_manager = get_or_create_loop_manager(strictly_get=True, id="automations-eventloop-manager")
@@ -590,7 +594,7 @@ class Automation:
             self.__running = True
             self.__first_execution = True
             self.__started_at = datetime.datetime.now()
-            await convert_to_async_if_needed(self.on_start)()
+            await ensure_async(self.on_start)()
 
         async def on_finish_wrapper():
             """
@@ -599,7 +603,9 @@ class Automation:
             self.__running = False
             self.__finished = True
             self.__finished_at = datetime.datetime.now()
-            await convert_to_async_if_needed(self.on_finish)()
+
+            # Call on_finish event
+            await ensure_async(self.on_finish)()
 
         if self.schedules == -1:  # execute to infinite
             counter = 0
@@ -615,13 +621,21 @@ class Automation:
                     break
                     
                 # continue with execution
-                await convert_to_async_if_needed(self.on_pre_execute)()  # do some stuff before execution
-                await convert_to_async_if_needed(self.execute)()  # execute the automation
-                await convert_to_async_if_needed(self.on_post_execute)()  # do some stuff after execution
-                self.__executed = (True)  # set that the method has executed for the first time
+                await ensure_async(self.on_pre_execute)()  # do some stuff before execution
+                await ensure_async(self.execute)()  # execute the automation
+                await ensure_async(self.on_post_execute)()  # do some stuff after execution
+
+                # Update execution state
+                self.__executed = True  # set that the method has executed for the first time
+
+                # Increment execution counters
                 self.__execution_times += 1
+
+                # Increment the loop counter
                 counter += 1  # counter is more accurate on number of times the loop was run compared to __execution_times.
-                await asyncio.sleep(self.interval)  # sleep before next execution cycle
+
+                # Sleep for the specified interval before the next execution cycle
+                await asyncio.sleep(self.interval)
         else:
             for i in range(0, self.schedules):
                 if self.__force_stop or self.disable_execution:
@@ -634,12 +648,19 @@ class Automation:
                     break
                     
                 # continue with execution
-                await convert_to_async_if_needed(self.on_pre_execute)()  # do some stuff before execution
-                await convert_to_async_if_needed(self.execute)()  # execute the automation
-                await convert_to_async_if_needed(self.on_post_execute)()  # do some stuff after execution
-                self.__executed = (True)  # automation has executed for the first time
+                await ensure_async(self.on_pre_execute)()  # do some stuff before execution
+                await ensure_async(self.execute)()  # execute the automation
+                await ensure_async(self.on_post_execute)()  # do some stuff after execution
+
+
+                # Update execution state
+                self.__executed = True  # automation has executed for the first time
+
+                # Increment execution counters
                 self.__execution_times += 1
-                await asyncio.sleep(self.interval)  # sleep before next execution cycle
+
+                # Increment the loop counter
+                await asyncio.sleep(self.interval)
 
         # finished or stopped execution
         await on_finish_wrapper()

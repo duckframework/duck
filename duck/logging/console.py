@@ -41,7 +41,7 @@ import threading
 import warnings
 import traceback
 
-from typing import Callable
+from typing import Callable, Optional, Type, Union
 from colorama import Fore, Style
 
 from duck.logging.handler import emit
@@ -57,6 +57,7 @@ try:
     
     SILENT = SETTINGS['SILENT']
     RESPECT_SILENT_CONSOLE_LOGS = SETTINGS.get("RESPECT_SILENT_CONSOLE_LOGS", False)
+
 except Exception:
     pass
 
@@ -77,7 +78,7 @@ def log_raw(
     msg: str,
     level: int = INFO,
     use_colors: bool = True,
-    custom_color: str = None,
+    custom_color: Optional[str] = None,
     end: str = "\n"
 ):
     """
@@ -132,7 +133,7 @@ def log(
     prefix: str = "[ * ]",
     level: int = INFO,
     use_colors: bool = True,
-    custom_color: str = None,
+    custom_color: Optional[str] = None,
     end: str = "\n",
 ):
     """
@@ -190,22 +191,26 @@ def should_filter_warning(category, message, module = None, lineno = 0):
     Returns True if the warning would be filtered (ignored), False otherwise.
     """
     module = module or "__main__"
+
     for action, msg, cat, mod, ln in warnings.filters:
         # Check if this filter matches the warning
         if ((msg is None or msg in message)
             and (cat is None or issubclass(category, cat))
             and (mod is None or mod in module)
             and (ln == 0 or lineno == ln)):
+            
             # Actions: 'ignore', 'always', 'default', 'error', 'once', 'module'
             return action == 'ignore'
+        
     # If no filter matches, default action is 'default' (show once per location)
     return False
 
 
-def warn(message: str, category: Warning = UserWarning, use_colors: bool = True, module = None, lineno = 0):
+def warn(message: str, category: Type[Warning] = UserWarning, use_colors: bool = True, module = None, lineno = 0):
     """
     This logs a warning to the console. You can filter warnings by using `warnings.filterwarnings`.
     """
+    
     if not should_filter_warning(category, message, module, lineno):
         log_raw(f"{category.__name__}: {message}", level=WARNING, use_colors=use_colors)
 

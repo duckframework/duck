@@ -10,13 +10,14 @@ This module provides the core application class, `App`, for setting up and runni
 - **Port Management**: Ensures that application ports are available.
 - **Signal Handling**: Gracefully handles termination signals (e.g., `Ctrl+C`) for clean shutdown.
 """
+
 import re
 import os
 import sys
 import json
+import threading
 import time
 import signal
-import threading
 import setproctitle
 import multiprocessing
 
@@ -24,17 +25,16 @@ from typing import (
     Optional,
     Dict,
     Any,
-    Union,
     Callable,
 )
 from concurrent.futures import Future
+from functools import lru_cache
 
 from duck.settings import SETTINGS
 from duck.settings.loaded import SettingsLoaded
 from duck.exceptions.all import (
     SSLError,
     ApplicationError,
-    SettingsError,
 )
 from duck.http.core.httpd.servers import HTTPServer
 from duck.logging import logger
@@ -42,10 +42,10 @@ from duck.meta import Meta
 from duck.csp import csp_nonce_flag
 from duck.env import get_project_name
 from duck.version import version
-from duck.utils.lazy import Lazy
 from duck.utils.asyncio.eventloop import get_or_create_loop_manager
 from duck.utils.threading.threadpool import get_or_create_thread_manager
 from duck.app.base import BaseApp
+from duck.app.supervisor import in_supervised_mode, run_supervised_app
 
 
 class App(BaseApp):
@@ -54,6 +54,7 @@ class App(BaseApp):
     """
     DEFAULT_ADDR = "localhost"
     DEFAULT_PORT = 8000
+    SHUTDOWN_TIMEOUT = 2.0 if SETTINGS["DEBUG"] else 15.0
     
     __instances__ = 0
     __mainapp__ = None
@@ -61,7 +62,8 @@ class App(BaseApp):
     def __init__(
         self,
         name: Optional[str] = None,
-        
+        *,
+
         # Network configuration
         addr: str = DEFAULT_ADDR,
         port: int = DEFAULT_PORT,
@@ -209,14 +211,12 @@ class App(BaseApp):
 
         # Runtime objects
         self.automations_dispatcher = None
-        self.ducksight_reloader = None
         self.https_redirect_app = None
-        
+
         # Concurrent futures / threads
         self.server_future = None
         self.django_server_future = None
         self.automations_dispatcher_future = None
-        self.ducksight_reloader_thread = None
         
         # Child processes
         self.https_redirect_process = None
@@ -303,7 +303,7 @@ class App(BaseApp):
         application: BaseApp,
         start_request_handling_threadpool_manager,
         start_request_handling_eventloop_manager,
-        start_component_threadpool_manager: bool = True,
+        start_component_threadpool_manager: bool = False,
         start_automations_eventloop_manager: bool = False,
         recreate_managers: bool = False,
     ):
@@ -311,12 +311,23 @@ class App(BaseApp):
         Starts or restarts background workers, e.g. `AsyncioLoopManager` & `ThreadPoolManager`.
         
         Args:
-            application (BaseApp): The target application.
-            start_request_handling_threadpool_manager (bool): Whether to start request handling threadpool in `WSGI` environment. This is only valid in WSGI environment only.
-            start_request_handling_eventloop_manager (bool): Whether to start asyncio event loop either in `WSGI` or `ASGI` environment.
-            start_component_threadpool_manager (bool): Whether to start the background threadpool manager for HTML components rendering, assistance, etc. Defaults to True.
-            start_automations_eventloop_manager (bool): Whether to start a dedicated event loop for running automations. Defaults to False.
-            recreate_managers (bool): Whether to recreate managers for the current thread and all it's descendents. Defaults to False.
+            application (BaseApp):
+                The target application.
+
+            start_request_handling_threadpool_manager (bool):
+                Whether to start request handling threadpool in `WSGI` environment. This is only valid in WSGI environment only.
+            
+            start_request_handling_eventloop_manager (bool):
+                Whether to start asyncio event loop either in `WSGI` or `ASGI` environment.
+
+            start_component_threadpool_manager (bool):
+                Whether to start the background threadpool manager for HTML components rendering, assistance, etc. Defaults to False.
+            
+            start_automations_eventloop_manager (bool):
+                Whether to start a dedicated event loop for running automations. Defaults to False.
+            
+            recreate_managers (bool):
+                Whether to recreate managers for the current thread and all it's descendents. Defaults to False.
                 This argument doesn't affect argument `start_automations_eventloop_manager`. Argument `recreate_managers` only applies to 
                 every other manager except the automations eventloop manager.
             
@@ -328,7 +339,6 @@ class App(BaseApp):
         - The thread manager is only run in `WSGI` mode but loop manager can be run in any environment (ASGI or WSGI).
          """
         from duck.utils.threading import get_max_workers
-        from duck.setup import set_asyncio_loop
         
         async_ = SETTINGS['ASYNC_HANDLING']
         start_bg_eventloop_if_wsgi = getattr(application, "start_bg_eventloop_if_wsgi", True)
@@ -338,13 +348,12 @@ class App(BaseApp):
             raise ApplicationError("Argument 'start_request_handling_threadpool_manager' can only be True in a WSGI environment.")
         
         if not async_ and start_request_handling_eventloop_manager and not start_bg_eventloop_if_wsgi:
-            raise ApplicationError("Argument 'start_request_handling_threadpool_manager' can only be True if app's `start_bg_eventloop_if_wsgi` is set to True.")
+            raise ApplicationError("Argument 'start_request_handling_eventloop_manager' can only be True if app's `start_bg_eventloop_if_wsgi` is set to True.")
             
         if multiprocessing.parent_process() is not None:
             # Not in main process; this is a child process.
-            # Reset asyncio event loop
-            set_asyncio_loop()
-        
+            pass
+
         # This block is not affected by recreate managers.
         if start_automations_eventloop_manager:
             loop_manager = get_or_create_loop_manager(id="automations-eventloop-manager")
@@ -352,7 +361,10 @@ class App(BaseApp):
         
         # Start component threadpool manager    
         if start_component_threadpool_manager:
+            # Get or create threadpool manager for component tasks..
             component_threadpool_manager = get_or_create_thread_manager(id="component-threadpool-manager", force_create=recreate_managers)
+
+            # Start the threadpool manager for component tasks.
             component_threadpool_manager.start(
                 task_type="component-task", # Restrict task to only `component-task` type.
                 max_workers=int(max_threadpool_workers / 2),
@@ -363,8 +375,10 @@ class App(BaseApp):
         # In WSGI environment
         if not async_:
             if start_request_handling_threadpool_manager:
-                # Start request handling threadpool
+                # Get or create threadpool manager for request handling tasks. This is only valid in WSGI environment.
                 request_handling_threadpool_manager = get_or_create_thread_manager(id="request-handling-threadpool-manager", force_create=recreate_managers)
+
+                # Start the threadpool manager for request handling tasks.
                 request_handling_threadpool_manager.start(
                     task_type="request-handling-task", # Restrict task to only `request-handling-task` type.
                     max_workers=max_threadpool_workers,
@@ -374,7 +388,10 @@ class App(BaseApp):
             
         # In any environment WSGI/ASGI
         if start_request_handling_eventloop_manager:
+            # Get or create asyncio event loop manager for request handling tasks.
             request_handling_loop_manager = get_or_create_loop_manager(id="request-handling-eventloop-manager", force_create=recreate_managers)
+
+            # Start the asyncio event loop manager for request handling tasks.
             request_handling_loop_manager.start(task_type="request-handling-task") # Restrict to only request handling tasks
                 
     @staticmethod
@@ -484,6 +501,49 @@ class App(BaseApp):
         else:
             return self.https_redirect_app.server.running
                
+    def start_background_event_loop(self):
+        """
+        Starts background threads and event loop(s) based on worker config.
+    
+        With workers enabled, only the automations loop is started here — the
+        rest are handled per-worker. Without workers, all managers are started
+        directly, with the event loop conditional on ASYNC_HANDLING.
+        """
+
+        if self.workers:
+            # Workers handle their own request loops; only start automations here
+            App.start_background_workers(
+                self,
+                start_request_handling_threadpool_manager=False,
+                start_request_handling_eventloop_manager=False,
+                start_component_threadpool_manager=False,
+                start_automations_eventloop_manager=True,
+            )
+            return
+    
+        # No workers — start everything ourselves
+        async_ = SETTINGS['ASYNC_HANDLING']
+        start_bg_eventloop_if_wsgi = getattr(self, "start_bg_eventloop_if_wsgi", True)
+        start_eventloop = async_ or (not async_ and start_bg_eventloop_if_wsgi)
+    
+        App.start_background_workers(
+            self,
+            start_request_handling_threadpool_manager=not async_,
+            start_request_handling_eventloop_manager=start_eventloop,
+            start_component_threadpool_manager=True,
+            start_automations_eventloop_manager=True,
+        )
+    
+        if not async_:
+            if start_bg_eventloop_if_wsgi:
+                logger.log("Background event loop scheduled", level=logger.DEBUG)
+            else:
+                logger.log(
+                    "App argument `start_bg_eventloop_if_wsgi` is set to False. "
+                    "This may prevent protocols like `HTTP/2` or `WebSockets` from working correctly\n",
+                    level=logger.WARNING,
+                )
+        
     def register_ports(self):
         """
         Register occupied ports.
@@ -542,16 +602,62 @@ class App(BaseApp):
         """
         signal.signal(signal.SIGINT, self.handle_signal)
         signal.signal(signal.SIGTERM, self.handle_signal)
-        
-    def handle_signal(self, sig, frame):
-        """
-        Method for handling process signals.
 
-        Signals:
-        - `SIGINT` (Ctrl-C), `SIGTERM` (Terminate): Quits the server/application.
+        # SIGBREAK is the reload signal on Windows, SIGUSR1 on POSIX.
+        reload_signal = getattr(signal, "SIGBREAK", None) or getattr(signal, "SIGUSR1", None)
+
+        if reload_signal:
+            signal.signal(reload_signal, self.handle_signal)
+
+    def handle_signal(self, sig, _):
         """
-        if sig in [signal.SIGINT, signal.SIGTERM]:
-            self.stop(wait_for_runtime_executor_shutdown=False)
+        Starts a clean shutdown once, ignoring repeated signals.
+
+        Notes:
+            The reload signal shuts down quietly. Other signals log the exit message.
+        """
+        if getattr(self, "shutting_down", False):
+            return
+
+        # Mark the app as shutting down to prevent repeated signal handling.
+        self.shutting_down = True
+
+        # Catch the reload signal to avoid logging a shutdown message.
+        reload_signal = getattr(signal, "SIGBREAK", None) or getattr(signal, "SIGUSR1", None)
+
+        threading.Thread(
+            target=self.shutdown_and_exit,
+            kwargs={"log_to_console": sig != reload_signal},
+            daemon=True,
+        ).start()
+
+    def shutdown_and_exit(self, log_to_console: bool = True):
+        """
+        Stops the app, waiting for the executor, then ends the process.
+
+        Args:
+            log_to_console (bool): Whether to log the exit message.
+        """
+        watchdog = threading.Timer(self.SHUTDOWN_TIMEOUT, lambda: os._exit(1))
+        watchdog.daemon = True
+        watchdog.start()
+
+        # Stop the app and wait for the runtime executor to finish.
+        self.stop(
+            log_to_console=log_to_console,
+            no_exit=True,
+            wait_for_runtime_executor_shutdown=True,
+        )
+
+        # Stop the watchdog and exit cleanly.
+        try:
+            watchdog.cancel()
+
+        except Exception:
+            pass
+
+        finally:
+            os._exit(0)
             
     def handle_ipc_messages(self):
         """
@@ -573,9 +679,9 @@ class App(BaseApp):
                 
                 if message:
                     if any({message.lower() == i for i in ["bye", "quit", "exit"]}):
-                        self.stop()
+                        self.shutdown_and_exit()
                         break
-                                
+                        
                 # Simulate some delay
                 time.sleep(1)
                 
@@ -639,7 +745,7 @@ class App(BaseApp):
         Args:
             log_message (bool): Whether to log something before starting the micro app.
         """
-        def start_https_redirect(process_safe_running_state: multiprocessing.Value):
+        def start_https_redirect():
             """
             Starts app for redirecting non encrypted traffic to main app using https.
             """
@@ -649,7 +755,7 @@ class App(BaseApp):
             setproctitle.setproctitle(p.name)
             
             # Register signal handler
-            signal.signal(signal.SIGINT, lambda *a: self.https_redirect_app.stop())
+            signal.signal(signal.SIGINT, lambda *a: self.https_redirect_app.stop()) # type: ignore
             
             # Restart background workers
             # Recreate managers recreates and attaches new managers fot the current 
@@ -670,7 +776,7 @@ class App(BaseApp):
             )
             
             # Start the microapp
-            self.https_redirect_app.run(run_forever=True) # This is blocking; run_forever=True is blocking.
+            self.https_redirect_app.run(run_forever=True) # type: ignore # This is blocking; run_forever=True is blocking.
             
         if self.https_redirect:
             # Start HTTP redirect process
@@ -698,6 +804,7 @@ class App(BaseApp):
         Args:
             log_message (bool): Whether to log something before starting the micro app.
         """
+
         def start_automations_dispatcher():
             """
             Starts automations dispatcher for running and managing automations on runtime.
@@ -707,6 +814,8 @@ class App(BaseApp):
             
             if log_message:
                 automations_dispatcher_name = self.automations_dispatcher.__class__.__name__
+
+                # Log something if applicable.
                 logger.log(
                     f"Running all automations with {automations_dispatcher_name}",
                     level=logger.DEBUG,
@@ -723,38 +832,33 @@ class App(BaseApp):
             # Submit task to the pool
             if not self.automations_dispatcher_future or not self.automations_dispatcher_future.running():
                 self.automations_dispatcher_future = self.runtime_executor.submit_task(start_automations_dispatcher)
-                        
+                
     def start_ducksight_reloader(self):
         """
         Starts the DuckSight Reloader for reloading app on file modifications, deletions, etc.
         
         Notes:
-        - Unlike other tasks like starting Duck server, HTTPS redirect server, etc which will be run by the app's `runtime_executor`,
-          this runs in an independant background thread with `daemon=True`.
+        - Unlike other tasks like starting Duck server, etc which will be run by the app's `runtime_executor`,
+          this runs in an independant process.
         """
-        from duck.contrib.reloader.ducksight import DuckSightReloader
-        
+        from duck.contrib.reloader.ducksight import start_ducksight_reloader
+
         # Note: Production server should not be restarted at any point only start duck sight reloader on DEBUG
-        def start_reloader():
-            """
-            Start the app's reloader.'
-            """
-            if not self.ducksight_reloader:
-                self.ducksight_reloader = DuckSightReloader(SETTINGS['BASE_DIR'])
-            self.ducksight_reloader.run()
-            
+        
         if SETTINGS["DEBUG"] and SETTINGS['AUTO_RELOAD']:
-            if not self.ducksight_reloader_thread or not self.ducksight_reloader_thread.is_alive():
-                if not self.ducksight_reloader_thread:
-                    self.ducksight_reloader_thread = threading.Thread(target=start_reloader)
-                self.ducksight_reloader_thread.start()
-                            
+            if not self.ducksight_reloader_process or not self.ducksight_reloader_process.is_alive():
+                # Initialize the DuckSight reloader and set some attributes.
+                self.ducksight_reloader_process = multiprocessing.Process(target=start_ducksight_reloader, args=(True,), name="ducksight-reloader")
+                
+                # Start the DuckSight reloader process
+                self.ducksight_reloader_process.start()
+                
     def get_runtime_futures(self) -> Dict[str, Optional[Future]]:
         """
         Returns a dictionary of all application runtime concurrent futures.
         
         Notes:
-        - The `DuckSightReloader` task is run on an independent thread, so no future for it will be included.
+        - The `DuckSightReloader` task is run on an independent process, so no future for it will be included.
         """
         return {
             "duck_server": self.server_future,
@@ -795,7 +899,6 @@ class App(BaseApp):
         log_to_console: bool = True,
         no_exit: bool = False,
         dispatch_pre_stop_event: bool = True,
-        kill_ducksight_reloader: bool = True,
         wait_for_runtime_executor_shutdown: bool = True,
         close_log_file: bool = True,
     ):
@@ -803,18 +906,24 @@ class App(BaseApp):
         Stops the application and terminates the whole program.
 
         Args:
-            no_exit (bool): Whether to terminate everything but keep the program running.
-            log_to_console (bool): Whether to log an exit message.
-            dispatch_pre_stop_event (bool): Whether to call method `on_pre_stop`. Defaults to True.
-            kill_ducksight_reloader (bool): This attempts to kill the `DuckSightReloader`. Useful if `no_exit=True`,
-            wait_for_runtime_executor_shutdown (bool): Whether to wait for the runtime executor to complete shutdown. 
-                                                                                            This mean waiting for current tasks to finish/cancel.
-                                                                                            This is only used if argument `no_exit=True` else it is automatically `False`.
-            close_log_file (bool): Whether to close the log file. Defaults to True.
+            no_exit (bool):
+                Whether to terminate everything but keep the program running.
+
+            log_to_console (bool):
+                Whether to log an exit message.
+
+            dispatch_pre_stop_event (bool):
+                Whether to call method `on_pre_stop`. Defaults to True.
+
+            wait_for_runtime_executor_shutdown (bool):
+                Whether to wait for the runtime executor to complete shutdown. 
+                This mean waiting for current tasks to finish/cancel.
+                This is only used if argument `no_exit=True` else it is automatically `False`.
+
+            close_log_file (bool):
+                Whether to close the log file. Defaults to True.
         """
-        if "--is-reload" in sys.argv:
-            log_to_console = False
-            
+
         def stop_future(future):
             """
             Stops a running running future safely.
@@ -829,19 +938,25 @@ class App(BaseApp):
         if dispatch_pre_stop_event:
             # Dispatch pre stop event.
             self.dispatch_event("on_pre_stop")
+
+        # Log a blank line
+        if log_to_console:
+            logger.log_raw("")
         
         try:
             # Close the session storage connector in new thread
             SettingsLoaded.SESSION_STORAGE_CONNECTOR.close()
+
         except Exception as e:
-            logger.log_raw('\n')
+            logger.log_raw('')
             logger.log(f"Error closing session storage: {e}", level=logger.WARNING)
 
         try:
             # Stop all started servers
             self.stop_servers(log_to_console=log_to_console, wait=wait_for_runtime_executor_shutdown if no_exit else False)
+
         except Exception as e:
-            logger.log_raw('\n')
+            logger.log_raw('')
             logger.log(f"Error stopping servers: {e}", level=logger.ERROR)
             
             if SETTINGS['DEBUG']:
@@ -853,18 +968,11 @@ class App(BaseApp):
                 self.automations_dispatcher.stop()
             except Exception as e:
                 logger.log_exception(e)
-        
-        # Try cancel other cancelable components.
-        if SETTINGS['DEBUG'] and SETTINGS['AUTO_RELOAD'] and kill_ducksight_reloader:
-            try:
-                self.ducksight_reloader.stop() if self.ducksight_reloader else None
-            except Exception as e:
-                logger.log_exception(e)
-                
+
         # Cancel all running futures
         concurrent_futures = self.get_runtime_futures()
         
-        for name, future in concurrent_futures.items():
+        for _, future in concurrent_futures.items():
             stop_future(future)
         
         # Shutdown runtime executor if not stopped.            
@@ -873,18 +981,7 @@ class App(BaseApp):
                 self.runtime_executor.stop(wait=wait_for_runtime_executor_shutdown if no_exit else False)
             except Exception as e:
                 logger.log_exception(e)
-        
-        if (
-            no_exit
-            and kill_ducksight_reloader
-            and wait_for_runtime_executor_shutdown
-        ):
-            try:
-                if self.ducksight_reloader_thread.is_alive():
-                    self.ducksight_reloader_thread.join()
-            except Exception as e:
-                logger.log_exception(e)
-                
+
         if close_log_file:
             # Close the logging file
             if SETTINGS['LOG_TO_FILE']:
@@ -996,49 +1093,7 @@ class App(BaseApp):
                 ),
                 level=logger.WARNING,
             )
-    
-    def start_background_event_loop(self):
-        """
-        Starts background threads and event loop(s) based on worker config.
-    
-        With workers enabled, only the automations loop is started here — the
-        rest are handled per-worker. Without workers, all managers are started
-        directly, with the event loop conditional on ASYNC_HANDLING.
-        """
-        if self.workers:
-            # Workers handle their own request loops; only start automations here
-            App.start_background_workers(
-                self,
-                start_request_handling_threadpool_manager=False,
-                start_request_handling_eventloop_manager=False,
-                start_component_threadpool_manager=False,
-                start_automations_eventloop_manager=True,
-            )
-            return
-    
-        # No workers — start everything ourselves
-        async_ = SETTINGS['ASYNC_HANDLING']
-        start_bg_eventloop_if_wsgi = getattr(self, "start_bg_eventloop_if_wsgi", True)
-        start_eventloop = async_ or (not async_ and start_bg_eventloop_if_wsgi)
-    
-        App.start_background_workers(
-            self,
-            start_request_handling_threadpool_manager=not async_,
-            start_request_handling_eventloop_manager=start_eventloop,
-            start_component_threadpool_manager=True,
-            start_automations_eventloop_manager=True,
-        )
-    
-        if not async_:
-            if start_bg_eventloop_if_wsgi:
-                logger.log("Background event loop scheduled", level=logger.DEBUG)
-            else:
-                logger.log(
-                    "App argument `start_bg_eventloop_if_wsgi` is set to False. "
-                    "This may prevent protocols like `HTTP/2` or `WebSockets` from working correctly\n",
-                    level=logger.WARNING,
-                )
-    
+            
     def wait_for_main_server(self, start_failure_msg: str) -> bool:
         """
         Waits briefly then checks whether the main server came up.
@@ -1130,10 +1185,15 @@ class App(BaseApp):
             try:
                 logger.log_raw("\n")
                 bridge.run_django_app_commands()
+
             except Exception as e:
                 logger.log(f"Failed to run django commands: {e}\n", level=logger.ERROR)
                 logger.log_exception(e)
+
+                # Stop the application - usally kills the whole process.
                 self.stop()
+
+                # Return failure flag
                 return False
     
         # Wait for Django server to start
@@ -1193,24 +1253,41 @@ class App(BaseApp):
     
         return True
         
-    def run(self, print_ansi_art: bool = True):
+    def run(self, print_ansi_art: bool = True, with_supervisor: bool = True):
         """
         Runs the Duck application.
+
+        Args:
+            print_ansi_art: Whether to display the Duck ASCII art on startup.
+            with_supervisor: Whether to run the app in supervised mode. Defaults to True.
         """
         from duck.setup import setup
         
-        if not self.skip_setup:
-            # Setup Duck environment and the entire application.
-            setup()
+        def wrapped_run():
+
+            if not self.skip_setup:
+                # Setup Duck environment and the entire application.
+                setup()
+                
+            # Record application metadata and run the server
+            self.record_metadata()
             
-        # Record application metadata and run the server
-        self.record_metadata()
-        
-        # Start runtime executor
-        self.runtime_executor.start(max_workers=5)
-        
-        # Run the main application
-        return self._run(print_ansi_art=print_ansi_art)
+            # Start runtime executor
+            self.runtime_executor.start(max_workers=2)
+            
+            # Run the main application
+            return self._run(print_ansi_art=print_ansi_art)
+
+        if with_supervisor:
+            if in_supervised_mode():
+                # Supervisor already is trying to run the app in new process, just run the app directly.
+                wrapped_run()
+            else:
+                # Run the app in supervised mode
+                run_supervised_app()
+        else:
+            # Run the app directly without supervision
+            wrapped_run()
         
     def _run(self, print_ansi_art: bool = True):
         """
@@ -1228,7 +1305,8 @@ class App(BaseApp):
     
         # Tune threadpool size relative to configured workers
         default_workers = _TRANSACTION_THREAD_POOL.max_threads
-        
+
+        # Change the max threads of the transaction thread pool
         _TRANSACTION_THREAD_POOL.max_threads = (
             (default_workers * self.workers) if self.workers else default_workers
         )
@@ -1260,7 +1338,7 @@ class App(BaseApp):
             logger.log_raw(f'{bold_start}NATIVE ENABLED{bold_end} true')
             
             try:
-                from duck_native import __version__
+                from duck_native import __version__ # type: ignore
                 
                 logger.log_raw(f'{bold_start}NATIVE VERSION{bold_end} {__version__}')
                 logger.log_raw(f'{bold_start}NATIVE CONFIG{bold_end} {native_config}\n')
@@ -1325,7 +1403,19 @@ class App(BaseApp):
         except json.JSONDecodeError:
             # The file used by duck.processes is corrupted
             pass  # Ignore for now, maybe writting is still in progress
-        
+
+        if SETTINGS["AUTO_RELOAD"] and SETTINGS["DEBUG"]:
+            if in_supervised_mode():
+                logger.log(
+                    "Watching file changes with DuckSight reloader",
+                    level=logger.DEBUG,
+                )
+            else:
+                logger.log(
+                    "DuckSight reloader not started, run with supervisor to enable it",
+                    level=logger.WARNING,
+                )
+
         if not self.disable_signal_handler:
             # Bind signals to appropriate signal handlers
             self.register_signals()
@@ -1335,19 +1425,8 @@ class App(BaseApp):
                 f"Use Ctrl-C to quit [APP PID: {self.process_id}]",
                 level=logger.DEBUG,
                 custom_color=logger.Fore.GREEN,
-            ) 
-        
-        if SETTINGS["AUTO_RELOAD"] and SETTINGS["DEBUG"]:
-            # Start duck sight reloader (if not running)
-            self.start_ducksight_reloader()
-            
-            # Log something to the console.
-            logger.log(
-                "Duck Sight Reloader watching file changes",
-                level=logger.DEBUG,
-                custom_color=logger.Fore.GREEN,
             )
-        
+
         # Log a success message
         logger.log(
             "Waiting for incoming requests :-) \n",

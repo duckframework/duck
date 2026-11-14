@@ -8,149 +8,68 @@ import asyncio
 import platform
 import threading
 
-from typing import List
-
+from duck.env import is_testing_environment
 from duck.exceptions.all import SettingsError
 from duck.routes import register_blueprints, register_urlpatterns
 from duck.logging import logger
 from duck.settings import SETTINGS
 from duck.settings.loaded import SettingsLoaded
-from duck.env import is_testing_environment
+from duck.utils.asyncio import validate_event_loop, ASYNCIO_LOOP_CREATORS
 
 
-def makedirs():
+def validate_asyncio_loop():
     """
-    Initial function for Duck application directories creation.
-    """
-    # TEMPLATE_DIRS setup
-    tdirs = str(SETTINGS["TEMPLATE_DIRS"])
-    
-    if isinstance(tdirs, (list)):
-        for tdir in tdirs:
-            os.makedirs(tdir, exist_ok=True)
-
-    # STATIC_ROOT setup
-    sroot = SETTINGS["STATIC_ROOT"]
-    if os.path.isfile(sroot):
-        raise SettingsError(
-            "STATIC_ROOT in settings.py should be a directory not a file")
-
-    if sroot and not os.path.isdir(sroot):
-        os.makedirs(sroot, exist_ok=True)
-
-    # SESSION_DIR setup
-    sdir = SETTINGS["SESSION_DIR"]
-    if os.path.isfile(sdir):
-        raise SettingsError(
-            "SESSION_DIR in settings.py should be a directory not a file")
-
-    if sdir and not os.path.isdir(sdir):
-        os.makedirs(sdir, exist_ok=True)
-
-    # STATIC_ROOT setup
-    sroot = SETTINGS["STATIC_ROOT"]
-    if os.path.isfile(sroot):
-        raise SettingsError(
-            "STATIC_ROOT in settings.py should be a directory not a file")
-
-    if sroot and not os.path.isdir(sroot):
-        os.makedirs(sroot, exist_ok=True)
-
-    # MEDIA_ROOT setup
-    mroot = SETTINGS["MEDIA_ROOT"]
-    if os.path.isfile(mroot):
-        raise SettingsError(
-            "MEDIA_ROOT in settings.py should be a directory not a file")
-
-    if mroot and not os.path.isdir(mroot):
-        os.makedirs(mroot, exist_ok=True)
-
-    # FILE_UPLOAD_DIR setup
-    fdir = SETTINGS["FILE_UPLOAD_DIR"]
-    if os.path.isfile(fdir):
-        raise SettingsError(
-            "FILE_UPLOAD_DIR in settings.py should be a directory not a file")
-
-    if fdir and not os.path.isdir(fdir):
-        os.makedirs(fdir, exist_ok=True)
-
-    # LOGGING_DIR setup
-    ldir = SETTINGS["LOGGING_DIR"]
-    if os.path.isfile(ldir):
-        raise SettingsError(
-            "LOGGING_DIR in settings.py should be a directory not a file")
-
-    if ldir and not os.path.isdir(ldir):
-        os.makedirs(ldir, exist_ok=True)
-
-
-def set_asyncio_loop():
-    """
-    Configure the event loop policy based on SETTINGS["ASYNC_LOOP"].
-
-    Supports:
-    - "asyncio": Default Python event loop (no changes made)
-    - "uvloop": High-performance event loop (requires uvloop installed)
+    Validate the ASYNC_LOOP setting and configure the event loop accordingly.
 
     Raises:
-        SettingsError: If the specified ASYNC_LOOP value is unsupported.
+        SettingsError: If the specified ASYNC_LOOP value is unsupported or if uvloop is selected on Windows.
     """
-    supported_loops = {"asyncio", "uvloop"}
-    loop_choice = SETTINGS.get("ASYNC_LOOP", "asyncio")
+    configured_loop = SETTINGS.get("ASYNC_LOOP", "asyncio")
+    supported_loops = sorted(set(ASYNCIO_LOOP_CREATORS.keys()))
 
-    # Only configure the loop if async handling is enabled or HTTP/2 is used
-    if SETTINGS.get("ASYNC_HANDLING") or SETTINGS.get("SUPPORT_HTTP_2"):
-        if loop_choice not in supported_loops:
+    try:
+        current_platform = platform.system() or ""
+
+        if configured_loop == "uvloop" and current_platform.lower() == "windows":
             raise SettingsError(
-                f"Invalid ASYNC_LOOP setting: '{loop_choice}'. "
-                f"Supported options are: {sorted(supported_loops)}."
+                "uvloop is generally not supported on Windows in official releases. "
+                "Set ASYNC_LOOP to 'asyncio' or run on a Unix-like OS (Linux, macOS)."
             )
 
-        if loop_choice == "uvloop":
-            current_platform = platform.system() or ""
-            if current_platform.lower() == "windows":
-                # There are some community/experimental efforts for Windows but they are
-                # not reliable across all uvloop releases. Provide a clear message.
-                raise SettingsError(
-                    "uvloop is generally not supported on Windows in official releases. "
-                    "Set ASYNC_LOOP to 'asyncio' or run on a Unix-like OS (Linux, macOS)."
-                )
-            
-            try:
-                import uvloop
-            except ImportError as e:
-                raise SettingsError("uvloop is not installed, but ASYNC_LOOP is set to 'uvloop'.") from e
-            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+        # Validate the loop type and ensure it can be created
+        validate_event_loop(configured_loop, return_loop_creator=False)
 
+    except ValueError as e:
+        raise SettingsError(
+            f"Invalid ASYNC_LOOP setting: '{configured_loop}'. "
+            f"Supported options are: {supported_loops}."
+        ) from e
 
-def setup(make_app_dirs: bool = True, use_threads_for_heavy_work: bool = True):
+    except ImportError as e:
+        raise SettingsError(
+            f"Failed to import the required module for ASYNC_LOOP '{configured_loop}'. "
+            "Ensure the necessary package is installed."
+        ) from e
+    
+
+def setup():
     """
     Setup the Duck application.
 
     Initialize and configure all necessary components to ensure the application is ready for operation.
 
-    Args:
-            make_app_dirs (bool): Whether to create application directories which might be useful to the project.
     Notes:
-        - This configures and registers all routes either simple or ones created
+        This configures and registers all routes either simple or ones created
     """
     # Improve the setup it's taking approx >= 2s
     from duck.backend.django.setup import prepare_django, DjangoSetupWarning
     
     base_dir = str(SETTINGS['BASE_DIR'])
     
-    # Set asyncio event loop for ASYNC_HANDLING or HTTP/2
-    set_asyncio_loop()
-    
-    # Create base application (directories
-    if make_app_dirs:
-        # Only make app dirs if not in testing environment
-        if not is_testing_environment():
-            if use_threads_for_heavy_work:
-                threading.Thread(target=makedirs).start()  # app dirs creation
-            else:
-                makedirs()
-                
+    # Validate the ASYNC_LOOP setting and configure the event loop accordingly
+    if SETTINGS.get("ASYNC_HANDLING") or SETTINGS.get("SUPPORT_HTTP_2"):
+        validate_asyncio_loop()
+
     # Try preparing Django backend
     try:
         prepare_django(True)

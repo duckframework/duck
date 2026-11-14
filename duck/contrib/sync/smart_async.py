@@ -53,7 +53,6 @@ The core principal of async responsiveness, use of small tasks rather than await
 long running task or even converting to async.
 """
 
-import os
 import uuid
 import time
 import queue
@@ -96,12 +95,18 @@ class TransactionThread(threading.Thread):
     - This thread can also be used in non-transactional general contexts.
     """
     def __init__(self, context_id=None):
+
+        # Super init
         super().__init__(daemon=True)
+
+        # Set some attributes
         self.context_id = context_id
         self.task_queue = queue.Queue()
         self._busy = threading.Event()   # NEW: busy indicator
         self._current_task_executing = None
         self._max_task_duration = 0.3 # Seconds for optimal task duration
+
+        # Start the transaction thread
         self.start()
 
     def is_free(self) -> bool:
@@ -120,6 +125,7 @@ class TransactionThread(threading.Thread):
     def run(self):
         try:
             from duck.logging import logger
+
         except SettingsError:
             # Not in a Duck project
             from duck.logging import console as logger
@@ -131,6 +137,9 @@ class TransactionThread(threading.Thread):
                 break
 
             func, args, kwargs, future, loop = item
+
+            # Set the asyncio loop
+            asyncio.set_event_loop(loop)
 
             # Mark thread busy
             self._busy.set()
@@ -152,6 +161,7 @@ class TransactionThread(threading.Thread):
                 try:
                     from duck.settings import SETTINGS
                     is_debug = SETTINGS['DEBUG']
+                    
                 except SettingsError:
                     pass # Not inside a Duck project.
                     
@@ -216,9 +226,16 @@ class TransactionThread(threading.Thread):
         Returns:
             asyncio.Fututure: An asynchronous future you can wait for in async context.
         """
-        loop = asyncio.get_event_loop()
+        # Use the caller's running loop so the future is awaitable where it's used.
+        loop = asyncio.get_running_loop()
+
+        # Create a future for the task result
         future: asyncio.Future = loop.create_future()
+
+        # Schedule the task to run in the thread's queue
         self.task_queue.put((func, args, kwargs, future, loop))
+
+        # Return the future to the caller so they can await it in async context
         return future
 
     def shutdown(self):
@@ -612,9 +629,14 @@ class TransactionThreadPool:
                 # No available threads yet, create one
                 thread = TransactionThread()
                 self.general_threads.append(thread)
+
+                # Mark active 
                 self.mark_active(thread)
+
                 if self.should_run_load_check():
                     self.update_load_estimate()
+
+                # Return the new thread
                 return thread
 
             # Round robin over available general threads, falling back to any
@@ -675,7 +697,7 @@ class TransactionThreadPool:
             thread = self.get_thread(context_id)  # Re-fetch thread
 
         # Do some checks
-        assert thread.is_alive(), "Expected a running thread, but got a dead thread."
+        assert thread.is_alive(), "Expected a running thread, but got a dead one instead."
 
         # Return asyncio.Future
         return thread.submit(func, *args, **kwargs)
@@ -720,12 +742,16 @@ def is_transactional(func: Callable) -> bool:
     """
     if getattr(func, "is_atomic", False):
         return True
+    
     try:
         src = inspect.getsource(func)
+
         if "transaction.atomic" in src or "atomic()" in src:
             return True
+        
     except Exception:
         pass
+
     return False
 
 
@@ -738,19 +764,24 @@ def in_transaction_context() -> Optional[str]:
     """
     # Duck context
     ctx_id = _transaction_context_id_var.get()
+
     if ctx_id is not None:
         return ctx_id
 
     # Django detection
     try:
         from django.db import connection
+
         if getattr(connection, 'in_atomic_block', False):
             # Use id(connection) for affinity
             return f"django_atomic_{id(connection)}"
+        
     except ImportError:
         pass
+
     except Exception:
         pass
+
     return None
 
 
@@ -771,10 +802,14 @@ def sync_to_async(
     @wraps(func)
     async def wrapper(*args, **kwargs) -> T: 
         context_id = in_transaction_context()
+
         if context_id:
             return await _TRANSACTION_THREAD_POOL.submit(func, *args, context_id=context_id, **kwargs)
+        
         else:
             return await _TRANSACTION_THREAD_POOL.submit(func, *args, context_id=None, **kwargs) # Using None as context_id will use round-robin for threads
+
+    # Return the async wrapper
     return wrapper
 
 

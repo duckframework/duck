@@ -12,15 +12,13 @@ FALLBACK_TYPES = {
 
 def guess_file_mimetype(filename: str) -> str:
     """
-    Determine the MIME type of a file based on its filename or content.
+    Determine the MIME type of a file based on its filename.
 
     This function first attempts to guess the MIME type using the file's
-    extension by leveraging the `mimetypes` module. If the MIME type could not
-    be determined from the filename, it reads the file content and attempts to
-    infer the MIME type from the data.
+    extension by leveraging the `mimetypes` module.
 
     Args:
-        filename (str): The path to the file for which the MIME type needs to be determined.
+        filename (str): The filename/filepath for which the MIME type needs to be determined.
 
     Returns:
         str: The determined MIME type of the file. Defaults to 'application/octet-stream' if the type cannot be determined.

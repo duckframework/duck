@@ -6,12 +6,12 @@ functions using **asgiref's** `async_to_sync` and custom **Duck's** `sync_to_asy
 to improve performance in high-frequency conversion scenarios.
 """
 
-from typing import Callable, Any
+from typing import Callable
 from functools import lru_cache
 from asyncio import iscoroutine
+from inspect import iscoroutinefunction
 from asgiref.sync import (
     async_to_sync as _async_to_sync,
-    iscoroutinefunction,
     AsyncToSync,
 )
 
@@ -27,7 +27,7 @@ __all__ = [
     "iscoroutinefunction",
     "sync_to_async",
     "async_to_sync",
-    "convert_to_async_if_needed",
+    "ensure_async",
     "convert_to_sync_if_needed",
     "ensure_async",
     "ensure_sync",
@@ -47,10 +47,10 @@ def async_to_sync(func: Callable) -> AsyncToSync:
     Returns:
         AsyncToSync: A synchronous version of the input async function.
     """
-    return _async_to_sync(func)
+    return _async_to_sync(func) # type: ignore
 
 
-def convert_to_async_if_needed(func: Callable) -> Callable:
+def ensure_async(func: Callable) -> Callable:
     """
     Automatically converts a function to asynchronous if it's synchronous,
     or returns it unchanged if it's already a coroutine function.
@@ -65,7 +65,9 @@ def convert_to_async_if_needed(func: Callable) -> Callable:
     
     if iscoroutinefunction(func) or isinstance(func, SyncToAsync):
         return func
+    
     func = sync_to_async(func)
+    
     return func
 
 
@@ -86,5 +88,5 @@ def convert_to_sync_if_needed(func: Callable) -> Callable:
 
 
 # Helper aliases
-ensure_async = convert_to_async_if_needed
+ensure_async = ensure_async
 ensure_sync = convert_to_sync_if_needed

@@ -78,7 +78,9 @@ class Request:
             - These two keys contains both content queries and url queries respectively
         """
         from duck.settings.loaded import SettingsLoaded
-        
+        from duck.http.session.engine import SessionStore
+        from duck.http.jwt.engine import JWTStore
+
         # The `request_store` is a dictionary originating from the RequestData object.
         # It allows you to attach custom metadata to the request during early parsing,
         # and access or modify that data later in the request lifecycle (e.g., middleware, views).
@@ -94,25 +96,25 @@ class Request:
         
         self.__meta: Dict = {}  # meta for the request
         self.__session = None  # session object for the request
-        self.__remote_addr: Tuple[str, int] = None  # client remote address and port
+        self.__remote_addr: Tuple[str, int] | None = None  # client remote address and port
         self.__headers: Headers = Headers()  # request headers
-        self.__fullpath: str = None  # full path for the request
-        self.__path: str = None  # path stripped of queries if so
-        self.__id: str = None  # request unique identifier
+        self.__fullpath: str | None = None  # full path for the request
+        self.__path: str | None = None  # path stripped of queries if so
+        self.__id: str | None = None  # request unique identifier
         self.__user: Any = None
         
         # Some important attributes
-        self.client_socket: xsocket = None # Client socket which made this request
-        self.client_address: Tuple[str, int] = None # Client remote address
+        self.client_socket: xsocket | None = None # Client socket which made this request
+        self.client_address: Tuple[str, int] | None = None # Client remote address
         self.application = None
         self.method: str = ""
         self.path: str = ""
         self.http_version: str = ""
-        self.error: Exception = None
+        self.error: Exception | None = None
         self.request_store: Dict = {}
         self.content_obj: Content = Content(b"", suppress_errors=True)
         self.topheader: str = ""  # topheader .e.g GET / HTTP/1.1
-        self.request_data: RequestData = None # Will be set when Request.parse is used
+        self.request_data: RequestData | None = None # Will be set when Request.parse is used
         self.uses_ipv6 = Meta.get_metadata("DUCK_USES_IPV6")
         
         # Initialize default fields
@@ -123,8 +125,8 @@ class Request:
         self.GET: QueryDict = QueryDict()
         self.POST: QueryDict = QueryDict()
         self.QUERY: FixedQueryDict[str, QueryDict] = FixedQueryDict({"CONTENT_QUERY": QueryDict(), "URL_QUERY": QueryDict()})
-        self.SESSION: SettingsLoaded.SESSION_STORE = SettingsLoaded.SESSION_STORE(None)
-        self.JWT: SettingsLoaded.JWT_STORE = SettingsLoaded.JWT_STORE(None)
+        self.SESSION: SessionStore= SettingsLoaded.SESSION_STORE(None)
+        self.JWT: JWTStore = SettingsLoaded.JWT_STORE(None)
         
         # Only accept content or content_obj not both
         if kwargs.get("content_obj", None) and kwargs.get("content", None):
@@ -145,7 +147,7 @@ class Request:
     @property
     def ID(self):
         """
-        Retrieves the 8-bit unique identifier for the request.
+        Retrieves the 16-bit unique identifier for the request.
     
         If the ID has not been generated yet, it will be created using a hash of a random number.
         The ID is represented as a substring of the MD5 hash, limited to the first 8 characters.
@@ -154,7 +156,7 @@ class Request:
             str: The 8-character unique identifier for the request.
         """
         if not self.__id:
-            self.__id = hashlib.md5(str(random.random()).encode("utf-8")).hexdigest()[:8]
+            self.__id = hashlib.md5(str(random.random()).encode("utf-8")).hexdigest()[:16]
         return self.__id
     
     @property

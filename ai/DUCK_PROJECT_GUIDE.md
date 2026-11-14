@@ -1234,13 +1234,13 @@ When working with sync-only code (Django ORM, third-party libraries), use Duck's
 contrib utilities to safely wrap it without blocking the event loop.
 
 ```python
-from duck.contrib.sync import sync_to_async, convert_to_async_if_needed
+from duck.contrib.sync import sync_to_async, ensure_async
 
 # Wrap a known sync function into an awaitable
 result = await sync_to_async(some_sync_function)(arg1, arg2)
 
 # Automatically handles both sync and async callables
-result = await convert_to_async_if_needed(maybe_sync_or_async_fn)(arg1) # ensure_async() does the same thing
+result = await ensure_async(maybe_sync_or_async_fn)(arg1) # ensure_async() does the same thing
 ```
 
 **Rule:** Never call Django ORM directly in an async view or handler. Always wrap it.
@@ -2083,7 +2083,7 @@ Full deployment guide: https://docs.duckframework.com/main/deployment
 - Default to async views and handlers for all I/O.
 - Never block the event loop with sync calls.
 - Wrap Django ORM and other sync code with `ensure_async` or
-  `convert_to_async_if_needed` from `duck.contrib.sync`.
+  `ensure_async` from `duck.contrib.sync`.
 
 ### Keep it documented
 

@@ -22,7 +22,7 @@ from h2.settings import SettingCodes
 
 from duck.settings import SETTINGS
 from duck.http.request_data import RequestData
-from duck.contrib.sync import iscoroutinefunction, convert_to_async_if_needed
+from duck.contrib.sync import iscoroutinefunction, ensure_async
 from duck.utils.threading import SyncFuture
 from duck.utils.asyncio import create_task
 from duck.logging import logger

@@ -1,163 +1,226 @@
 """
 **Duck Sight Reloader**
 
-Watches for file changes in Duck framework projects and restarts the
-webserver in DEBUG mode whenever relevant `.py` files change.
-
+Watches project files and calls a callback after a burst of relevant changes.
+It knows nothing about the supervisor or the app. Plug it in by passing any
+callable, such as `supervisor.restart`.
 """
-import sys
-import time
-import fnmatch
-import threading
-import platform
-import subprocess
 
-from watchdog.events import FileSystemEventHandler
+import fnmatch
+import platform
+import threading
+
+from pathlib import Path
+from typing import Callable
+
+from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
-from duck.settings import SETTINGS
 from duck.logging import logger
+from duck.settings import SETTINGS
 
 
-class DuckSightReloader:
+class DuckSightReloader(FileSystemEventHandler):
     """
-    Monitors the project directory for Python file changes and triggers reloads.
+    Calls `on_change` once after a burst of relevant file changes.
+
+    Attributes:
+        on_change (Callable[[], None]): Called after the quiet period.
+        watch_dir (Path): Directory watched recursively.
+        patterns (list[str]): Glob patterns for files that trigger a reload.
+        observer (Observer): Filesystem observer thread.
+        pending (set[str]): Changed paths waiting for the next callback.
+        timer (threading.Timer | None): Pending debounce timer.
+        lock (threading.Lock): Guards the pending set and the timer.
+        stop_event (threading.Event): Set to end the blocking `run` call.
     """
-    def __init__(self, watch_dir: str):
-        # Set a dynamic timeout
+
+    DEBOUNCE_SECONDS = 0.6
+    WINDOWS_MIN_POLL = 2.0
+    STOP_CHECK_INTERVAL = 0.1
+    HANDLED_EVENTS = frozenset({"created", "modified", "deleted", "moved"})
+    IGNORED_PARTS = frozenset({"__pycache__", ".git", ".venv", "venv", "node_modules"})
+
+    def __init__(self, on_change: Callable[[], None], watch_dir: str) -> None:
+        """
+        Configure the observer without starting it.
+
+        Args:
+            on_change (Callable[[], None]): Called after the quiet period.
+            watch_dir (str): Directory to watch recursively.
+        """
+        super().__init__()
+
+        # Windows polling is slower, so keep a higher floor there.
         timeout = SETTINGS.get("AUTO_RELOAD_POLL", 1.0)
-        
+
         if platform.system().lower() == "windows":
-            timeout = max(timeout, 2.0)
-        
-        # Create some attributes
+            timeout = max(timeout, self.WINDOWS_MIN_POLL)
+
+        # Set up some attributes
+        self.on_change = on_change
+        self.watch_dir = Path(watch_dir).resolve()
+        self.patterns = list(SETTINGS["AUTO_RELOAD_WATCH_FILES"])
         self.observer = Observer(timeout=timeout)
-        self.watch_dir = watch_dir
-        self.__force_stop = False
+        self.pending: set[str] = set()
+        self.timer: threading.Timer | None = None
+        self.lock = threading.Lock()
+        self.stop_event = threading.Event()
 
-    def stop(self):
+    def matches(self, path: str) -> bool:
         """
-        Stops the reloader.
+        Check whether a path should trigger a reload.
+
+        Args:
+            path (str): Path reported by the observer.
+
+        Returns:
+            bool: True if the path matches a pattern and is not in an ignored folder.
         """
-        self.__force_stop = True
+        if self.IGNORED_PARTS & set(Path(path).parts):
+            return False
+        return any(fnmatch.fnmatch(path, pattern) for pattern in self.patterns)
+
+    def on_any_event(self, event: FileSystemEvent) -> None:
+        """
+        Record relevant file events and schedule a debounced callback.
+
+        Args:
+            event (FileSystemEvent): Event reported by the observer.
+
+        Returns:
+            None
+        """
+        if event.is_directory or event.event_type not in self.HANDLED_EVENTS:
+            return
+
+        # A move affects both the old and the new path.
+        paths = [event.src_path]
+
+        if event.event_type == "moved":
+            paths.append(event.dest_path)
         
-    def run(self):
+        # Only keep the paths that match our patterns.
+        matched = {str(path) for path in paths if self.matches(str(path))}
+
+        if not matched:
+            return
+
+        # Reset the timer so a burst of saves produces one callback.
+        with self.lock:
+            self.pending |= matched
+
+            if self.timer:
+                self.timer.cancel()
+
+            # Create a new timer to call `fire` after the debounce period.
+            self.timer = threading.Timer(self.DEBOUNCE_SECONDS, self.fire)
+            self.timer.daemon = True
+
+            # Start the timer.
+            self.timer.start()
+
+    def describe(self, paths: set[str]) -> str:
         """
-        Start the observer loop; ensures single reloader process is active.
-        
-        Notes:
-            This method is blocking.
+        Build a short summary of the changed files.
+
+        Args:
+            paths (set[str]): Changed file paths.
+
+        Returns:
+            str: First changed file relative to the watch directory, plus a count of the rest.
         """
+        first = sorted(paths)[0]
+
         try:
-            event_handler = Handler()
+            first = str(Path(first).resolve().relative_to(self.watch_dir))
+        except ValueError:
+            pass
 
-            self.observer.schedule(event_handler, self.watch_dir, recursive=True)
-            self.observer.start()
-            
-            while not self.__force_stop:
-                time.sleep(.1)
-            
+        # Count how many more files changed.
+        extra = len(paths) - 1
+
+        # Return a string like "foo.py (+3 more)" or just "foo.py" if there are no extras.
+        return f"{first} (+{extra} more)" if extra else first
+
+    def fire(self) -> None:
+        """
+        Run the callback for the collected changes.
+
+        Returns:
+            None
+        """
+        with self.lock:
+            paths, self.pending = self.pending, set()
+            self.timer = None
+
+        if not paths:
+            return
+
+        # Log the change and call the callback.
+        logger.log_raw(
+            f"\nFile {self.describe(paths)} changed, reloading...",
+            custom_color=logger.Fore.YELLOW,
+        )
+
+        try:
+            self.on_change()
+
+        except Exception as error:
+            logger.log_exception(error)
+
+    def start(self) -> None:
+        """
+        Begin watching without blocking.
+
+        Returns:
+            None
+        """
+        self.observer.schedule(self, str(self.watch_dir), recursive=True)
+        self.observer.start()
+
+    def stop(self) -> None:
+        """
+        Cancel any pending callback and stop watching.
+
+        Returns:
+            None
+        """
+        self.stop_event.set()
+
+        with self.lock:
+            if self.timer:
+                self.timer.cancel()
+                self.timer = None
+
+            # Clear the pending set
+            self.pending.clear()
+
+        # Stop the observer thread
+        self.observer.stop()
+        
+        if self.observer.is_alive():
+            # Wait for the observer thread to finish
+            self.observer.join()
+
+    def run(self) -> None:
+        """
+        Watch for changes and block until stopped.
+
+        Notes:
+            This method is blocking. Call `stop` from another thread to end it.
+
+        Returns:
+            None
+        """
+        self.start()
+
+        try:
+            while not self.stop_event.wait(self.STOP_CHECK_INTERVAL):
+                pass
+
         except KeyboardInterrupt:
             pass
-        
+
         finally:
-            self.observer.stop()
-            if self.observer.is_alive():
-                self.observer.join()
-
-
-class Handler(FileSystemEventHandler):
-    """
-    Handles filesystem events and triggers debounced full server reloads.
-    """
-    def __init__(self, debounce_interval=0.6):
-        super().__init__()
-        self.debounce_interval = debounce_interval
-        self.restart_timer = None
-        self.latest_event = None
-        self.restarting = threading.Lock()
-        self.last_restart_time = 0
-
-    def on_any_event(self, event):
-        """
-        Called on any filesystem event; filters `.py` files and schedules reload.
-        """
-        watch_files = SETTINGS["AUTO_RELOAD_WATCH_FILES"]
-        
-        if event.is_directory:
-            return
-        
-        if not any(fnmatch.fnmatch(event.src_path, pat) for pat in watch_files):
-            return
-
-        if event.event_type not in {"created", "modified", "deleted", "moved"}:
-            # Ignore event.
-            return
-        
-        # Update the latest event    
-        self.latest_event = event
-        
-        if self.restart_timer:
-            self.restart_timer.cancel()
-        
-        # Set & start the timer
-        self.restart_timer = threading.Timer(self.debounce_interval, self._trigger_restart)
-        self.restart_timer.start()
-        
-    def restart_webserver(self, changed_file: str):
-        """
-        Perform the actual server reload.
-        
-        Args:
-            changed_file (str): This is the path to the file which triggered this reload.
-        """
-        from duck.app import App
-        
-        # Get the main app instance
-        app = App.get_main_app()
-
-        # Stop the app without exiting the process or killing the reloader
-        app.stop(
-            log_to_console=False,
-            no_exit=True,
-            kill_ducksight_reloader=False,
-            dispatch_pre_stop_event=True,
-            wait_for_runtime_executor_shutdown=False,
-            close_log_file=True,
-        )
-        
-        def restart_app():
-            """
-            This restarts the application.
-            """
-            # Was started from a file
-            cmd = [sys.executable, *sys.argv, "--is-reload"]
-            subprocess.run(cmd)
-            
-        try:
-            restart_app()
-        except Exception as e:
-            # Log any encountered exception
-            logger.log_exception(e)
-                 
-    def _trigger_restart(self):
-        """
-        Trigger the real restart.
-        """
-        if self.restarting.locked():
-            return
-        
-        # Check for overlapping reloads
-        now = time.time()
-
-        if now - self.last_restart_time < 0.5:
-            return  # avoid overlapping reloads
-
-        with self.restarting:
-            self.last_restart_time = now
-            event = self.latest_event
-            file_path = event.src_path
-            
-            # Log something and restart the server.
-            logger.log_raw(f"\nFile {file_path} changed, attempting reload...", custom_color=logger.Fore.YELLOW)
-            self.restart_webserver(file_path)
+            self.stop()

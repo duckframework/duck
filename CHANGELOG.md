@@ -11,14 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Nothing yet
+- Added support for app supervision. By default, app is started in supervisor.
+- Added support for custom caching backend in `duck.utils.fileio`.
 
 ### Changed
 
+- `PersistentFileUpload` now saves automatically to mediafiles storage backend when `save()` is called and it even supports progress reporting when `onprogress` argument is provided.
+- Command `duck collectstatic` now collect staticfiles directly to configured storage backend.
+- Added `LocalStorage`, `S3Storage`, `CloudflareR2Storage` as storage backends at `duck.contrib.storage.backends`. All these have ability to report progress when saving data e.g, `0, ..., 40%, ..., 100%`.
+- `Blueprints` now support absolute/external static and template directories.
+- Changed default `Dashboard` blueprint name from `dashboard` to `duck-dashboard`.
 - `authenticate` now accepts a single explicit lookup field as a keyword (e.g. `email="..."`) and a keyword-only `explicit_username` flag to look up by the `username` field instead of `USERNAME_FIELD`; combining multiple identifiers raises `ValueError`.
 
 ### Fixed
 
+- Fixed bug in `duck.contrib.sync.smart_async` which created unused event loops.
 - Fixed `FileInput` component having a `Clickable` subclass which caused an error.
 
 ---

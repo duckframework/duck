@@ -18,16 +18,16 @@ from duck.exceptions.all import (
     NormalizerLoadError,
     SettingsError, 
 )
+from duck.settings import SETTINGS
+from duck.routes import Blueprint
 from duck.http.core.proxyhandler import HttpProxyHandler
 from duck.http.request import HttpRequest
 from duck.automation import Automation
 from duck.automation.dispatcher import AutomationDispatcher
 from duck.automation.trigger import AutomationTrigger
-from duck.routes import Blueprint
 from duck.html.components.core.system import LivelyComponentSystem
-from duck.settings import SETTINGS
-from duck.utils.importer import (import_module_once, x_import)
 from duck.utils.lazy import Lazy
+from duck.utils.importer import (import_module_once, x_import)
 
 
 def get_wsgi() -> Any:
@@ -43,7 +43,8 @@ def get_wsgi() -> Any:
         raise SettingsError("Please define WSGI in `settings.py`.")
     
     try:
-        return x_import(wsgi_path)(SETTINGS)
+        return x_import(wsgi_path)(SETTINGS) # type: ignore
+    
     except Exception as e:
         raise SettingsError(f"Failed to load WSGI: {e}") from e
 
@@ -59,8 +60,10 @@ def get_asgi() -> Any:
     
     if not asgi_path:
         raise SettingsError("Please define ASGI in `settings.py`.")
+    
     try:
-        return x_import(asgi_path)(SETTINGS)
+        return x_import(asgi_path)(SETTINGS) # type: ignore
+    
     except Exception as e:
         raise SettingsError(f"Failed to load ASGI: {e}") from e
 
@@ -76,8 +79,10 @@ def get_file_upload_handler() -> Any:
     
     if not handler_path:
         raise SettingsError("Please define FILE_UPLOAD_HANDLER in `settings.py`.")
+    
     try:
         return x_import(handler_path)
+    
     except Exception as e:
         raise SettingsError(f"Failed to load file upload handler: {e}") from e
 
@@ -90,10 +95,14 @@ def get_user_templatetags() -> List[TemplateTag | TemplateFilter]:
     
     if not module_str:
         return []
+    
     try:
         templatetags = import_module_once(module_str).TEMPLATE_TAGS
         templatetags = templatetags or []
+
+        # Return template tags
         return list(templatetags)
+    
     except Exception as e:
         raise SettingsError(f"Failed to templatetags: {str(e)}")
 
@@ -106,14 +115,19 @@ def get_request_class() -> Type[Any]:
         SettingsError: If `REQUEST_CLASS` is not defined or cannot be imported.
     """
     request_class = SETTINGS.get("REQUEST_CLASS")
+
     if not request_class:
         raise SettingsError("Please define REQUEST_CLASS in `settings.py`.")
+    
     try:
         request_class = x_import(request_class)
-        if not issubclass(request_class, HttpRequest):
-            raise Exception(
-                "Invalid request class, should be a subclass of HttpRequest.")
+
+        if not issubclass(request_class, HttpRequest): # type: ignore
+            raise Exception("Invalid request class, should be a subclass of HttpRequest.")
+
+        # Return the final request class
         return request_class
+    
     except Exception as e:
         raise SettingsError(f"Failed to load request class: {e}") from e
 
@@ -170,15 +184,19 @@ def get_proxy_handlers() -> List[Type[Any]]:
         
         try:
             proxy_handler = x_import(proxy_handler)
-            if not issubclass(proxy_handler, HttpProxyHandler):
-                raise Exception(
-                    "Invalid proxy handler, should be a subclass of HttpProxyHandler."
-                )
+
+            if not issubclass(proxy_handler, HttpProxyHandler): # type: ignore
+                raise Exception("Invalid proxy handler, should be a subclass of HttpProxyHandler.")
+
+            # Add to handlers
             handlers.append(proxy_handler)
+
         except Exception as e:
             if proxy_handler == async_proxy_handler:
                  raise SettingsError(f"Failed to load async proxy handler: {e}") from e
             raise SettingsError(f"Failed to load proxy handler: {e}") from e
+        
+    # Return final headers
     return handlers
 
 
@@ -190,24 +208,24 @@ def get_automation_dispatcher() -> AutomationDispatcher:
         SettingsError: If `AUTOMATION_DISPATCHER` is not properly defined.
     """
     dispatcher_path = SETTINGS.get("AUTOMATION_DISPATCHER")
+
     if not dispatcher_path:
-        raise SettingsError(
-            "AUTOMATION_DISPATCHER is not set in `settings.py`. Ensure `RUN_AUTOMATIONS=True`."
-        )
+        raise SettingsError("AUTOMATION_DISPATCHER is not set in `settings.py`. Ensure `RUN_AUTOMATIONS=True`.")
+    
     try:
         dispatcher = x_import(dispatcher_path)
-        if not issubclass(dispatcher, AutomationDispatcher):
-            raise SettingsError(
-                f"AUTOMATION_DISPATCHER should be a subclass of AutomationDispatcher, not {dispatcher}."
-            )
-        return dispatcher
+
+        if not issubclass(dispatcher, AutomationDispatcher): # type: ignore
+            raise SettingsError(f"AUTOMATION_DISPATCHER must be a subclass of AutomationDispatcher, not {dispatcher}.")
+
+        # Return dispatcher
+        return dispatcher # type: ignore
+    
     except Exception as e:
-        raise SettingsError(
-            f"Failed to load automation dispatcher: {e}") from e
+        raise SettingsError(f"Failed to load automation dispatcher: {e}") from e
 
 
-def get_triggers_and_automations(
-) -> List[Tuple[AutomationTrigger, Automation]]:
+def get_triggers_and_automations() -> List[Tuple[AutomationTrigger, Automation]]:
     """
     Returns all triggers and their corresponding automations defined in `settings.py`.
 
@@ -215,38 +233,44 @@ def get_triggers_and_automations(
         SettingsError: If any trigger or automation is invalid or improperly configured.
     """
     automations = []
+
     try:
         for idx, (automation_path, meta) in enumerate(SETTINGS.get("AUTOMATIONS", {}).items()):
             try:
                 automation = x_import(automation_path)
             except ImportError:
-                raise SettingsError(
-                    f"Cannot import automation '{automation_path}' ")
+                raise SettingsError(f"Cannot import automation '{automation_path}' ")
 
             if not isinstance(automation, Automation):
                 raise SettingsError(
                     f"Automation '{automation_path}' at position {idx} must be an instance of Automation, not {type(automation).__name__}."
                 )
+            
             if not isinstance(meta, dict):
                 raise SettingsError(
                     f"AUTOMATIONS in settings should map Automations to dictionaries, not {type(meta).__name__}."
                 )
+
+            # Trigger path
             trigger_path = meta.get("trigger")
+
             if not trigger_path:
                 raise SettingsError(
                     f"Automation '{automation_path}' at position {idx} must have a corresponding dictionary with key 'trigger' set."
                 )
+            
             try:
                 trigger = x_import(trigger_path)
             except ImportError:
-                raise SettingsError(
-                    f"Cannot import automation trigger '{trigger_path}' ")
+                raise SettingsError(f"Cannot import automation trigger '{trigger_path}' ")
+            
             if not isinstance(trigger, AutomationTrigger):
                 raise SettingsError(
                     f"Trigger for automation '{automation_path}' at position {idx} must be an instance of AutomationTrigger, not {type(trigger).__name__}."
                 )
+            
             try:
-                trigger.check_trigger()  # check if this method is implemented
+                trigger.check_trigger()  # Check if this method is implemented
             except NotImplementedError:
                 raise SettingsError("Method 'check_trigger' not implemented")
             
@@ -350,8 +374,8 @@ def get_user_middlewares() -> List[Type]:
         middlewares.append(dashboard_middleware)
         
     try:
-        middlewares = [x_import(path) for path in middlewares]
-        return middlewares
+        return [x_import(path) for path in middlewares] # type: ignore
+    
     except Exception as e:
         raise MiddlewareLoadError(f"Failed to load middlewares: {e}") from e
 
@@ -361,20 +385,19 @@ def get_normalizers():
     Returns loaded normalizers set in settings.py
     """
     try:
-        normalizers = [
-            x_import(normalizer) for normalizer in SETTINGS["NORMALIZERS"]
-        ]
-        return normalizers
+        return [x_import(normalizer) for normalizer in SETTINGS["NORMALIZERS"]]
+    
     except Exception as e:
         raise NormalizerLoadError("Error loading normalizers: %s" % str(e)) from e
 
 
-def get_session_storage() -> type:
+def get_session_storage() -> Type:
     """
     Returns the session storage class from settings.py.
     """
     storage_cls = x_import(SETTINGS["SESSION_STORAGE"])
-    return storage_cls
+
+    return storage_cls # type: ignore
 
 
 def get_session_store():
@@ -382,7 +405,8 @@ def get_session_store():
     Returns the session store class.
     """
     session_engine = SETTINGS["SESSION_ENGINE"]
-    return import_module_once(session_engine).SessionStore  # get SessionStore from session engine.
+
+    return import_module_once(session_engine).SessionStore  # Get SessionStore from session engine.
 
 
 def get_jwt_store():
@@ -390,6 +414,7 @@ def get_jwt_store():
     Returns the JWT store class.
     """
     jwt_engine = SETTINGS.get("JWT_ENGINE", "duck.http.jwt.engine")
+
     return import_module_once(jwt_engine).JWTStore
 
 
@@ -403,12 +428,14 @@ def get_request_handling_task_executor():
         
         if object_path.count(".") < 1:
             request_handling_task_executor = x_import(object_path)
-            return request_handling_task_executor()
+            return request_handling_task_executor() # type: ignore
         
         # If the object path contains a dot, we treat it as a module path and an object name
         module_path, obj_name = object_path.rsplit(".", 1)
         module = import_module_once(module_path)
         request_handling_task_executor = getattr(module, obj_name)
+
+        # Return final executor
         return request_handling_task_executor()
 
     except Exception as e:
@@ -424,6 +451,69 @@ def get_preferred_log_style() -> str:
     
     if style and style not in supported:
         raise SettingsError(f"PREFERRED_LOG_STYLE unsupported. Supported styles: {supported}")
+
+    return style
+
+
+def get_storage_backend(key: str, load_backend: bool = True):
+    """
+    Returns the set storage backend from settings.
+    """
+    backends = SETTINGS.get("STORAGE_BACKENDS")
+
+    default = {
+        "default": {
+            "backend": "duck.contrib.storage.backends.local.LocalStorage",
+        },
+        "staticfiles": {
+            "backend": "duck.contrib.storage.backends.local.LocalStorage",
+            "options": {
+                "root": str(SETTINGS["STATIC_ROOT"]),
+                "base_url": str(SETTINGS.get("STATIC_URL", "/static")),
+            }
+        },
+        "mediafiles": {
+            "backend": "duck.contrib.storage.backends.local.LocalStorage",
+            "options": {
+                "root": str(SETTINGS["MEDIA_ROOT"]),
+                "base_url": str(SETTINGS.get("MEDIA_URL", "/media")),
+            }
+        },
+    }
+
+    if not backends:
+        backends = default
+
+    if not load_backend:
+        return backends.get(key)
+
+    # Load backend
+    backend_data = backends.get(key)
+
+    if not backend_data:
+        raise SettingsError(f"Config for storage backend '{key}' not set correctly or is not present.")
+
+    backend = backend_data.get("backend")
+
+    if not backend:
+        raise SettingsError(f"Key 'backend' in storage backend '{key}' not configured.")
+
+    try:
+        backend_cls = x_import(backend)
+
+    except Exception as e:
+        raise SettingsError(f"Error loading storage backend '{backend}': {e} ") from e
+
+    try:
+        backend = backend_cls(**(backend_data.get("options") or {})) # type: ignore
+        
+    except Exception as e:
+        raise SettingsError(f"Error initializing storage backend '{backend}': {e}. Maybe you forgot to pass right options. ") from e
+
+    
+    # Return final obj
+    return backend
+    
 
 
 class Loaded:
@@ -446,12 +536,12 @@ class Loaded:
         )
         self.ALL_TEMPLATETAGS = (
             self.USER_TEMPLATETAGS
-            + self.BUILTIN_TEMPLATETAGS
+            + self.BUILTIN_TEMPLATETAGS # type: ignore
             + self.TEMPLATE_HTML_COMPONENT_TAGS
         )
         self.REQUEST_CLASS = get_request_class()
         self.CONTENT_COMPRESSION = Lazy(get_content_compression_settings)
-        self.PROXY_HANDLER, self.ASYNC_PROXY_HANDLER = Lazy(get_proxy_handlers) if SETTINGS["USE_DJANGO"] else (None, None)
+        self.PROXY_HANDLER, self.ASYNC_PROXY_HANDLER = Lazy(get_proxy_handlers) if SETTINGS["USE_DJANGO"] else (None, None) # type: ignore
         self.AUTOMATION_DISPATCHER, self.AUTOMATIONS = (
             Lazy(get_automation_dispatcher), Lazy(get_triggers_and_automations)
             if SETTINGS.get("RUN_AUTOMATIONS")
@@ -467,6 +557,8 @@ class Loaded:
         self.JWT_STORE = Lazy(get_jwt_store)
         self.REQUEST_HANDLING_TASK_EXECUTOR = Lazy(get_request_handling_task_executor)
         self.PREFERRED_LOG_STYLE = Lazy(get_preferred_log_style)
+        self.MEDIAFILES_BACKEND = Lazy(lambda: get_storage_backend("mediafiles"))
+        self.STATICFILES_BACKEND = Lazy(lambda: get_storage_backend("staticfiles"))
         
         # Load middlewares instantly because it sometimes cause errors if loaded lazily in request processor
         self.MIDDLEWARES() # This loads middlewares right away

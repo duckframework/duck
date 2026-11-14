@@ -7,6 +7,7 @@ import sys
 import json
 import pathlib
 import socket
+from typing import Any
 
 from duck.html.components.utils.include import (
     BUILTIN_COMPONENTS,
@@ -44,7 +45,7 @@ NATIVE_ENABLED: bool = False
 
 
 # Native Config
-NATIVE_CONFIG: str = BASE_DIR / "native/config.py"
+NATIVE_CONFIG: str | pathlib.Path = BASE_DIR / "native/config.py"
 
 
 # Allowed Hosts, Wildcards Allowed
@@ -104,7 +105,7 @@ IGNORE_NORMALIZATION_ERRORS: bool = True
 # Response Content Compression
 # Whether to compress response content
 # Note: If a backend server like Django is used, then content compression will depend on that server.
-CONTENT_COMPRESSION: dict[str] = {
+CONTENT_COMPRESSION: dict[str, Any] = {
     "encoding": "gzip",
     "min_size": 1024,  # Files more than 1KB
     "max_size": 512 * 1024,  # Files not more than 512KB
@@ -548,7 +549,7 @@ SESSION_ENGINE = "duck.http.session.engine"
 # Specifies the directory to store session data.
 # - If using database session storage, this can be set to `None`.
 # - The directory will be automatically created if it does not exist.
-SESSION_DIR: str = BASE_DIR / "assets/.cache"
+SESSION_DIR: str | pathlib.Path = BASE_DIR / "assets/.cache"
 
 
 # Session Cookie Name
@@ -567,7 +568,7 @@ SESSION_COOKIE_PATH: str = "/"
 
 
 # Session Cookie Domain
-SESSION_COOKIE_DOMAIN: str = None
+SESSION_COOKIE_DOMAIN: str | None = None
 
 
 # Session Expire At Browser Close
@@ -622,7 +623,7 @@ CSRF_COOKIE_PATH: str = "/"
 
 
 # Domain for which the CSRF cookie is valid (default is None, meaning the domain of the current request)
-CSRF_COOKIE_DOMAIN: str = None
+CSRF_COOKIE_DOMAIN: str | None = None
 
 
 # Whether to send the CSRF cookie only over HTTPS connections (default is False)
@@ -646,12 +647,12 @@ CSRF_USE_SESSIONS: bool = False
 # These are global static directories to lookup for static files when
 # `collectstatic` command is used (in production)
 # Blueprint static dirs will be resolved automatically, no need to be included here.
-GLOBAL_STATIC_DIRS: list[str] = [BASE_DIR / "web/ui/static"]
+GLOBAL_STATIC_DIRS: list[str | pathlib.Path] = [BASE_DIR / "web/ui/static"]
 
 
 # The root directory for storing static files.
 # Auto created if it doesn't exist
-STATIC_ROOT: str = BASE_DIR / "assets/staticfiles"
+STATIC_ROOT: str | pathlib.Path = BASE_DIR / "assets/staticfiles"
 
 
 # The URL to use for serving static files.
@@ -662,8 +663,8 @@ STATIC_URL: str = "static/"
 
 # Media Root
 # This is where the media files will reside in.
-# Auto created if it does'nt exist
-MEDIA_ROOT: str = BASE_DIR / "assets/media"
+# Auto created if it doesn'Wt exist
+MEDIA_ROOT: str | pathlib.Path = BASE_DIR / "assets/media"
 
 
 # Media URL
@@ -673,16 +674,9 @@ MEDIA_URL: str = "media/"
 
 # File Upload Handler Configuration
 # Specifies the handler used to save uploaded files.
-# - Default is `PersistentFileUpload`, which saves uploaded files in local storage (but you have to manually call save()).
+# - Default is `PersistentFileUpload`, which saves uploaded files in configured storage backend (but you have to manually call save()).
 # Other alternative is TemporaryFileUpload
 FILE_UPLOAD_HANDLER: str = "duck.http.fileuploads.handlers.PersistentFileUpload"
-
-
-# File Upload Directory Configuration
-# Specifies the directory where uploaded files will be stored.
-# - Required if `PersistentFileUpload` is used as the `FILE_UPLOAD_HANDLER`.
-# - The directory will be automatically created if it doesn't already exist.
-FILE_UPLOAD_DIR: str = BASE_DIR / "assets/uploads"
 
 
 # Maximum Data Upload
@@ -716,7 +710,7 @@ DJANGO_SILENT: bool = False
 
 # Logging Directory
 # This is the directory to place all logs
-LOGGING_DIR: str = BASE_DIR / "assets/logs"
+LOGGING_DIR: str | pathlib.Path = BASE_DIR / "assets/logs"
 
 
 # Log File Format
@@ -747,16 +741,16 @@ VERBOSE_LOGGING: bool = True
 # SSL CERTIFICATE SETTINGS
 
 # SSL Certificate Location
-SSL_CERTFILE_LOCATION: str = BASE_DIR / "etc/ssl/server.crt"
+SSL_CERTFILE_LOCATION: str | pathlib.Path = BASE_DIR / "etc/ssl/server.crt"
 
 
 # SSL Private Key Location
 # SECURITY WARNING: Keep this safe to avoid security bridges
-SSL_PRIVATE_KEY_LOCATION: str = BASE_DIR / "etc/ssl/server.key"
+SSL_PRIVATE_KEY_LOCATION: str | pathlib.Path = BASE_DIR / "etc/ssl/server.key"
 
 
 # Preconfigured Certbot config
-CERTBOT_ROOT: str = BASE_DIR / "etc/certbot"
+CERTBOT_ROOT: str | pathlib.Path = BASE_DIR / "etc/certbot"
 
 
 # SYSTEMD CONFIGURATION

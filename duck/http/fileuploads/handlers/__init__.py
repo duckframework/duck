@@ -9,7 +9,10 @@ from typing import Optional
 
 from duck.settings import SETTINGS
 from duck.contrib.sync import ensure_async
+from duck.contrib.storage.backends import StorageBackend, ProgressCallback
+from duck.utils.slug import slugify
 from duck.utils.object_mapping import map_data_to_object
+
 
 
 class FileUploadError(Exception):
@@ -48,6 +51,8 @@ class BaseFileUpload(io.BytesIO):
         self.name = None
         self.content_type = None
         self.content_disposition = None
+
+        # Ensure filename provided
         assert filename or False, "Filename is required"
 
         if not isinstance(initial_bytes, bytes):
@@ -58,6 +63,14 @@ class BaseFileUpload(io.BytesIO):
         # Map additional keyword arguments to instance attributes
         map_data_to_object(self, kw)
         
+    def get_storage_backend(self) -> StorageBackend:
+        """
+        Returns the current storage backend for file uploads.
+        """
+        from duck.settings.loaded import SettingsLoaded
+
+        return SettingsLoaded.MEDIAFILES_BACKEND.getresult()
+
     def normalize_filename(self) -> str:
         """
         Normalize the filename by spaces or invalid characters.
@@ -65,10 +78,11 @@ class BaseFileUpload(io.BytesIO):
         Returns:
             str: The normalized filename.
         """
-        self.filename = self.filename.strip().replace(" ", "-")
+        self.filename = slugify(self.filename.strip())
+
         return self.filename
         
-    def geturl(self, absolute=True):
+    def geturl(self, absolute: bool = True):
         """
         Get the URL for accessing the uploaded file.
 
@@ -76,16 +90,26 @@ class BaseFileUpload(io.BytesIO):
             str: The URL for accessing the uploaded file.
         """
         from duck.shortcuts import media
+
         return media(self.filename, absolute=absolute)
 
     def getsize(self):
         """
         Returns the file IO object total bytes.
         """
-        curpos = self.tell() 
-        self.seek(0, 2) # end of file
-        size = self.tell()
-        self.seek(curpos)
+        curpos = self.tell()
+
+        # Seek to end of file
+        self.seek(0, 2)
+
+        try:
+            # Get the current size
+            size = self.tell()
+        
+        finally:
+            self.seek(curpos)
+
+        # Return the current size
         return size
     
     def guess_mimetype(self) -> Optional[str]:
@@ -97,6 +121,7 @@ class BaseFileUpload(io.BytesIO):
                the filename, because it bypasses altered filenames thereby increasing security.
         """
         from duck.http.mimes import guess_data_mimetype
+
         return guess_data_mimetype(self.getvalue())
         
     def verify(self, allowed_mimes: list[str] | None = None) -> None:
@@ -131,7 +156,7 @@ class BaseFileUpload(io.BytesIO):
     
         if allowed_mimes:
             if detected not in allowed_mimes:
-                raise DisallowedMimeError(f"Mimetype `{detected}` not allowed. Allowed mimes: {allowed_mimes}")
+                raise FileTypeNotAllowedError(f"Mimetype `{detected}` not allowed. Allowed mimes: {allowed_mimes}")
                 
     def save_to_file(self, filepath: str):
         """
@@ -163,10 +188,12 @@ class BaseFileUpload(io.BytesIO):
       
     def __repr__(self):
         r = f"<{self.__class__.__name__} {self.filename}"
+
         if hasattr(self, "content_type"):
             r += f" ({self.content_type})>"
         else:
             r += ">"
+            
         return r
 
 
@@ -184,54 +211,37 @@ class TemporaryFileUpload(BaseFileUpload):
 
 class PersistentFileUpload(BaseFileUpload):
     """
-    Class for persistent storage of file uploads on disk in a specified directory.
+    Class for persistent storage of file uploads to the mediafiles storage backend.
 
-    Attributes:
-        filename (str): The name of the file.
-        initial_bytes (bytes): The initial byte content of the file.
-        directory (str): The directory where the file will be saved.
-        overwrite_existing_file (bool): Whether to overwrite existing file in directory when saving
+    Notes:
+        This saves the uploaded file to the current storage backend.
     """
 
-    def __init__(
-        self,
-        filename: str,
-        initial_bytes: bytes = b"",
-        directory: str = SETTINGS["FILE_UPLOAD_DIR"],
-        overwrite_existing_file=True,
-        **kw,
-    ):
-        self.initial_bytes = initial_bytes
-        self.directory = directory
-        self.filename = filename
-        self.overwrite_existing_file = overwrite_existing_file
-
-        if not os.path.isdir(directory):
-            raise FileNotFoundError(f"Directory {directory} does not exist")
-
-        if not filename:
-            raise FileUploadError(f"Please provide filename, should not be '{filename}' ")
-            
-        self.filepath = os.path.join(directory, filename)
-
-        if os.path.isfile(self.filepath) and not overwrite_existing_file:
-            raise FileUploadError(
-                f"File '{self.filepath}' already exists and argument 'overwrite_existing_file' is not True "
-            )
-            
-        super().__init__(filename, initial_bytes, **kw)
-
-    def save_to_file(self):
+    def save(self, folder: str = "", on_progress: ProgressCallback | None = None):
         """
-        Save the uploaded data to the specified file path.
+        Save file to storage backend backend with progress reporting.
 
-        Returns:
-            int: The number of bytes written.
+        Args:
+            folder (str, optional): The optional folder to save the file in, e.g., `"images"` or `"video"`.
+            on_progress (ProgressCallback, optional): Function to call on save progress.
         """
-        return super().save_to_file(self.filepath)
+        
+        backend = self.get_storage_backend()
 
-    def save(self):
+        # Save file to backend
+        backend.save(self.initial_bytes, self.filename, folder=folder, on_progress=on_progress)
+
+    async def async_save(self, folder: str = "", on_progress: ProgressCallback | None = None):
         """
-        Save the uploaded data by writing it to the specified file path.
+        Asynchronously save file to storage backend with progress reporting.
+
+        Args:
+            folder (str, optional): The optional folder to save the file in, e.g., `"images"` or `"video"`.
+            on_progress (ProgressCallback, optional): Function to call on save progress.
         """
-        self.save_to_file()
+        
+        backend = self.get_storage_backend()
+
+        # Save file to backend
+        await backend.async_save(self.initial_bytes, self.filename, folder=folder, on_progress=on_progress)
+

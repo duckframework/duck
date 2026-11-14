@@ -1,7 +1,6 @@
 """
 Module for route-specific actions.
 """
-import os
 import pathlib
 
 from typing import List
@@ -74,6 +73,13 @@ def register_blueprints(blueprints: List[Blueprint]):
             register_urlpatterns(blueprint.urlpatterns)
         except Exception as e:
             raise BlueprintError(f"Error registering urlpatterns for blueprint '{blueprint}' ") from e
+
+
+def clear_urlpatterns():
+    """
+    Clear all registered urlpatterns.
+    """
+    RouteRegistry.clear()
 
 
 def blueprint_joinpath(blueprint_subdir: str, path: str, blueprint: Blueprint) -> str:

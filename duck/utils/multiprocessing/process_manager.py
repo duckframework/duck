@@ -46,6 +46,7 @@ manager = WorkerProcessManager(
 
 try:
     manager.start()
+    
     for _ in range(20):  # Monitor for a while
         print("Worker status:", manager.status())
         time.sleep(2)
@@ -53,9 +54,8 @@ finally:
     manager.stop()
 ```
 """
-import os
+
 import time
-import logging
 import threading
 import multiprocessing
 import setproctitle
@@ -71,6 +71,7 @@ from duck.exceptions.all import SettingsError
 
 try:
     from duck.logging import logger
+
 except SettingsError:
     from duck.logging import console as logger
 
@@ -143,9 +144,13 @@ class HeartbeatHealthCheck:
          """
          if not self._heartbeats:
              raise HeartbeatUpdateNeverCalled("Heartbeats are empty, meaning you may not be calling `update_heartbeat` in your child process.")
+
+         # Last heartbeat timestamp for the given process index
          last_beat = self._heartbeats.get(idx, 0)
+
          if time.time() - last_beat > self.heartbeat_timeout:
              return False  # Too long since last heartbeat
+         
          return True    
         
     def __call__(self, process: multiprocessing.Process, idx: int) -> bool:
@@ -351,6 +356,7 @@ class WorkerProcessManager:
         """
         with self.worker_locks[idx]:
             old_p = self.worker_processes[idx]
+
             if old_p.is_alive():
                 old_p.terminate()
                 old_p.join(timeout=5)
@@ -358,6 +364,7 @@ class WorkerProcessManager:
             # Start new process
             args = self.args_fn(idx)
             args = (idx, *args) if isinstance(args, Iterable) else (idx, args) # Always include index in args
+
             if len(args) == 2:
                 if args[1] is None:
                     args = (idx, )
@@ -399,9 +406,11 @@ class WorkerProcessManager:
             try:
                 for idx, p in enumerate(list(self.worker_processes)):
                     healthy = p.is_alive()
+
                     if healthy and self.health_check_fn:
                         try:
                             healthy = self.health_check_fn(p, idx)
+
                         except HeartbeatUpdateNeverCalled as e:
                             healthy = False
                             
@@ -413,7 +422,11 @@ class WorkerProcessManager:
                                     
                             # Wait for heartbeat_timeout and continue
                             heartbeat_never_called_counter += 1
+
+                            # Sleep for heartbeat_timeout to avoid busy-looping
                             time.sleep(self.health_check_fn.heartbeat_timeout)
+
+                            # Continue
                             continue
                              
                         except (KeyboardInterrupt, BrokenPipeError):

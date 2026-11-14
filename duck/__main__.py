@@ -3,7 +3,6 @@
 Main entry to Duck command-line tool.
 """
 import os
-import sys
 import click
 import setproctitle
 
@@ -129,6 +128,7 @@ def django(args):
 @click.option("-dj", "--use-django", is_flag=True, default=False, help="Run application along with Django server. This overrides setting USE_DJANGO in settings.py (optional)")
 @click.option("--is-reload", is_flag=True, default=False, help="Flag the application to be in a reload state. Usually set by DuckSightReloader.")
 @click.option("--workers", default=None, help="Number of workers to use. Parse 'auto' for optimum workers.")
+@click.option("--no-child-process", is_flag=True, default=False, help="Run the application in the current process instead of a child process. Useful for debugging.")
 def runserver(address, port, domain, settings, ipv6, file, use_django, is_reload, workers):
     """
     Run the development or production server.

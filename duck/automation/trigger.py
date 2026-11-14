@@ -6,6 +6,7 @@ It includes a base `AutomationTrigger` class and a `NoTrigger` class for scenari
 """
 
 
+
 class AutomationTrigger:
     """
     Base class for Automation Triggers.
@@ -25,9 +26,10 @@ class AutomationTrigger:
         self.description = description
 
         if name:
-            assert isinstance(name, str), "Name should be a string"
+            assert isinstance(name, str), "Name must be a string"
+
         if description:
-            assert isinstance(description,str), "Description should be a string"
+            assert isinstance(description,str), "Description must be a string"
 
     def check_trigger(self) -> bool:
         """

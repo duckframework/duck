@@ -196,6 +196,7 @@ class BaseRouteRegistry:
             for registered_name, (_, _, existing_pattern,) in route_info.items():
                 if name == registered_name:
                     raise RouteError(f"URL path '{original_url}' with name '{name}' already registered.")
+                
                 if existing_pattern.fullmatch(normalized_url) or pattern.fullmatch(registered_url):
                     raise RouteError(
                         f"URL path '{original_url}' conflicts with existing registered route '{registered_url}'. "
@@ -207,7 +208,7 @@ class BaseRouteRegistry:
         # Save to registry
         self.url_map[normalized_original_url][name] = (handler, methods, pattern,)
 
-    @functools.lru_cache(maxsize=256)
+    @functools.lru_cache(maxsize=1024)
     def fetch_route_info_by_name(self, name: str) -> Dict:
         """
         Fetches the handler, allowed methods, URL pattern for a route, etc by its name
@@ -237,7 +238,7 @@ class BaseRouteRegistry:
                     }
         raise RouteNotFoundError(f'Route with name "{name}" not found')
 
-    @functools.lru_cache(maxsize=256)
+    @functools.lru_cache(maxsize=1024)
     def fetch_route_info_by_url(self, url_path: str) -> Dict:
         """
         Fetches the handler and allowed methods for a given URL path.
@@ -245,14 +246,14 @@ class BaseRouteRegistry:
         This generates handler kwargs rather than method fetch_route_info_by_name
 
         Args:
-                url_path (str): The URL path to match.
+            url_path (str): The URL path to match.
 
         Returns:
-                Dict: A dictionary containing the route details.
+            Dict: A dictionary containing the route details.
 
         Raises:
-                RouteNotFoundError: If no matching route is found.
-                RouteError: If URL in bad format
+            RouteNotFoundError: If no matching route is found.
+            RouteError: If URL in bad format
         """
         normalized_url = normalize_url_path(url_path)
         
@@ -272,8 +273,13 @@ class BaseRouteRegistry:
                         "pattern": pattern,
                         "handler_kwargs": self.extract_kwargs_from_url(normalized_url, registered_url),
                     }
-        raise RouteNotFoundError(
-            f'Route "{url_path}" doesn\'t match any registered routes')
+        raise RouteNotFoundError(f'Route "{url_path}" doesn\'t match any registered routes')
+
+    def clear(self):
+        """
+        Clears all registered routes from the registry.
+        """
+        self.url_map.clear()
 
 
 RouteRegistry = Lazy(BaseRouteRegistry)

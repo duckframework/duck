@@ -112,11 +112,11 @@ from typing import (
 
 from duck.utils.threading.patch import get_parent_thread
 from duck.exceptions.all import SettingsError
-from duck.utils.performance import exec_time
 
 
 try:
     from duck.logging import logger
+
 except SettingsError:
     from duck.logging import console as logger
     
@@ -185,18 +185,23 @@ def get_or_create_thread_manager(
     """
     def resolve(thread: threading.Thread):
         managers = REGISTRY.get(thread.ident)
+
         if managers:
             # Manager namespace found
             manager = managers.get(id)
+
             if manager is None and not strictly_get:
                 manager = ThreadPoolManager(thread, _id=id)
                 managers[id] = manager
+
             return manager
 
         # No managers registered for this thread; check parent
         parent = get_parent_thread(thread)
+
         if parent is not None:
             return resolve(parent)
+        
         return None
 
     if strictly_get and force_create:
@@ -219,9 +224,11 @@ def get_or_create_thread_manager(
         try:
             managers = REGISTRY[current.ident]
             managers[id] = manager
+
         except KeyError:
             # Registry has no target key
             managers = REGISTRY[current.ident] = {id: manager}
+
     return manager
 
 
@@ -247,7 +254,11 @@ class UnknownTaskError(Exception):
             f"(expected task_type: '{pool_task_type}').\n"
             "To safely submit this task, reinitialize the ThreadPoolManager or restart the pool with the proper task type."
         )
+
+        # Call the base class constructor with the parameters it needs
         super().__init__(message)
+
+        # Store the task type and pool task type for reference
         self.task_type = task_type
         self.pool_task_type = pool_task_type
 
@@ -264,6 +275,7 @@ class ThreadPoolManager:
     """
     This is the list of created instances.
     """
+
     def __init__(self, creator_thread: Optional[threading.Thread] = None, _id: Optional[Union[str, int]] = None):
         """
         Initialize the threadpool.
@@ -278,6 +290,8 @@ class ThreadPoolManager:
         self._daemon: Optional[bool] = None
         self._task_type: Optional[str] = None
         self._id = _id or "default-%s"%id(self)
+
+        # Register this instance in the global registry
         ThreadPoolManager.__instances.append(self)
     
     @classmethod
@@ -316,9 +330,13 @@ class ThreadPoolManager:
         """
         def is_pool_active():
             dummy_task = lambda: None
+
             try:
                 self._pool.submit(dummy_task)
+
+                # If submission succeeds, the pool is active
                 return True
+            
             except RuntimeError:
                 # Likely pool is not active
                 return False
@@ -330,7 +348,7 @@ class ThreadPoolManager:
             
             self._pool = concurrent.futures.ThreadPoolExecutor(
                 max_workers=self._max_workers,
-                thread_name_prefix=thread_name_prefix,
+                thread_name_prefix=thread_name_prefix, # type: ignore
                 initializer=self._worker_init,
             )
 
@@ -374,15 +392,20 @@ class ThreadPoolManager:
         def wrapped_task():
             try:
                 return task()
+            
             except Exception as e:
-                # Log exception already if 
+                # Log exception already if log_exception is True, else just raise it to propagate to future.result() or future.exception()
                 if log_exception:
                     logger.log(f"Error executing threadpool task '{task}': {e}", level=logger.WARNING)
                     logger.log_exception(e)
+
+                # Re-raise exception to propagate to future.result() or future.exception()
                 raise e # Re-raise exception
         
         # Submit wrapped task instead.
         future = pool.submit(wrapped_task)
+
+        # Return the future
         return future
         
     def get_pool(self) -> concurrent.futures.ThreadPoolExecutor:

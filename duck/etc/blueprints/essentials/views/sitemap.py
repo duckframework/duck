@@ -6,7 +6,7 @@ from duck.settings import SETTINGS
 from duck.http.request import HttpRequest
 from duck.http.response import HttpResponse
 from duck.contrib.sitemap import SitemapBuilder
-from duck.contrib.sync import convert_to_async_if_needed
+from duck.contrib.sync import ensure_async
 from duck.views import cached_view
 
 
@@ -53,5 +53,5 @@ async def async_sitemap_view(request: HttpRequest):
         default_changefreq=SITEMAP_CHANGE_FREQUENCY,
         apply_default_excludes=SITEMAP_APPLY_DEFAULT_EXCLUDES,
     )
-    xml = await convert_to_async_if_needed(builder.build)()
+    xml = await ensure_async(builder.build)()
     return HttpResponse(xml, content_type="text/xml")

@@ -1,0 +1,143 @@
+"""
+Module containing collectstatic command class.
+"""
+import os
+import shutil
+import pathlib
+
+from typing import List, Generator, Tuple
+
+from duck.routes import Blueprint
+from duck.utils.path import joinpaths
+from duck.logging import console
+
+
+class CollectStaticCommand:
+    # collectstatic command
+    
+    @classmethod
+    def setup(cls):
+        pass
+        
+    @classmethod
+    def main(cls, skip_confirmation: bool = False):
+        cls.setup()
+        cls.collectstatic(skip_confirmation)
+    
+    @classmethod
+    def collectstatic(cls, skip_confirmation: bool = False) -> None:
+        # Execute command after setup.
+        from duck.settings import SETTINGS
+        
+        static_root = str(SETTINGS["STATIC_ROOT"])
+        blueprint_static_dirs: List[str, Blueprint] = list(cls.find_blueprint_static_dirs())
+        blueprint_staticfiles: List[str] = list(cls.get_blueprint_staticfiles(blueprint_static_dirs))
+        global_static_dirs = SETTINGS["GLOBAL_STATIC_DIRS"] or []
+        global_staticfiles = [] 
+        
+        for static_dir in global_static_dirs:
+            if os.path.isdir(static_dir):
+                staticfiles = list(cls.recursive_getfiles(static_dir))
+                global_staticfiles.extend(staticfiles)
+                
+        staticfiles_len = len(blueprint_staticfiles) + len(global_staticfiles)
+        
+        if staticfiles_len == 0:
+            console.log_raw("\nNo staticfiles found!", level=console.WARNING)
+            return
+    
+        if not skip_confirmation:
+            # Show confirmation prompt
+            console.log_raw(
+                f"\nWould you like to copy {staticfiles_len} staticfile(s) to {static_root} (y/N): ",
+                end="",
+                level=console.DEBUG,
+            )
+            
+            # Obtain confirmation from console.
+            choice = input("")
+            
+            if not choice.lower().startswith("y"):
+                console.log_raw("\nCancelled, bye!", level=console.WARNING)
+                return
+        
+        for static_dir in global_static_dirs:
+            destination = static_root
+            
+            if os.path.isdir(static_dir):
+                shutil.copytree(static_dir, destination, dirs_exist_ok=True)
+            
+        for static_dir, blueprint in blueprint_static_dirs:
+            # Convert staticdir to relative path
+            abs_static_dir = static_dir
+            
+            # Build destination path
+            destination = joinpaths(
+                static_root,
+                blueprint.name,
+            )
+            
+            # Copy static files
+            shutil.copytree(abs_static_dir, destination, dirs_exist_ok=True)
+    
+        console.log_raw(f"\nSuccessfully copied {staticfiles_len} staticfile(s) to {static_root}", level=console.SUCCESS)
+        
+    @classmethod
+    def recursive_getfiles(cls, directory: str) -> Generator:
+       """
+       Returns a generator for all files and subfiles within the directory.
+       """
+       directory = pathlib.Path(directory)
+       
+       if directory.is_dir():
+           for dir_entry in os.scandir(directory):
+                if dir_entry.is_file():
+                    yield dir_entry.path
+                else:
+                    for i in cls.recursive_getfiles(dir_entry.path):
+                        yield i
+    
+    @classmethod
+    def find_blueprint_static_dirs(cls) -> Generator[Tuple[str, Blueprint], None, None]:
+        """
+        Finds and returns static directories from all blueprint base directories.
+    
+        Returns:
+            Generator: The generator of static directory and blueprint pair.
+        """
+        from duck.backend.django.setup import prepare_django, DjangoSetupWarning
+        from duck.settings.loaded import SettingsLoaded
+        
+        blueprints = SettingsLoaded.BLUEPRINTS
+        
+        # Some blueprints may import Django models so lets try to setup django first.
+        try:
+            prepare_django(True)
+        except Exception as e:
+            console.warn(f"Django setup failed: {e}", DjangoSetupWarning)
+            
+            if SETTINGS['DEBUG']:
+                console.log_exception(e)
+        
+        for blueprint in blueprints:
+            if blueprint.enable_static_dir:
+                # Access to blueprint static files is allowed.
+                static_dir = joinpaths(
+                    blueprint.root_directory,
+                    blueprint.static_dir,
+                ) if not blueprint.static_dir_is_absolute else blueprint.static_dir
+                
+                if pathlib.Path(static_dir).is_dir():
+                     yield (static_dir, blueprint)
+    
+    @classmethod
+    def get_blueprint_staticfiles(cls, blueprint_static_dirs: Tuple[str, Blueprint]):
+        """
+        Returns the generator to the found staticfiles.
+        
+        Args:
+            blueprint_static_dirs (Tuple[str, Blueprint]): The collection of the static directory and the respective blueprint.
+        """
+        for static_dir, blueprint in blueprint_static_dirs:
+            for static_file in cls.recursive_getfiles(static_dir):
+                yield static_file

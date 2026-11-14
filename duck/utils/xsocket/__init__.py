@@ -11,6 +11,7 @@ import threading
 
 from typing import (
   Any,
+  Callable,
   Optional,
   Union,
   Tuple,
@@ -42,13 +43,13 @@ def create_xsocket(
 
 def ssl_wrap_socket(
     socket_obj: socket.socket,
-    keyfile: str = None,
+    keyfile: Optional[str] = None,
     certfile: str = None,
     version: int = ssl.PROTOCOL_TLS_SERVER,
     server_side: bool = True,
     ca_certs=None,
     ciphers=None,
-    alpn_protocols: list[str] = None,
+    alpn_protocols: Optional[list[str]] = None,
 ) -> "ssl_xsocket":
     """
     Return an SSL xsocket with the same arguments as `ssl.wrap_socket`.
@@ -204,11 +205,13 @@ class xsocket:
         # what we want to detect.
         try:
             asyncio.get_running_loop()
+
         except RuntimeError:
             return  # No running loop — we are in a sync context, safe to proceed.
+        
         raise AsyncViolationError(message)
                 
-    def connect(self, target: Tuple[str, int], timeout: float = None) -> None:
+    def connect(self, target: Tuple[str, int], timeout: Optional[float] = None) -> None:
         # BUG FIX: `target = Tuple[str, int]` used `=` (a default value) instead
         # of `:` (a type annotation), making `target` optional with a nonsensical default.
         """
@@ -223,8 +226,10 @@ class xsocket:
         
         try:
             sock.connect(target)
+
         except socket.timeout:
             raise TimeoutError(f"Connect operation timed out after {timeout} seconds")
+        
         finally:
             sock.settimeout(original_timeout)
         
@@ -251,7 +256,7 @@ class xsocket:
             # Ignore every exception
             pass
             
-    def send(self, data: bytes, timeout: float = None) -> int:
+    def send(self, data: bytes, timeout: Optional[float] = None) -> int:
         """
         Custom `send` method with optional timeout. This defaults to using `sendall`.
     
@@ -279,13 +284,17 @@ class xsocket:
             # success path.  The ternary was backwards: it returned len(data) only
             # when sent was NOT None, which never happens.
             sock.sendall(data)
+            
+            # Return data sent length
             return len(data)
+        
         except socket.timeout:
             raise TimeoutError(f"Send operation timed out after {timeout} seconds")
+        
         finally:
             sock.settimeout(original_timeout)
             
-    def recv(self, n: int = DEFAULT_BUFSIZE, timeout: float = None):
+    def recv(self, n: int = DEFAULT_BUFSIZE, timeout: Optional[float] = None):
         """
         Custom `recv` method using `recv_into` with a reusable buffer and optional timeout.
     
@@ -311,20 +320,24 @@ class xsocket:
         
         try:
             count = sock.recv_into(mv, n)
+
             if count == 0:
                 # Connection closed gracefully
                 return b""
             return bytes(buf[:count])
+        
         except socket.timeout:
             raise TimeoutError(f"No data received within {timeout} seconds")
+        
         finally:
             sock.settimeout(original_timeout)
     
-    async def async_connect(self, target: Tuple[str, int], timeout: float = None) -> None:
+    async def async_connect(self, target: Tuple[str, int], timeout: Optional[float] = None) -> None:
         """
         Connect socket to a target.
         """
         self.raise_if_blocking()
+
         await asyncio.wait_for(self.loop.sock_connect(self.raw_socket, target), timeout=timeout)
         
     async def async_send(self, data: bytes, timeout: Optional[float] = None) -> int:
@@ -546,9 +559,10 @@ class ssl_xsocket(xsocket):
         self.ssl_obj = None
         self.ssl_inbio = None
         self.ssl_outbio = None
+
         super().close(shutdown, shutdown_reason)
     
-    def handle_sock_close(func):
+    def handle_sock_close(func: Callable): # type: ignore
         """
         Decorator to handle socket close by raising ConnectionError if `ssl_obj` is set to None.
         
@@ -568,6 +582,7 @@ class ssl_xsocket(xsocket):
         
         if iscoroutinefunction(func):
             return async_wrapper
+        
         return wrapper
         
     @handle_sock_close
@@ -578,19 +593,25 @@ class ssl_xsocket(xsocket):
         """
         self.raise_if_in_async_context("This method is blocking, use `async_send_pending_data` instead.")
         total = 0
+        
         while True:
             if not self.is_handshake_done():
                 with self._threading_lock: # Avoid corrupting SSLObject if handshake is not done yet
                     data = self.ssl_outbio.read() # data to send
             else:
                 data = self.ssl_outbio.read() # data to send
+            
             if not data:
                 break
+
             sent = super().send(data, timeout=timeout) or 0
+            
             if sent == 0:
                 raise ConnectionError("Transport unable to send pending encrypted data")
+            
             total += sent
             # loop until outbio drained
+
         return total
     
     @handle_sock_close
@@ -601,14 +622,19 @@ class ssl_xsocket(xsocket):
         Raises ConnectionResetError on EOF.
         """
         self.raise_if_in_async_context("This method is blocking, use `async_recv_pending_data` instead.")
+
         data = super().recv(n, timeout)
+
         if not data:
             raise ConnectionResetError("Underlying transport closed (EOF) while expecting encrypted data")
+        
         if not self.is_handshake_done():
             with self._threading_lock: # Avoid corrupting SSLObject if handshake is not done yet
                 self.ssl_inbio.write(data) # data to write
+        
         else:
             self.ssl_inbio.write(data) # data to write
+        
         return len(data)
     
     def transport_readable(self, timeout: Optional[float]) -> bool:
@@ -655,6 +681,7 @@ class ssl_xsocket(xsocket):
                 
                 if self.transport_readable(.01):
                     self.recv_more_encrypted_data(timeout=timeout)
+
                 else:
                     self._handshake_done = True
                     break
@@ -666,7 +693,7 @@ class ssl_xsocket(xsocket):
         self._handshake_done = True
         
     @handle_sock_close
-    def send(self, data: bytes, timeout: float = None) -> int:
+    def send(self, data: bytes, timeout: Optional[float] = None) -> int:
         """
         Encrypts and synchronously sends application data over the network.
         
@@ -818,7 +845,7 @@ class ssl_xsocket(xsocket):
         self._handshake_done = True
         
     @handle_sock_close
-    async def async_send(self, data: bytes, timeout: float = None) -> int:
+    async def async_send(self, data: bytes, timeout: Optional[float] = None) -> int:
         """
         Encrypts and asynchronously sends application data over the network.
         
@@ -859,7 +886,7 @@ class ssl_xsocket(xsocket):
         return total_written
         
     @handle_sock_close
-    async def async_recv(self, n: int = DEFAULT_BUFSIZE, timeout: float = None) -> bytes:
+    async def async_recv(self, n: int = DEFAULT_BUFSIZE, timeout: Optional[float] = None) -> bytes:
         """
         Asynchronously receives encrypted data from the socket, decrypts and returns it.
         """

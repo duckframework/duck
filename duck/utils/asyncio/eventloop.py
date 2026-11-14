@@ -128,6 +128,7 @@ from typing import (
     Dict,
 )
 
+from duck.utils.asyncio import new_event_loop
 from duck.utils.threading import SyncFuture, async_to_sync_future
 from duck.utils.threading.patch import get_parent_thread
 
@@ -201,25 +202,32 @@ def get_or_create_loop_manager(
     """
     def resolve(thread: threading.Thread):
         managers = REGISTRY.get(thread.ident)
+
         if managers:
             # Manager namespace found
             manager = managers.get(id, None)
+
             if manager is None and not strictly_get:
                 manager = AsyncioLoopManager(thread, _id=id)
                 managers[id] = manager
+
             return manager
 
         # No managers registered for this thread; check parent
         parent = get_parent_thread(thread)
+
         if parent is not None:
             return resolve(parent)
+        
         return None
     
     if strictly_get and force_create:
         raise TypeError("Arguments 'strictly_get' and 'force_create' cannot be both True.")
-            
+
+    # Get the current thread and attempt to resolve its manager        
     current = threading.current_thread()
     manager = None
+
     if not force_create:
         manager = resolve(current)
     
@@ -234,9 +242,11 @@ def get_or_create_loop_manager(
         try:
             managers = REGISTRY[current.ident]
             managers[id] = manager
+
         except KeyError:
             # Registry has no target key
             managers = REGISTRY[current.ident] = {id: manager}
+
     return manager
 
 
@@ -258,7 +268,11 @@ class UnknownAsyncTaskError(Exception):
             f"(required type: '{expected_type}').\n"
             "To safely submit this task, restart AsyncioLoopManager with the desired task_type, or reinitialize."
         )
+
+        # Call the base class constructor with the message
         super().__init__(message)
+
+        # Store the given and expected types for reference
         self.given_type = given_type
         self.expected_type = expected_type
 
@@ -294,6 +308,8 @@ class AsyncioLoopManager:
         self._thread: Optional[threading.Thread] = None
         self._task_type: Optional[str] = None
         self._id = _id or "default-%s"%id(self)
+
+        # Register this instance in the global registry
         AsyncioLoopManager.__instances.append(self)
         
     @classmethod
@@ -301,7 +317,7 @@ class AsyncioLoopManager:
         """
         Returns a list of all created instances so far.
         """
-        return ThreadPoolManger.__instances
+        return AsyncioLoopManager.__instances
         
     @classmethod
     def registry(cls) -> Dict[int, Dict[Any, "AsyncioLoopManager"]]:
@@ -322,12 +338,29 @@ class AsyncioLoopManager:
             RuntimeError: If event loop is not None and loop's thread is alive.
         """
         if self._loop is None:
-            self._loop = asyncio.new_event_loop()
+            loop_type = "asyncio"
+
+            try:
+                from duck.settings import SETTINGS
+
+                # Set the loop type based on settings if available, this may be run outside project so settings may not be available
+                loop_type = SETTINGS.get("ASYNC_LOOP", "asyncio")
+
+            except Exception:
+                loop_type = "asyncio"
+
+            # Set the loop type based on settings if available
+            self._loop = new_event_loop(set_as_asyncio_loop=False, loop_type=loop_type)
+
+        # If the loop is already running in a thread, we cannot start it again.
         self._task_type = task_type
 
         def run_loop():
+            # Set the event loop for this thread
             asyncio.set_event_loop(self._loop)
-            self._loop.run_forever()
+
+            # Run the event loop forever in this thread
+            self._loop.run_forever() # type: ignore
 
         if self._thread is None or not self._thread.is_alive():
             self._thread = threading.Thread(target=run_loop, daemon=True)
@@ -361,10 +394,15 @@ class AsyncioLoopManager:
             if self._task_type is not None:
                 if task_type != self._task_type:
                     raise UnknownAsyncTaskError(task_type, self._task_type)
+                
+            # Schedule the coroutine in the event loop from another thread
             future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+
             if return_sync_future:
                 future = async_to_sync_future(future)
+
             return future
+        
         else:
             raise RuntimeError("Event loop is not running. Method start() must be called first.")
             
@@ -392,8 +430,11 @@ class AsyncioLoopManager:
         """
         if self._loop:
             self._loop.call_soon_threadsafe(self._loop.stop)
+
             if self._thread:
                 self._thread.join(1)
+
+            # Clean up references    
             self._loop = None
             self._thread = None
             self._task_type = None

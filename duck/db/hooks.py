@@ -12,7 +12,7 @@ Supports both synchronous and asynchronous execution contexts.
 from django.core.exceptions import ImproperlyConfigured
 
 from duck.contrib.sync import (
-    convert_to_async_if_needed,
+    ensure_async,
     transaction_context,
     disable_transaction_context,
 )
@@ -78,7 +78,7 @@ def async_view_wrapper(handler):
     Wraps an asynchronous view or handler with DB connection lifecycle cleanup.
 
     Ensures `close_old_connections()` is called both before and after
-    the view is executed, using `convert_to_async_if_needed()` to avoid
+    the view is executed, using `ensure_async()` to avoid
     blocking the event loop.
 
     Args:
@@ -104,5 +104,5 @@ def async_view_wrapper(handler):
 
 
 # Define some async functions
-async_close_old_connections = convert_to_async_if_needed(close_old_connections)
-async_close_current_connection = convert_to_async_if_needed(close_current_connection)
+async_close_old_connections = ensure_async(close_old_connections)
+async_close_current_connection = ensure_async(close_current_connection)

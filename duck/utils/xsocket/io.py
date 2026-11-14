@@ -5,7 +5,7 @@ import re
 import ssl
 import socket
 
-from typing import List, Type, Tuple
+from typing import List, Optional, Type, Tuple
 
 from duck.settings import SETTINGS
 from duck.utils.xsocket import xsocket
@@ -51,6 +51,7 @@ class SocketIO:
     """
     Class for doing socket I/O operations like connect, send and receive data through the network.
     """
+
     @classmethod
     @check_socket
     def connect(cls, sock: xsocket, target: Tuple[str, int], timeout: float = None):
@@ -91,7 +92,7 @@ class SocketIO:
             OSError,
             ConnectionError,
         ],
-    ) -> int:
+    ) -> Optional[int]:
         """
         Sends raw data directly to a client socket.
 
@@ -144,8 +145,8 @@ class SocketIO:
         sock: xsocket,
         timeout: float = REQUEST_TIMEOUT,
         stream_timeout: float = STREAM_TIMEOUT,
-        max_data_upload: int | None = MAX_DATA_UPLOAD,
-        max_content_upload: int | None = MAX_CONTENT_UPLOAD,
+        max_data_upload: int | float | None = MAX_DATA_UPLOAD,
+        max_content_upload: int | float | None = MAX_CONTENT_UPLOAD,
      ) -> bytes:
         """
         Receives the complete request data from the socket.
@@ -259,9 +260,14 @@ class SocketIO:
                 try:
                     # Receive data with a request timeout
                     more_data = cls.receive(sock, timeout=timeout)
+
+                    # Extend data
                     data.extend(more_data)
+
+                    # Increment received length
                     received_length += len(more_data)
 
+                    # Check limits
                     check_content_limit(data, header_end)
 
                     if not more_data:
@@ -304,10 +310,16 @@ class SocketIO:
                 while b"\r\n" not in data[body_offset:]:
                     try:
                         more = cls.receive(sock, timeout=stream_timeout)
+
+                        # Extend data
                         data.extend(more)
+
+                        # Check content limits
                         check_content_limit(data, header_end)
+                    
                     except PayloadTooLargeError:
                         raise
+                    
                     except Exception as e:
                         # Suppress all other exceptions when receiving all data after headers.
                         if not suppress_errors_after_headers:
@@ -359,10 +371,16 @@ class SocketIO:
                 while len(data) - body_offset < remaining:
                     try:
                         more = cls.receive(sock, timeout=stream_timeout)
+
+                        # Add more data
                         data += more
+
+                        # Check limits
                         check_content_limit(data, header_end)
+                    
                     except PayloadTooLargeError:
                         raise
+
                     except Exception as e:
                         # Suppress all other exceptions when receiving all data after headers.
                         if not suppress_errors_after_headers:
@@ -380,13 +398,20 @@ class SocketIO:
                 try:
                     # Receive data with a stream timeout
                     more_data = cls.receive(sock, timeout=stream_timeout)
+
+                    # Extend more data
                     data.extend(more_data)
+
+                    # Check limits
                     check_content_limit(data, header_end)
+
                     if not more_data:
                         # Data received is empty, this may mean the client is done sending.
                         break
+
                 except PayloadTooLargeError:
                     raise
+
                 except Exception as e:
                     # Suppress all other exceptions when receiving all data after headers.
                     if not suppress_errors_after_headers:
@@ -404,9 +429,11 @@ class SocketIO:
             try:
                 # Receive until headers are complete.
                 receive_data_upto_headers_end(data)
+
             except PayloadTooLargeError:
                 # Always propagate payload-size violations, even if we're past headers.
                 raise
+
             except Exception as e:
                 if not suppress_errors_after_headers:
                     # Errors after headers shouldn't be ignored, what about errors before headers are complete,
@@ -444,7 +471,7 @@ class SocketIO:
     
     @classmethod
     @check_socket
-    async def async_connect(cls, sock: xsocket, target: Tuple[str, int], timeout: float = None):
+    async def async_connect(cls, sock: xsocket, target: Tuple[str, int], timeout: Optional[float] = None):
         """
         Asynchronously connect to a target.
         """
@@ -463,7 +490,7 @@ class SocketIO:
             BrokenPipeError,
             OSError,
         ],
-    ) -> int:
+    ) -> Optional[int]:
         """
         Asynchronously sends raw data directly to a client socket.
 
@@ -516,8 +543,8 @@ class SocketIO:
         sock: xsocket,
         timeout: float = REQUEST_TIMEOUT,
         stream_timeout: float = STREAM_TIMEOUT,
-        max_data_upload: int | None = MAX_DATA_UPLOAD,
-        max_content_upload: int | None = MAX_CONTENT_UPLOAD,
+        max_data_upload: int | float | None = MAX_DATA_UPLOAD,
+        max_content_upload: int | float | None = MAX_CONTENT_UPLOAD,
      ) -> bytes:
         """
         Asynchronously receives the complete request data from the socket.
@@ -749,13 +776,20 @@ class SocketIO:
                 try:
                     # Receive data with a stream timeout
                     more_data = await cls.async_receive(sock, timeout=stream_timeout)
+
+                    # Extend data
                     data.extend(more_data)
+
+                    # Check limits
                     check_content_limit(data, header_end)
+
                     if not more_data:
                         # Data received is empty, this may mean the client is done sending.
                         break
+                
                 except PayloadTooLargeError:
                     raise
+
                 except Exception as e:
                     # Suppress all other exceptions when receiving all data after headers.
                     if not suppress_errors_after_headers:

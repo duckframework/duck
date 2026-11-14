@@ -45,6 +45,7 @@ stream.read()
 ```
 
 """
+import inspect
 import io
 import os
 import asyncio
@@ -54,8 +55,7 @@ from email.utils import formatdate
 
 from duck.exceptions.all import AsyncViolationError
 from duck.utils.asyncio import in_async_context, create_task
-from duck.utils.threading import async_to_sync_future
-from duck.utils.caching import InMemoryCache
+from duck.utils.caching import InMemoryCache, CacheBase
 from duck.contrib.sync import ensure_async
 from duck.logging import logger
 
@@ -139,6 +139,7 @@ class FileIOStream(io.IOBase):
         "open_now",
         "ignore_file_open_on_delete",
         "close_on_delete",
+        "cache_backend",
         "_filepath",
         "_file",
         "_pos",
@@ -159,6 +160,7 @@ class FileIOStream(io.IOBase):
         open_now: bool = False,
         mode: str = "rb",
         disable_path_traversal: bool = True,
+        cache_backend: CacheBase = FILE_CACHE,
     ):
         """
         Initialize the FileIOStream object.
@@ -169,12 +171,14 @@ class FileIOStream(io.IOBase):
             open_now: Whether to open the file immediately. Defaults to False.
             mode: File open mode. Defaults to `'rb'`.
             disable_path_traversal (bool): Whether to remove `..` in paths to avoid path traversal. Defaults to True.
+            cache_backend (CacheBase): Cache backend to use, defaults to `FILE_CACHE`.
         """
         # NOTE: FD must always be opened on read/write - to catch FileNotFoundError if file is nolonger available rather than just returning cached data.
         self.chunk_size = chunk_size
         self.ignore_file_open_on_delete = False
         self.close_on_delete = True
         self.disable_path_traversal = disable_path_traversal
+        self.cache_backend = cache_backend
         self._filepath = filepath
         self._file: Optional[io.BufferedIOBase] = None
         self._pos = 0
@@ -533,7 +537,7 @@ class FileIOStream(io.IOBase):
             data: The bytes that triggered this event.
         """
         for fn in hooks:
-            if asyncio.iscoroutinefunction(fn):
+            if inspect.iscoroutinefunction(fn):
                 # Best-effort: schedule on the running loop or spin a new one
                 try:
                     loop = asyncio.get_running_loop()
@@ -591,7 +595,7 @@ class FileIOStream(io.IOBase):
             Cached bytes if the entry exists and is fresh, else `None`.
         """
         cache_key = self.make_cache_key(self._pos, size)
-        entry = FILE_CACHE.get(cache_key)
+        entry = self.cache_backend.get(cache_key)
         
         if entry is None:
             return None
@@ -600,7 +604,7 @@ class FileIOStream(io.IOBase):
 
         # Evict the entry if the file has been modified on disk since caching
         if cached_mtime != self.current_mtime():
-            FILE_CACHE.delete(cache_key)
+            self.cache_backend.delete(cache_key)
             return None
 
         return cached_data
@@ -618,7 +622,11 @@ class FileIOStream(io.IOBase):
             data: The bytes to cache.
         """
         mtime = self.current_mtime()
-        FILE_CACHE.set(self.make_cache_key(pos, size), (data, mtime))
+
+        # Upadate cache
+        self.cache_backend.set(self.make_cache_key(pos, size), (data, mtime))
+
+        # Upadete cache mtime
         self._cache_mtime = mtime
 
     def cache_patch_on_write(self, write_pos: int, data: bytes) -> None:
@@ -649,7 +657,7 @@ class FileIOStream(io.IOBase):
         # InMemoryCache exposes its internal store as _store.
         prefix = f"{self.filepath}:"
         keys_to_check = [
-            k for k in list(FILE_CACHE.cache.keys())
+            k for k in list(self.cache_backend.cache.keys())
             if k.startswith(prefix)
         ]
 
@@ -668,7 +676,7 @@ class FileIOStream(io.IOBase):
                 continue
 
             # Get entry
-            entry = FILE_CACHE.get(key)
+            entry = self.cache_backend.get(key)
             
             if entry is None:
                 continue
@@ -686,7 +694,7 @@ class FileIOStream(io.IOBase):
                 # relevant slice of the written data
                 slice_start = cached_pos - write_pos
                 new_data = data[slice_start: slice_start + actual_len]
-                FILE_CACHE.set(key, (new_data, mtime))
+                self.cache_backend.set(key, (new_data, mtime))
 
             elif write_pos >= cached_pos and write_end <= cached_end:
                 # Write is entirely inside the cached range — patch in place
@@ -696,14 +704,14 @@ class FileIOStream(io.IOBase):
                     + data
                     + cached_data[patch_offset + len(data):]
                 )
-                FILE_CACHE.set(key, (new_data, mtime))
+                self.cache_backend.set(key, (new_data, mtime))
 
             else:
                 # Partial boundary overlap — evict rather than store wrong data
-                FILE_CACHE.delete(key)
+                self.cache_backend.delete(key)
 
         # Always warm the cache for the exact slice just written
-        FILE_CACHE.set(
+        self.cache_backend.set(
             self.make_cache_key(write_pos, len(data)),
             (data, mtime),
         )
@@ -802,7 +810,8 @@ class AsyncFileIOStream(FileIOStream):
             data: The bytes that triggered this event.
         """
         for fn in hooks:
-            if asyncio.iscoroutinefunction(fn):
+            
+            if inspect.iscoroutinefunction(fn):
                 await fn(self, data, len(data))
             else:
                 fn(self, data, len(data))

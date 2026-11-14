@@ -12,6 +12,7 @@ import warnings
 from typing import (
     Callable,
     Optional,
+    Type,
     Union,
 )
 from colorama import Fore, Style
@@ -19,6 +20,7 @@ from colorama import Fore, Style
 from duck import processes
 from duck.logging.handler import emit
 from duck.settings import SETTINGS
+from duck.exceptions.all import DisallowedAction
 from duck.utils.path import paths_are_same, joinpaths
 from duck.utils.ansi import remove_ansi_escape_codes_str
 from duck.env import is_testing_environment
@@ -170,13 +172,15 @@ def should_filter_warning(category, message, module = None, lineno = 0):
             and (cat is None or issubclass(category, cat))
             and (mod is None or mod in module)
             and (ln == 0 or lineno == ln)):
+
             # Actions: 'ignore', 'always', 'default', 'error', 'once', 'module'
             return action == 'ignore'
+        
     # If no filter matches, default action is 'default' (show once per location)
     return False
 
 
-def warn(message: str, category: Warning = UserWarning, use_colors: bool = True, module = None, lineno = 0):
+def warn(message: str, category: Type[Warning] = UserWarning, use_colors: bool = True, module = None, lineno = 0):
     """
     This logs a warning to the console. You can filter warnings by using `warnings.filterwarnings`.
     """
@@ -280,6 +284,7 @@ class Logger:
             # This is a reload so lets use previous latest log file because its a continuation
             try:
                 return processes.get_process_data("main").get("log_file")
+            
             except KeyError:
                 # Failed to retrieve last log file used by the main app.
                 pass
@@ -395,6 +400,7 @@ class Logger:
         """
         original_stdout_write = getattr(cls, "_original_stdout_write", None)
         original_stderr_write = getattr(cls, "_original_stderr_write", None)
+
         if all([original_stdout_write, original_stderr_write]):
             sys.stdout.write = original_stdout_write
             sys.stderr.write = original_stderr_write

@@ -2,16 +2,10 @@
 Handles the response further after they have been processed.
 This includes sending response to client and logging the response.
 """
-import ssl
-import time
-import socket
 
 from typing import (
     Optional,
     Union,
-    Callable,
-    Dict,
-    Type,
     List,
 )
 from inspect import isasyncgen
