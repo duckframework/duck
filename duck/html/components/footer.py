@@ -2,7 +2,7 @@
 Footer component module.
 """
 from datetime import datetime
-from typing import Any
+from typing import Any, List
 
 from duck.meta import Meta
 from duck.html.components import (
@@ -14,7 +14,7 @@ from duck.html.components.theme import Theme
 from duck.html.components.duck import MadeWithDuck
 from duck.html.components.container import GridContainer, FlexContainer
 from duck.html.components.style import Style
-from duck.html.components.link import Link
+from duck.html.components.link import Link, LinkButton
 from duck.html.components.span import Span
 from duck.html.components.heading import Heading
 
@@ -47,15 +47,15 @@ DEFAULT_SOCIAL_ICONS = {
     ),
     "whatsapp": (
         '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">'
-        '<g transform="translate(-1, 0.6)">'
         '<path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.1-1.3A10 10 0 1 0 12 2z'
-        'm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2z'
-        'm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.6.8-.8 1-.3.2-.6.1'
+        'm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2z"/>'
+        '<path transform="translate(11.6 11.5) scale(.76) translate(-12 -12)" '
+        'd="M16.5 14.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.6.8-.8 1-.3.2-.6.1'
         'a6.6 6.6 0 0 1-2-1.2 7.4 7.4 0 0 1-1.4-1.7c-.1-.2 0-.4.1-.5s.3-.3.4-.5'
         'a.5.5 0 0 0 .1-.5c-.1-.1-.6-1.4-.8-1.9s-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3'
         'A3 3 0 0 0 6.5 9c0 1.6 1.2 3.2 1.4 3.4s2.3 3.5 5.6 4.9c.8.3 1.4.5 1.9.7'
         'a4.5 4.5 0 0 0 2 .1c.6-.1 1.5-.6 1.7-1.2s.2-1.1.2-1.2-.2-.2-.4-.3z"/>'
-        '</g></svg>'
+        '</svg>'
     ),
     "github": (
         '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">'
@@ -217,8 +217,10 @@ class SocialLinks(FlexContainer):
         super().on_create()
 
         # Base row layout
-        self.id = self.kwargs.get("id", "footer-social-links")
-        self.klass = "footer-social-links"
+        self.id = self.kwargs.get("id", "duck-footer-social-links")
+        self.klass = "duck-footer-social-links"
+
+        # Update the style
         self.style.update({
             "gap": "10px",
             "align-items": "center",
@@ -227,7 +229,7 @@ class SocialLinks(FlexContainer):
         # Build one icon link per configured social entry
         self.add_children(self.build_icon_links())
 
-    def build_icon_links(self) -> list[Link]:
+    def build_icon_links(self) -> List[LinkButton]:
         """
         Builds one circular icon link per configured social entry.
 
@@ -255,7 +257,7 @@ class SocialLinks(FlexContainer):
         icon = entry.get("icon") or DEFAULT_SOCIAL_ICONS.get(platform, "")
         label = entry.get("label", platform.title())
 
-        return Link(
+        return LinkButton(
             id=f"footer-social-{platform}",
             url=entry.get("url", "#"),
             klass="footer-social-icon",
@@ -289,7 +291,7 @@ class FooterItems(GridContainer):
         # Build one block per configured heading
         self.add_children(self.build_blocks())
 
-    def build_blocks(self) -> list[FooterBlock]:
+    def build_blocks(self) -> List[FooterBlock]:
         """
         Builds one FooterBlock per configured heading.
 
