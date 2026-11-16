@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Fixed `FileInput` component bugs.
 - Fixed bug in `duck.contrib.sync.smart_async` which created unused event loops.
 - Fixed `FileInput` component having a `Clickable` subclass which caused an error.
 

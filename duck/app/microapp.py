@@ -56,24 +56,47 @@ class MicroApp(BaseApp):
     ):
         """
         Args:
-            name: Unique name to your application.
-            addr: Address the server binds to.
-            port: Port the server binds to.
-            domain: Public-facing domain. Defaults to the bind address.
-            server_url: Public-facing absolute server URL.
-            uses_ipv6: Whether the app should bind using IPv6.
-            enable_https: Whether HTTPS is enabled for this app.
-            no_checks: Whether to skip app checks. Defaults to Fa
-            no_logs: Whether to disable app logging. Defaults to False.
-            workers: Optional number of server workers.
-            force_worker_processes: Determines whether to use worker **processes** instead of the default worker **threads**. 
-                    By default, when `workers` is greater than 1, the server will use worker **threads**.  
-                    Threads avoid cross-process synchronization issues—such as component registry mismatches 
-                    (e.g., issues with Lively components) that occur when state lives in separate processes.  
-                    
-                    Set this flag to `True` only when process isolation is explicitly desired **and** you do not
-                    require shared in-memory synchronization between workers.
-            events: Events to handle e.g. {"on_start": some_callable}. Defaults to None.
+            name:
+                Unique name to your application.
+
+            addr:
+                Address the server binds to.
+
+            port:
+                Port the server binds to.
+
+            domain:
+                Public-facing domain. Defaults to the bind address.
+
+            server_url:
+                Public-facing absolute server URL.
+
+            uses_ipv6:
+                Whether the app should bind using IPv6.
+
+            enable_https:
+                Whether HTTPS is enabled for this app.
+
+            no_checks:
+                Whether to skip app checks. Defaults to False.
+
+            no_logs:
+                Whether to disable app logging. Defaults to False.
+
+            workers:
+                Optional number of server workers.
+
+            force_worker_processes:
+                Determines whether to use worker **processes** instead of the default worker **threads**. 
+                By default, when `workers` is greater than 1, the server will use worker **threads**.  
+                Threads avoid cross-process synchronization issues—such as component registry mismatches 
+                (e.g., issues with Lively components) that occur when state lives in separate processes.  
+                
+                Set this flag to `True` only when process isolation is explicitly desired **and** you do not
+                require shared in-memory synchronization between workers.
+
+            events:
+                Events to handle e.g. {"on_start": some_callable}. Defaults to None.
             
         Raises:
             ApplicationError: If the provided bind address is invalid.
@@ -138,17 +161,22 @@ class MicroApp(BaseApp):
         Runs the duck sub-application.
         
         Args:
-            run_forever (bool): Whether to run a while loop to avoid app from exiting.
-                                              Server is always run in background and setting `run_forever=False` will make this method return 
-                                              immediately after starting the background thread.
+            run_forever (bool):
+                Whether to run a while loop to avoid app from exiting.
+                Server is always run in background and setting `run_forever=False` will make this method return 
+                immediately after starting the background thread.
         """
         # Start the server in a new thread - only if not running.
         self.start_server()
-        
-        while run_forever:
-            # Just sleep for 5 seconds
-            time.sleep(5)
-            
+
+        try:
+            while run_forever:
+                # Just sleep for 5 seconds
+                time.sleep(5)
+                
+        except KeyboardInterrupt:
+            self.stop()
+
     def stop(self):
         """
         Stops the current running micro-application.
@@ -233,6 +261,7 @@ class HttpsRedirectMicroApp(MicroApp):
     """
     Micro application class capable of redirecting HTTP traffic to HTTPS.
     """
+    
     def view(self, request: HttpRequest, request_processor: RequestProcessor) -> HttpResponse:
         """
         Returns an HTTP redirect response.
@@ -241,7 +270,7 @@ class HttpsRedirectMicroApp(MicroApp):
         dest_url_obj = URL(self.absolute_uri)
         
         # Edit the destination URL object inplace
-        dest_url_obj.innerjoin(request.fullpath)
+        dest_url_obj.innerjoin(request.fullpath) # type: ignore
         
         # Return response
         return redirect(dest_url_obj.to_str(), permanent=False)

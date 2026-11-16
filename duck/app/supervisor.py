@@ -212,7 +212,7 @@ class Supervisor:
                 if force:
                     self.child.kill()
                 else:
-                    self.child.send_signal(signal.CTRL_BREAK_EVENT) # type: ignore
+                    self.child.send_signal(signal.SIGBREAK) if reload else signal.SIGTERM # type: ignore
             else:
                 if force:
                     sig = signal.SIGKILL
@@ -244,7 +244,7 @@ class Supervisor:
 
             # Stop the current process
             self.stop(reload=True)
-
+            
             # Start a new process
             self.start(restart=True)
 
@@ -337,7 +337,7 @@ class Supervisor:
             None
         """
         # The handler only sets a flag, so no locks are taken inside it.
-        signal.signal(signal.SIGTERM, lambda signum, frame: self.stop_event.set())
+        signal.signal(signal.SIGTERM, lambda _, __: self.stop_event.set())
 
         # Start the first application process
         self.start()

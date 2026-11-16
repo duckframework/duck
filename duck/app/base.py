@@ -5,7 +5,6 @@ Base application primitives shared by Duck application classes.
 from typing import Optional, Dict, Callable
 
 from duck.exceptions.all import ApplicationError
-from duck.meta import Meta
 from duck.utils.net import is_ipv4, is_ipv6
 from duck.utils.path import url_normalize
 from duck.utils.urlcrack import URL
@@ -43,22 +42,41 @@ class BaseApp:
         Initializes shared app configuration.
 
         Args:
-            name: Unique name to your application.
-            addr: Address the server binds to.
-            port: Port the server binds to.
-            domain: Public-facing domain. Defaults to the bind address.
-            server_url: Public-facing absolute server URL.
-            uses_ipv6: Whether the app should bind using IPv6.
-            enable_https: Whether HTTPS is enabled for this app.
-            workers: Optional number of server workers.
-            force_worker_processes: Determines whether to use worker **processes** instead of the default worker **threads**. 
-                    By default, when `workers` is greater than 1, the server will use worker **threads**.  
-                    Threads avoid cross-process synchronization issues—such as component registry mismatches 
-                    (e.g., issues with Lively components) that occur when state lives in separate processes.  
-                    
-                    Set this flag to `True` only when process isolation is explicitly desired **and** you do not
-                    require shared in-memory synchronization between workers.
-            events: Events to handle e.g. {"on_start": some_callable}. Defaults to None.
+            name:
+                Unique name to your application.
+
+            addr:
+                Address the server binds to.
+
+            port:
+                Port the server binds to.
+
+            domain:
+                Public-facing domain. Defaults to the bind address.
+
+            server_url:
+                Public-facing absolute server URL.
+
+            uses_ipv6:
+                Whether the app should bind using IPv6.
+
+            enable_https:
+                Whether HTTPS is enabled for this app.
+
+            workers:
+                Optional number of server workers.
+
+            force_worker_processes:
+                Determines whether to use worker **processes** instead of the default worker **threads**. 
+                By default, when `workers` is greater than 1, the server will use worker **threads**.  
+                Threads avoid cross-process synchronization issues—such as component registry mismatches 
+                (e.g., issues with Lively components) that occur when state lives in separate processes.  
+                
+                Set this flag to `True` only when process isolation is explicitly desired **and** you do not
+                require shared in-memory synchronization between workers.
+
+            events:
+                Events to handle e.g. {"on_start": some_callable}. Defaults to None.
         
         Raises:
             ApplicationError: If the provided bind address is invalid.
@@ -133,14 +151,14 @@ class BaseApp:
         return url_obj.to_str()
     
     @classmethod
-    def get_all_apps(self) -> Dict[str, "BaseApp"]:
+    def get_all_apps(cls) -> Dict[str, "BaseApp"]:
         """
         Returns all created apps.
         """
         return APPS_REGISTRY
         
     @classmethod
-    def get_app_by_name(name: str):
+    def get_app_by_name(cls, name: str):
         """
         Returns an app instance by name or else an ApplicationError is raised.
         """

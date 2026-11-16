@@ -425,19 +425,13 @@ def get_request_handling_task_executor():
     """
     try:
         object_path = SETTINGS["REQUEST_HANDLING_TASK_EXECUTOR"]
-        
-        if object_path.count(".") < 1:
-            request_handling_task_executor = x_import(object_path)
-            return request_handling_task_executor() # type: ignore
-        
-        # If the object path contains a dot, we treat it as a module path and an object name
-        module_path, obj_name = object_path.rsplit(".", 1)
-        module = import_module_once(module_path)
-        request_handling_task_executor = getattr(module, obj_name)
 
-        # Return final executor
-        return request_handling_task_executor()
+        # Import the executor class or function
+        executor = x_import(object_path)
 
+        # Return the executor instance
+        return executor() # type: ignore
+        
     except Exception as e:
         raise SettingsError(f"Error loading request handling task executor: {e}") from e
 

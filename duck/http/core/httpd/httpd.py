@@ -101,15 +101,32 @@ class BaseServer:
         Initialise the server instance.
 
         Args:
-            addr (Tuple[str, int]): Tuple of address and port.
-            application (Union[App, MicroApp]): The application that is using this server. Can be either duck main app or micro app.
-            domain (str): The server domain.
-            uses_ipv6 (bool): Whether If the server is on (IPV6)
-            enable_ssl (bool): Whether to enable `HTTPS`.
-            ssl_params (Optional[Dict]): Dictionary containing ssl parameters to parse to SSLSocket. If None, default ones will be used.
-            no_logs (bool): Whether to disable logging.
-            workers (Optional[int]): Number of workers to use. None will disable workers.
-            force_worker_processes (bool): Determines whether to use worker **processes** instead of the default worker **threads**. 
+            addr (Tuple[str, int]):
+                Tuple of address and port.
+
+            application (Union[App, MicroApp]):
+                The application that is using this server. Can be either duck main app or micro app.
+
+            domain (str):
+                The server domain.
+
+            uses_ipv6 (bool):
+                Whether If the server is on (IPV6)
+
+            enable_ssl (bool):
+                Whether to enable `HTTPS`.
+
+            ssl_params (Optional[Dict]):
+                Dictionary containing ssl parameters to parse to SSLSocket. If None, default ones will be used.
+
+            no_logs (bool):
+                Whether to disable logging.
+
+            workers (Optional[int]):
+                Number of workers to use. None will disable workers.
+
+            force_worker_processes (bool):
+                Determines whether to use worker **processes** instead of the default worker **threads**. 
                 By default, when `workers` is greater than 1, the server will use worker **threads**.  
                 Threads avoid cross-process synchronization issues—such as component registry mismatches 
                 (e.g., issues with Lively components) that occur when state lives in separate processes.  
@@ -307,7 +324,7 @@ class BaseServer:
                 start_eventloop = _async or (not _async and start_bg_eventloop_if_wsgi)
                 
                 App.start_background_workers(
-                    self,
+                    App.get_main_app(),
                     start_request_handling_threadpool_manager=not _async,
                     start_request_handling_eventloop_manager=start_eventloop,
                     start_component_threadpool_manager=True,
@@ -341,7 +358,7 @@ class BaseServer:
             
             # Assign worker process manager
             self.worker_process_manager = WorkerProcessManager(
-                worker_fn=start_server_loop_in_worker,
+                worker_fn=self.start_server_loop,
                 num_workers=self.workers,
                 args_fn=lambda idx: (True), # HeartbeatHealthCheck object is included in args automatically.
                 worker_name_fn=lambda idx: f"duck-worker-{idx}",
@@ -1117,7 +1134,7 @@ class BaseMicroServer(BaseServer):
             response = await async_server_error(e, request)
             
             await self.async_send_response(
-                response,
+                response=response,
                 sock=request.client_socket,
                 request=request,
             )

@@ -28,7 +28,6 @@ from typing import (
     Callable,
 )
 from concurrent.futures import Future
-from functools import lru_cache
 
 from duck.settings import SETTINGS
 from duck.settings.loaded import SettingsLoaded
@@ -41,11 +40,149 @@ from duck.logging import logger
 from duck.meta import Meta
 from duck.csp import csp_nonce_flag
 from duck.env import get_project_name
-from duck.version import version
 from duck.utils.asyncio.eventloop import get_or_create_loop_manager
 from duck.utils.threading.threadpool import get_or_create_thread_manager
 from duck.app.base import BaseApp
 from duck.app.supervisor import in_supervised_mode, run_supervised_app
+
+
+def _start_https_redirect_app(
+    in_new_process: bool,
+    process_name: Optional[str],
+    server_url: Optional[str],
+    addr: str,
+    port: int,
+    domain: Optional[str],
+    uses_ipv6: bool,
+    logs: bool,
+    workers: Optional[int],
+    force_worker_processes: bool,
+):
+    """
+    Run the HTTPS redirect application directly.
+
+    Args:
+        in_new_process (bool): Whether to start the redirect app in a new process.
+        process_name (Optional[str]): Name of the process.
+        server_url (Optional[str]): Public-facing absolute server URL.
+        addr (str): Address or hostname to bind the server to.
+        port (int): Port to bind the server to.
+        domain (Optional[str]): Public-facing domain name for the application.
+        uses_ipv6 (bool): Whether to use IPv6 networking.
+        logs (bool): Whether to enable console logs for the HTTPS redirect server.
+        workers (Optional[int]): Number of workers to use for the HTTPS redirect server.
+        force_worker_processes (bool): Whether to use worker processes instead of threads for the HTTPS redirect server.
+    """
+    from duck.app.microapp import HttpsRedirectMicroApp
+
+    app = HttpsRedirectMicroApp(
+        server_url=server_url,
+        addr=addr,
+        port=port,
+        domain=domain,
+        uses_ipv6=uses_ipv6,
+        enable_https=False,
+        no_logs=not logs,
+        workers=workers,
+        force_worker_processes=force_worker_processes,
+    )
+
+    if in_new_process:
+        # Set process name.
+        setproctitle.setproctitle(process_name or "duck-https-redirect-server")
+        
+        # Restart background workers
+        # Recreate managers recreates and attaches new managers fot the current 
+        # thread and all its descendents.
+
+        # Restart only request handling threadpool/eventloop manager
+        _async = SETTINGS['ASYNC_HANDLING']
+        start_bg_eventloop_if_wsgi = getattr(app, "start_bg_eventloop_if_wsgi", True)
+        start_eventloop = _async or (not _async and start_bg_eventloop_if_wsgi)
+
+        App.start_background_workers(
+            app,
+            start_request_handling_threadpool_manager=not _async,
+            start_request_handling_eventloop_manager=start_eventloop,
+            start_component_threadpool_manager=False,
+            start_automations_eventloop_manager=False,    
+            recreate_managers=True,
+        )
+
+    # Start the microapp
+    app.run(run_forever=True) # type: ignore # This is blocking; run_forever=True is blocking.
+
+
+def start_https_redirect_app(
+    in_new_process: bool = True,
+    process_name: Optional[str] = "duck-https-redirect-server",
+    server_url: Optional[str] = None,
+    addr: str = "localhost",
+    port: int = 8080,
+    domain: Optional[str] = None,
+    uses_ipv6: bool = False,
+    logs: bool = False,
+    workers: Optional[int] = None,
+    force_worker_processes: bool = False,
+) -> Optional[multiprocessing.Process]:
+    """
+    Starts app for redirecting non encrypted traffic to main app using https.
+
+    Args:
+        in_new_process (bool): Whether to start the redirect app in a new process. Defaults to True.
+        process_name (Optional[str]): Name of the process. Defaults to "duck-https-redirect-server".
+        server_url (Optional[str]): Public-facing absolute server URL. Defaults to None.
+        addr (str): Address or hostname to bind the server to. Defaults to "localhost".
+        port (int): Port to bind the server to. Defaults to 8080.
+        domain (Optional[str]): Public-facing domain name for the application. Defaults to None.
+        uses_ipv6 (bool): Whether to use IPv6 networking. Defaults to False.
+        logs (bool): Whether to enable console logs for the HTTPS redirect server. Defaults to False.
+        workers (Optional[int]): Number of workers to use for the HTTPS redirect server. Defaults to None.
+        force_worker_processes (bool): Whether to use worker processes instead of threads for the HTTPS redirect server. Defaults to False.
+        
+    Returns:
+        Optional[multiprocessing.Process]: The process object for the HTTPS redirect server, or None if it's not running in a new process.
+    """
+
+    if in_new_process:
+        # Start the HTTPS redirect microapp in a new process.
+        process = multiprocessing.Process(
+            target=_start_https_redirect_app,
+            kwargs={
+                "in_new_process": in_new_process,
+                "process_name": process_name,
+                "server_url": server_url,
+                "addr": addr,
+                "port": port,
+                "domain": domain,
+                "uses_ipv6": uses_ipv6,
+                "logs": logs,
+                "workers": workers,
+                "force_worker_processes": force_worker_processes,
+            },
+            name=process_name or "duck-https-redirect-server",
+        )
+
+        # Start the process
+        process.start()
+
+        # Return the process object for further management (e.g., checking if it's alive, terminating it, etc.).
+        return process
+    
+    else:
+        # Start the HTTPS redirect microapp in the current process.
+        _start_https_redirect_app(
+            in_new_process=False,
+            process_name=process_name,
+            server_url=server_url,
+            addr=addr,
+            port=port,
+            domain=domain,
+            uses_ipv6=uses_ipv6,
+            logs=logs,
+            workers=workers,
+            force_worker_processes=force_worker_processes,
+        )
 
 
 class App(BaseApp):
@@ -180,7 +317,6 @@ class App(BaseApp):
               alive and coordinated correctly.
         """
         from duck.utils.threading.threadpool import get_or_create_thread_manager
-        from duck.app.microapp import HttpsRedirectMicroApp
         
         # Runtime behavior
         self.skip_setup = skip_setup
@@ -189,8 +325,8 @@ class App(BaseApp):
         self.start_bg_eventloop_if_wsgi = start_bg_eventloop_if_wsgi
         
         # Process configuration
-        self.project_name = self.normalize_process_name(get_project_name())
-        self.process_name = process_name or f"duck-server[{self.project_name}]"
+        self.project_name = get_project_name()
+        self.process_name = self.normalize_process_name(process_name or f"duck-server.{self.project_name}")
         
         # Django configuration
         self.use_django = SETTINGS["USE_DJANGO"]
@@ -211,8 +347,7 @@ class App(BaseApp):
 
         # Runtime objects
         self.automations_dispatcher = None
-        self.https_redirect_app = None
-
+        
         # Concurrent futures / threads
         self.server_future = None
         self.django_server_future = None
@@ -238,24 +373,6 @@ class App(BaseApp):
             force_worker_processes=force_worker_processes,
             events=events,
         )
-        
-        # HTTPS redirect app
-        if self.https_redirect:
-            self.https_redirect_app = HttpsRedirectMicroApp(
-                server_url=self.server_url,
-                addr=self.https_redirect_addr,
-                port=self.https_redirect_port,
-                domain=self.domain,
-                uses_ipv6=self.uses_ipv6,
-                enable_https=False,
-                no_logs=not self.https_redirect_logs,
-                workers=self.https_redirect_workers,
-                force_worker_processes=self.https_redirect_force_worker_processes,
-                events={"on_start": lambda *_: setattr(self.https_redirect_process_running_state, 'value', int(self.https_redirect_app.server.running))}
-            )
-            
-            # Set HTTPS redirect state.
-            self.https_redirect_process_running_state = multiprocessing.Value("i", 0)
         
         # Main HTTP server
         self.server = HTTPServer(
@@ -495,11 +612,10 @@ class App(BaseApp):
         """
         if self.https_redirect_process:
             if self.https_redirect_process.is_alive():
-                return bool(self.https_redirect_process_running_state.value)
+                return True
             else:
                 return False
-        else:
-            return self.https_redirect_app.server.running
+        return False
                
     def start_background_event_loop(self):
         """
@@ -745,50 +861,22 @@ class App(BaseApp):
         Args:
             log_message (bool): Whether to log something before starting the micro app.
         """
-        def start_https_redirect():
-            """
-            Starts app for redirecting non encrypted traffic to main app using https.
-            """
-            p = multiprocessing.current_process()
-            
-            # Set process name.
-            setproctitle.setproctitle(p.name)
-            
-            # Register signal handler
-            signal.signal(signal.SIGINT, lambda *a: self.https_redirect_app.stop()) # type: ignore
-            
-            # Restart background workers
-            # Recreate managers recreates and attaches new managers fot the current 
-            # thread and all its descendents.
-            
-            # Restart only request handling threadpool/eventloop manager
-            _async = SETTINGS['ASYNC_HANDLING']
-            start_bg_eventloop_if_wsgi = getattr(self, "start_bg_eventloop_if_wsgi", True)
-            start_eventloop = _async or (not _async and start_bg_eventloop_if_wsgi)
-            
-            App.start_background_workers(
-                self,
-                start_request_handling_threadpool_manager=not _async,
-                start_request_handling_eventloop_manager=start_eventloop,
-                start_component_threadpool_manager=False,
-                start_automations_eventloop_manager=False,    
-                recreate_managers=True,
-            )
-            
-            # Start the microapp
-            self.https_redirect_app.run(run_forever=True) # type: ignore # This is blocking; run_forever=True is blocking.
-            
+        
         if self.https_redirect:
             # Start HTTP redirect process
             if not self.https_redirect_process or not self.https_redirect_process.is_alive():
-                self.https_redirect_process = multiprocessing.Process(
-                    target=start_https_redirect,
-                    name="duck-https-redirect-server",
-                    args=(self.https_redirect_process_running_state, ),
+                self.https_redirect_process = start_https_redirect_app(
+                    in_new_process=True,
+                    process_name=f"duck-https-redirect-server",
+                    server_url=self.server_url,
+                    addr=self.https_redirect_addr,
+                    port=self.https_redirect_port,
+                    domain=self.domain,
+                    uses_ipv6=self.uses_ipv6,
+                    logs=self.https_redirect_logs,
+                    workers=self.https_redirect_workers,
+                    force_worker_processes=self.https_redirect_force_worker_processes,
                 )
-                
-                # Start the HTTPS redirect process
-                self.https_redirect_process.start()
                 
                 # Log something if applicable.
                 if log_message:
@@ -832,34 +920,12 @@ class App(BaseApp):
             # Submit task to the pool
             if not self.automations_dispatcher_future or not self.automations_dispatcher_future.running():
                 self.automations_dispatcher_future = self.runtime_executor.submit_task(start_automations_dispatcher)
-                
-    def start_ducksight_reloader(self):
-        """
-        Starts the DuckSight Reloader for reloading app on file modifications, deletions, etc.
-        
-        Notes:
-        - Unlike other tasks like starting Duck server, etc which will be run by the app's `runtime_executor`,
-          this runs in an independant process.
-        """
-        from duck.contrib.reloader.ducksight import start_ducksight_reloader
 
-        # Note: Production server should not be restarted at any point only start duck sight reloader on DEBUG
-        
-        if SETTINGS["DEBUG"] and SETTINGS['AUTO_RELOAD']:
-            if not self.ducksight_reloader_process or not self.ducksight_reloader_process.is_alive():
-                # Initialize the DuckSight reloader and set some attributes.
-                self.ducksight_reloader_process = multiprocessing.Process(target=start_ducksight_reloader, args=(True,), name="ducksight-reloader")
-                
-                # Start the DuckSight reloader process
-                self.ducksight_reloader_process.start()
-                
     def get_runtime_futures(self) -> Dict[str, Optional[Future]]:
         """
         Returns a dictionary of all application runtime concurrent futures.
-        
-        Notes:
-        - The `DuckSightReloader` task is run on an independent process, so no future for it will be included.
         """
+
         return {
             "duck_server": self.server_future,
             "automations_dispatcher": self.automations_dispatcher_future,
@@ -881,9 +947,10 @@ class App(BaseApp):
             wait (bool): Whether to wait for termination. Defaults to True but with a timeout.
         """
         self.server.stop_server(log_to_console=log_to_console, wait=wait)
-        
+
         if (
-            stop_https_redirect_server and self.https_redirect_process
+            stop_https_redirect_server
+            and self.https_redirect_process
             and self.https_redirect_process.is_alive()
         ):
             
@@ -893,7 +960,7 @@ class App(BaseApp):
             if wait:
                 # Wait for termination
                 self.https_redirect_process.join(1)
-    
+                
     def stop(
         self,
         log_to_console: bool = True,

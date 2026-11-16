@@ -136,7 +136,7 @@ class FileDragAndDrop(Clickable, Card):
         self.input.klass = "drag-n-drop-fileinput"
         
         # Update input field style
-        self.inputfield.style.update({
+        self.input.style.update({
             "aria-hidden": "true",
             "opacity": "0",
             "width": "0",
@@ -147,4 +147,4 @@ class FileDragAndDrop(Clickable, Card):
         self.script = Script(inner_html=self.DRAG_AND_DROP_SCRIPT)
         
         # Add children
-        self.add_child([self.input, self.script])
+        self.add_children([self.input, self.script])
