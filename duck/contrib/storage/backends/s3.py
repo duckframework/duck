@@ -5,8 +5,9 @@ import hmac
 import hashlib
 import urllib.parse
 
-from typing import Any
+from typing import Any, Optional
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 
 from duck.contrib.storage.backends import (
     EMPTY_SHA256,
@@ -153,6 +154,32 @@ def sign_s3_request(
     }
 
 
+def parse_last_modified(value: str | None) -> float | None:
+    """
+    Parses a Last-Modified header into a UTC timestamp.
+
+    Args:
+        value: Raw header value, or None.
+
+    Returns:
+        Seconds since the epoch, or None when missing or unparseable.
+    """
+    if not value:
+        return None
+
+    try:
+        parsed = parsedate_to_datetime(value)
+
+    except (TypeError, ValueError, IndexError):
+        return None
+
+    # Header dates without a zone are treated as UTC
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+
+    return parsed.timestamp()
+
+
 class S3Storage(StorageBackend):
     """
     Stores files in an S3-compatible bucket using httpx and SigV4 signing.
@@ -281,9 +308,13 @@ class S3Storage(StorageBackend):
             "Content-Length": str(len(context.payload)),
         }
 
+        # Add the SHA256 and metadata headers
+        headers["x-amz-meta-sha256"] = context.sha256
+
         for name, value in context.metadata.items():
             headers[f"x-amz-meta-{name.lower()}"] = str(value)
 
+        # Sign the request and return
         return url, self.signed_headers("PUT", url, context.sha256, headers)
 
     def put(self, key: str, context: UploadContext, reporter: ProgressReporter) -> None:
@@ -521,6 +552,148 @@ class S3Storage(StorageBackend):
 
         # Return the final flag
         return True
+
+    def size(self, key: str) -> int:
+        """
+        Returns the size of an object using a HEAD request.
+
+        Args:
+            key: Object key in the bucket.
+
+        Returns:
+            The object size in bytes.
+
+        Raises:
+            FileNotFoundError: If the object does not exist.
+            httpx.HTTPStatusError: If the request fails for a reason other than a missing object.
+        """
+        url, headers = self.prepare_empty("HEAD", key)
+        response = self.sync_client.head(url, headers=headers)
+
+        # Missing object
+        if response.status_code == 404:
+            raise FileNotFoundError(key)
+
+        # Raise exception on error.
+        response.raise_for_status()
+
+        # Return the final size
+        return int(response.headers["Content-Length"])
+
+    async def async_size(self, key: str) -> int:
+        """
+        Async object size lookup using `httpx.AsyncClient`.
+
+        Args:
+            key: Object key in the bucket.
+
+        Returns:
+            The object size in bytes.
+
+        Raises:
+            FileNotFoundError: If the object does not exist.
+            httpx.HTTPStatusError: If the request fails for a reason other than a missing object.
+        """
+        url, headers = self.prepare_empty("HEAD", key)
+        response = await self.async_client.head(url, headers=headers)
+
+        # Missing object
+        if response.status_code == 404:
+            raise FileNotFoundError(key)
+
+        # Raise exception on error.
+        response.raise_for_status()
+
+        # Return the final size
+        return int(response.headers["Content-Length"])
+
+    def modified_time(self, key: str) -> Optional[float]:
+        """
+        Returns the object's Last-Modified time using a HEAD request.
+
+        Args:
+            key: Object key in the bucket.
+
+        Returns:
+            Seconds since the epoch or None if the header is missing or unparseable.
+
+        Raises:
+            FileNotFoundError: If the object does not exist.
+        """
+        url, headers = self.prepare_empty("HEAD", key)
+        response = self.sync_client.head(url, headers=headers)
+
+        # Missing object
+        if response.status_code == 404:
+            raise FileNotFoundError(key)
+
+        # Raise exception on error.
+        response.raise_for_status()
+
+        # Return the final modified time
+        return parse_last_modified(response.headers.get("Last-Modified"))
+
+    def is_unchanged(self, key: str, context: UploadContext) -> bool:
+        """
+        Compares the stored sha256 metadata with the upload using one HEAD request.
+
+        Args:
+            key: Object key in the bucket.
+            context: Final upload state.
+
+        Returns:
+            True if the stored object has the same content hash.
+        """
+        url, headers = self.prepare_empty("HEAD", key)
+        response = self.sync_client.head(url, headers=headers)
+
+        # Missing object
+        if response.status_code == 404:
+            return False
+
+        # Raise exception on error.
+        response.raise_for_status()
+
+        # Trust mtime only when present and clearly newer
+        if context.source_mtime is not None:
+            stored = parse_last_modified(response.headers.get("Last-Modified"))
+            
+            if stored is not None and stored == context.source_mtime:
+                return True
+
+        # Compare the stored sha256 metadata with the upload
+        return response.headers.get("x-amz-meta-sha256") == context.sha256
+
+    async def async_is_unchanged(self, key: str, context: UploadContext) -> bool:
+        """
+        Async version of `is_unchanged` using `httpx.AsyncClient`.
+
+        Args:
+            key: Object key in the bucket.
+            context: Final upload state.
+
+        Returns:
+            True if the stored object has the same content hash.
+        """
+        url, headers = self.prepare_empty("HEAD", key)
+        response = await self.async_client.head(url, headers=headers)
+
+        # Missing object
+        if response.status_code == 404:
+            return False
+
+        # Raise exception on error.
+        response.raise_for_status()
+
+        # Trust mtime only when present and clearly newer
+        if context.source_mtime is not None:
+            stored = parse_last_modified(response.headers.get("Last-Modified"))
+
+            if stored is not None and stored == context.source_mtime:
+                return True
+            
+        # Compare the stored sha256 metadata with the upload
+        return response.headers.get("x-amz-meta-sha256") == context.sha256
 
     def url_for(self, key: str) -> str:
         """

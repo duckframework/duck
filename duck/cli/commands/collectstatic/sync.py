@@ -1,5 +1,5 @@
 """
-Module containing collectstatic command class.
+Module containing synchronous collectstatic command class.
 """
 
 import os
@@ -10,7 +10,12 @@ from typing import Dict, Generator, List, Tuple
 from duck.logging import console
 from duck.routes import Blueprint
 
-from duck.contrib.storage.backends import StorageBackend
+from duck.contrib.storage.backends import StorageBackend, UploadContext
+from duck.utils.fileio import FileIOStream
+from duck.utils.caching import InMemoryCache
+
+
+FILE_CACHE = InMemoryCache(maxkeys=1024)
 
 
 class CollectStaticCommand:
@@ -69,7 +74,7 @@ class CollectStaticCommand:
                 entries[key] = source
 
         # Blueprint files are namespaced by blueprint name
-        for static_dir, blueprint in cls.find_blueprint_static_dirs():
+        for static_dir, blueprint in cls.find_blueprint_static_dirs(prepare_django_now=True):
             for source in cls.recursive_getfiles(static_dir):
                 relative = pathlib.Path(source).relative_to(static_dir).as_posix()
                 entries[f"{blueprint.name}/{relative}"] = source
@@ -77,22 +82,40 @@ class CollectStaticCommand:
         return list(entries.items())
 
     @classmethod
-    def upload(cls, storage: StorageBackend, entries: List[Tuple[str, str]]) -> None:
+    def upload(cls, storage: StorageBackend, entries: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
         """
         Uploads each static file to the storage backend.
 
         Args:
             storage: Backend that receives the files.
             entries: (source_path, key) pairs from `collect_entries`.
+        
+        Returns:
+            List of (key, source_path) pairs that were uploaded.
         """
         total = len(entries)
+        uploaded: List[Tuple[str, str]] = []
         
         for index, (key, source) in enumerate(entries, start=1):
             
-            with open(source, "rb") as handle:
-                storage.save_as(handle, key)
-                
-            console.log_raw(f"[{index}/{total}] {key}", level=console.DEBUG)
+            with FileIOStream(source, mode="rb", open_now=True, cache_backend=FILE_CACHE) as handle:
+                # Check if the file is unchanged to skip upload
+                mtime = pathlib.Path(source).stat().st_mtime
+
+                if storage.is_unchanged(key, UploadContext(filename=key, payload=handle.read(), source_mtime=mtime)):
+                    console.log_raw(f"[{index}/{total}] {key} (unchanged)", level=console.DEBUG, custom_color=console.Fore.YELLOW)
+                    continue
+
+                # Upload the file to the storage backend
+                storage.save_as(handle, key, source_mtime=mtime)
+
+            # Add the upload to the list of uploaded files
+            uploaded.append((key, source))
+
+            # Log the upload progress
+            console.log_raw(f"[{index}/{total}] {key} [done]", level=console.DEBUG)
+
+        return uploaded
 
     @classmethod
     def collectstatic(cls, skip_confirmation: bool = False) -> None:
@@ -130,10 +153,10 @@ class CollectStaticCommand:
         console.log_raw("")
 
         # Upload the static files to the storage backend
-        cls.upload(storage, entries)
+        uploaded = cls.upload(storage, entries)
 
         console.log_raw(
-            f"\nSuccessfully copied {len(entries)} staticfile(s) to {destination}",
+            f"\nSuccessfully copied {len(uploaded)} staticfile(s) to {destination}",
             level=console.SUCCESS,
         )
 
@@ -158,7 +181,7 @@ class CollectStaticCommand:
                     yield from cls.recursive_getfiles(dir_entry.path)
 
     @classmethod
-    def find_blueprint_static_dirs(cls) -> Generator[Tuple[str, Blueprint], None, None]:
+    def find_blueprint_static_dirs(cls, prepare_django_now: bool = False) -> Generator[Tuple[str, Blueprint], None, None]:
         """
         Finds static directories from all blueprints that enable them.
 
@@ -174,7 +197,7 @@ class CollectStaticCommand:
 
         # Some blueprints import Django models, so set up Django first
         try:
-            prepare_django(True)
+            prepare_django(prepare_django_now)
 
         except Exception as e:
             console.warn(f"Django setup failed: {e}", DjangoSetupWarning)

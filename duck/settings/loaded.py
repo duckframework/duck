@@ -2,6 +2,7 @@
 Module for loading objects defined in `settings.py` or in the Duck application configuration.
 Provides functions to retrieve various components and configurations dynamically.
 """
+from functools import lru_cache
 from typing import (
     Any,
     List,
@@ -449,10 +450,13 @@ def get_preferred_log_style() -> str:
     return style
 
 
+@lru_cache(maxsize=100)
 def get_storage_backend(key: str, load_backend: bool = True):
     """
     Returns the set storage backend from settings.
     """
+    from duck.contrib.storage.backends import StorageBackend
+    
     backends = SETTINGS.get("STORAGE_BACKENDS")
 
     default = {
@@ -499,7 +503,7 @@ def get_storage_backend(key: str, load_backend: bool = True):
         raise SettingsError(f"Error loading storage backend '{backend}': {e} ") from e
 
     try:
-        backend = backend_cls(**(backend_data.get("options") or {})) # type: ignore
+        backend: StorageBackend = backend_cls(**(backend_data.get("options") or {})) # type: ignore
         
     except Exception as e:
         raise SettingsError(f"Error initializing storage backend '{backend}': {e}. Maybe you forgot to pass right options. ") from e

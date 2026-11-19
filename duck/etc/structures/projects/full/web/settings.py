@@ -7,6 +7,7 @@ import sys
 import json
 import pathlib
 import socket
+
 from typing import Any
 
 from duck.html.components.utils.include import (
@@ -518,8 +519,7 @@ DJANGO_SIDE_URLS_SKIP_MIDDLEWARES: bool = False
 
 # DuckApp will use this as the ID domain for Django to recognize/accept our requests (if applicable).
 # Will be used also to validate private connection between Duck and Django.
-DJANGO_SHARED_SECRET_DOMAIN: str = os.environ.get(
-    "DJANGO_SHARED_SECRET_DOMAIN", SECRET_DOMAIN)
+DJANGO_SHARED_SECRET_DOMAIN: str = os.environ.get("DJANGO_SHARED_SECRET_DOMAIN", SECRET_DOMAIN)
 
 
 # SESSION SETTINGS
@@ -542,7 +542,7 @@ SESSION_STORAGE: str = "duck.utils.caching.KeyAsFolderCache"
 # - It's generally preferable to override the session storage mechanism instead.
 # - This engine will *not* be automatically synchronized with Django if `USE_DJANGO=True`. 
 #   To integrate with Django, you'll need to create a custom Django session backend.
-SESSION_ENGINE = "duck.http.session.engine" 
+SESSION_ENGINE = "duck.http.session.engine"
 
 
 # Session Directory
@@ -670,6 +670,30 @@ MEDIA_ROOT: str | pathlib.Path = BASE_DIR / "assets/media"
 # Media URL
 # This is the url for serving media files
 MEDIA_URL: str = "media/"
+
+
+# STORAGE SETTINGS
+
+# These are the storage backends that will be used for storing files.
+STORAGE_BACKENDS: dict[str, dict[str, Any]] = {
+    "default": {
+        "backend": "duck.contrib.storage.backends.local.LocalStorage",
+    },
+    "staticfiles": {
+        "backend": "duck.contrib.storage.backends.local.LocalStorage",
+        "options": {
+            "root": STATIC_ROOT,
+            "base_url": STATIC_URL,
+        }
+    },
+    "mediafiles": {
+        "backend": "duck.contrib.storage.backends.local.LocalStorage",
+        "options": {
+            "root": MEDIA_ROOT,
+            "base_url": MEDIA_URL,
+        }
+    },
+}
 
 
 # File Upload Handler Configuration

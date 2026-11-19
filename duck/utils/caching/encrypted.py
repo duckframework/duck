@@ -8,13 +8,13 @@ and ARM-safe.
 """
 
 import os
-import json
-
-from typing import Any
+import hashlib
 
 import pickle
 import nacl.secret
 import nacl.utils
+
+from typing import Any
 
 from nacl.exceptions import CryptoError
 
@@ -115,10 +115,13 @@ class NaClEncryptor:
 
     def __init__(self, secret_key: bytes):
         if not secret_key:
-            raise ValueError(
-                f"Secret key seems to be empty, please provide secret key."
-            )
-        self.secret_key = resolve_nacl_key(secret_key).encode("utf-8")
+            raise ValueError(f"Secret key seems to be empty, please provide secret key.")
+        
+        # Ensure the secret key is in the correct format.
+        self.secret_key = resolve_nacl_key(secret_key)
+        self.secret_key = self.secret_key.encode("utf-8") if not isinstance(self.secret_key, bytes) else self.secret_key
+
+        # Set up the SecretBox for encryption and decryption.
         self.box = nacl.secret.SecretBox(self.secret_key)
 
     def encrypt(self, value: Any) -> bytes:
@@ -162,6 +165,8 @@ class NaClEncryptor:
                 bad data.
         """
         pickled = self.box.decrypt(data)
+
+        # Return the original Python object. Pickle is used for serialisation.
         return pickle.loads(pickled)
 
 
@@ -173,10 +178,6 @@ class EncryptedCache(CacheBase):
     inner backend and decrypted transparently on retrieval. The backend
     never sees or stores plaintext. Tampering or wrong-key errors cause
     the offending entry to be evicted immediately rather than returned.
-
-    All methods delegate locking to the inner backend — no double-locking.
-    The async_* variants are forwarded to the inner backend's async_*
-    methods when available, falling back to the sync methods otherwise.
 
     Args:
         backend: Any CacheBase instance to use as the storage layer.
@@ -243,10 +244,14 @@ class EncryptedCache(CacheBase):
             return default
 
         try:
+            # Decrypt the raw value. If it fails, we evict and return default.
             return self.encryptor.decrypt(raw)
+        
         except CryptoError:
             # Tampered or wrong key — evict and return default cleanly.
             self.backend.delete(key)
+
+            # Return default on tamper detection.
             return default
 
     def delete(self, key: str) -> None:
@@ -284,11 +289,15 @@ class EncryptedCache(CacheBase):
             return default
 
         try:
+            # Decrypt the raw value. If it fails, we still return default.
             return self.encryptor.decrypt(raw)
+        
         except CryptoError:
             # Entry was already popped — nothing left to evict.
             if default is MISSING:
                 raise KeyError(key)
+
+            # Return default on tamper detection.
             return default
 
     def clear(self) -> None:
@@ -296,113 +305,6 @@ class EncryptedCache(CacheBase):
         Evict all entries from the underlying backend.
         """
         self.backend.clear()
-
-    # Async variants — delegate to backend async methods where available.
-
-    async def async_set(
-        self, key: str, value: Any, expiry: int | float | None = None
-    ) -> None:
-        """
-        Async-safe version of set.
-
-        Args:
-            key: Cache key.
-            value: JSON-serialisable value to store.
-            expiry: TTL in seconds.
-        """
-        from duck.contrib.sync import ensure_async
-        
-        encrypted = self.encryptor.encrypt(value)
-
-        if hasattr(self.backend, "async_set"):
-            await self.backend.async_set(key, encrypted, expiry)
-        else:
-            await ensure_async(self.backend.set)(key, encrypted, expiry)
-
-    async def async_get(self, key: str, default: Any = None) -> Any:
-        """
-        Async-safe version of get.
-
-        Args:
-            key: Cache key to look up.
-            default: Returned on miss, expiry, or tamper detection.
-
-        Returns:
-            The decrypted value or default.
-        """
-        from duck.contrib.sync import ensure_async
-        
-        if hasattr(self.backend, "async_get"):
-            raw = await self.backend.async_get(key)
-        else:
-            raw = await ensure_async(self.backend.get)(key)
-
-        if raw is None:
-            return default
-
-        try:
-            return self.encryptor.decrypt(raw)
-        except CryptoError:
-            await self.async_delete(key)
-            return default
-
-    async def async_pop(self, key: str, default: Any = MISSING) -> Any:
-        """
-        Async-safe version of pop.
-
-        Args:
-            key: Cache key to retrieve and delete.
-            default: Returned when absent. Raises KeyError if omitted.
-
-        Returns:
-            The decrypted value or default.
-
-        Raises:
-            KeyError: When the key is missing and no default was given.
-        """
-        from duck.contrib.sync import ensure_async
-        
-        if hasattr(self.backend, "async_pop"):
-            raw = await self.backend.async_pop(key, default=None)
-        else:
-            raw = await ensure_async(self.backend.pop)(key, default=None)
-
-        if raw is None:
-            if default is MISSING:
-                raise KeyError(key)
-            return default
-
-        try:
-            return self.encryptor.decrypt(raw)
-        except CryptoError:
-            if default is MISSING:
-                raise KeyError(key)
-            return default
-
-    async def async_delete(self, key: str) -> None:
-        """
-        Async-safe version of delete.
-
-        Args:
-            key: Cache key to remove.
-        """
-        from duck.contrib.sync import ensure_async
-        
-        if hasattr(self.backend, "async_delete"):
-            await self.backend.async_delete(key)
-        else:
-            await ensure_async(self.backend.delete)(key)
-
-    async def async_clear(self) -> None:
-        """
-        Async-safe version of clear.
-        """
-        from duck.contrib.sync import ensure_async
-        
-        if hasattr(self.backend, "async_clear"):
-            await self.backend.async_clear()
-        else:
-            await ensure_async(self.backend.clear)()
 
     def close(self) -> None:
         """

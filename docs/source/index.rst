@@ -99,6 +99,7 @@ Contents
    :caption: Data Layer & Integrations
 
    database
+   storage
    django-integration
    mcp
    sitemap

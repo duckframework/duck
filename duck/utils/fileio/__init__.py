@@ -160,7 +160,7 @@ class FileIOStream(io.IOBase):
         open_now: bool = False,
         mode: str = "rb",
         disable_path_traversal: bool = True,
-        cache_backend: CacheBase = FILE_CACHE,
+        cache_backend: InMemoryCache = FILE_CACHE,
     ):
         """
         Initialize the FileIOStream object.
@@ -171,7 +171,7 @@ class FileIOStream(io.IOBase):
             open_now: Whether to open the file immediately. Defaults to False.
             mode: File open mode. Defaults to `'rb'`.
             disable_path_traversal (bool): Whether to remove `..` in paths to avoid path traversal. Defaults to True.
-            cache_backend (CacheBase): Cache backend to use, defaults to `FILE_CACHE`.
+            cache_backend (InMemoryCache): In-memory cache backend to use, defaults to `FILE_CACHE`.
         """
         # NOTE: FD must always be opened on read/write - to catch FileNotFoundError if file is nolonger available rather than just returning cached data.
         self.chunk_size = chunk_size
@@ -657,7 +657,7 @@ class FileIOStream(io.IOBase):
         # InMemoryCache exposes its internal store as _store.
         prefix = f"{self.filepath}:"
         keys_to_check = [
-            k for k in list(self.cache_backend.cache.keys())
+            k for k in list(self.cache_backend._cache.keys())
             if k.startswith(prefix)
         ]
 
@@ -768,6 +768,13 @@ class FileIOStream(io.IOBase):
             raise RuntimeError(
                 "File is not closed yet, please ensure the file is closed before deletion."
             )
+
+    def __aenter__(self):
+        self.open()
+        return self
+
+    def __aexit__(self, exc_type, exc, tb):
+        self.close()
 
 
 class AsyncFileIOStream(FileIOStream):

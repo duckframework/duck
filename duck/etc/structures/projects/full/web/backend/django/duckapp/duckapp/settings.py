@@ -6,6 +6,7 @@ only modify these if you know what you are doing!
 """
 
 import os
+
 from pathlib import Path
 
 from duck.backend.django.logging import SIMPLE_CONFIG
@@ -96,6 +97,16 @@ TEMPLATES = [
         },
     },
 ]
+
+# Storage Backends 
+STORAGES = {
+    alias: {
+        "BACKEND": "duck.backend.django.storage.DuckStorage",
+        "OPTIONS": {
+            "backend_key": alias,
+        },
+    } for alias in DUCK_SETTINGS["STORAGE_BACKENDS"].keys()
+} #!: duck-modified
 
 
 WSGI_APPLICATION = "web.backend.django.duckapp.duckapp.wsgi.application"

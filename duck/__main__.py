@@ -10,7 +10,7 @@ from duck.art import duck_art_small
 from duck.version import server_version
 from duck.logging import console
 
-from duck.cli.commands.collectstatic import CollectStaticCommand
+from duck.cli.commands.collectstatic import CollectStaticCommand, AsyncCollectStaticCommand
 from duck.cli.commands.makeproject import MakeProjectCommand
 from duck.cli.commands.makeblueprint import MakeBlueprintCommand
 from duck.cli.commands.django import DjangoCommand
@@ -73,11 +73,15 @@ def cli(ctx, version):
 
 @cli.command()
 @click.option('-y', '--skip-confirmation', is_flag=True, default=False, help="Skip confirmation prompts")
-def collectstatic(skip_confirmation):
+@click.option('-sync', '--no-async', is_flag=True, default=False, help="Use synchronous collectstatic command instead of async.")
+def collectstatic(skip_confirmation, no_async):
     """
     Collect static files from Blueprints' directories.
     """
-    CollectStaticCommand.main(skip_confirmation)
+    if no_async:
+        CollectStaticCommand.main(skip_confirmation)
+    else:
+        AsyncCollectStaticCommand.main(skip_confirmation)
 
 
 @cli.command(help="Create a Duck project")

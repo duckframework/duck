@@ -17,7 +17,6 @@ import re
 import hashlib
 import inspect
 
-
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import (
@@ -71,6 +70,7 @@ class UploadContext:
         metadata: Free-form data that custom logic can attach and read.
         sha256: Hex digest of the payload, computed after processing.
         key: Storage key, assigned by the key builder.
+        source_mtime: Modification time of the source file, if available.
     """
 
     payload: bytes
@@ -81,6 +81,7 @@ class UploadContext:
     metadata: dict[str, Any] = field(default_factory=dict)
     sha256: str = ""
     key: str = ""
+    source_mtime: float | None = None
 
 
 @dataclass(frozen=True)
@@ -202,6 +203,29 @@ async def async_read_payload(data: FileData) -> bytes:
 
     # Other file-like objects are read in a worker thread
     return await ensure_async(data.read)()
+
+
+def resolve_source_mtime(data: FileData) -> float | None:
+    """
+    Reads the source mtime from the input when it is backed by a real file.
+
+    Args:
+        data: The upload source.
+
+    Returns:
+        Seconds since the epoch, or None when the input has no file path.
+    """
+    # Raw bytes have no file
+    if isinstance(data, bytes):
+        return None
+
+    # FileIOStream and open file objects expose their path
+    path = getattr(data, "filepath", None) or getattr(data, "name", None)
+
+    if isinstance(path, (str, Path)) and os.path.isfile(path):
+        return os.path.getmtime(path)
+
+    return None
 
 
 def default_key_builder(context: UploadContext) -> str:
@@ -400,10 +424,20 @@ class StorageBackend(ABC):
         Returns:
             The fully prepared UploadContext.
         """
+        # Resolve mtime before reading, since reading may close the stream
+        source_mtime = resolve_source_mtime(data)
+
         # Read file contents
         payload = read_payload(data)
 
-        return self.prepare_context(payload, filename, folder, metadata)
+        # Build context
+        context = self.prepare_context(payload, filename, folder, metadata)
+
+        # Set source mtime
+        context.source_mtime = source_mtime
+
+        # Return final context
+        return context
 
     async def async_build_context(
         self,
@@ -424,10 +458,20 @@ class StorageBackend(ABC):
         Returns:
             The fully prepared UploadContext.
         """
+        # Resolve mtime before reading, since reading may close the stream
+        source_mtime = await ensure_async(resolve_source_mtime)(data)
+
         # Read file contents without blocking the event loop
         payload = await async_read_payload(data)
 
-        return await ensure_async(self.prepare_context)(payload, filename, folder, metadata)
+        # Build context
+        context = await ensure_async(self.prepare_context)(payload, filename, folder, metadata)
+
+        # Set source mtime
+        context.source_mtime = source_mtime
+
+        # Return final context
+        return context
 
     def make_reporter(self, context: UploadContext, on_progress: ProgressCallback | None) -> ProgressReporter:
         """
@@ -501,8 +545,9 @@ class StorageBackend(ABC):
         # Start reporter
         reporter.start()
 
-        # Put data
-        self.put(context.key, context, reporter)
+        # Put data only if changed
+        if not self.is_unchanged(context.key, context):
+            self.put(context.key, context, reporter)
 
         # Finish reporter
         reporter.finish()
@@ -544,7 +589,8 @@ class StorageBackend(ABC):
         await reporter.async_start()
 
         # Put data
-        await self.async_put(context.key, context, reporter)
+        if not await self.async_is_unchanged(context.key, context):
+            await self.async_put(context.key, context, reporter)
 
         # Finish reporter
         await reporter.async_finish()
@@ -575,21 +621,23 @@ class StorageBackend(ABC):
     def save_as(
         self,
         data: FileData,
-        key: str,
+        filename: str,
         folder: str = "",
         metadata: dict[str, Any] | None = None,
         on_progress: ProgressCallback | None = None,
+        source_mtime: float | None = None,
     ) -> StoredFile:
         """
         Stores a file under an exact key, keeping the pipeline and progress reporting.
 
         Args:
             data: Raw bytes, a FileIOStream, or a binary file-like object.
-            key: Exact storage key, such as `"css/app.css"`.
+            filename: Exact storage filename, such as `"app.css"`.
             folder: Optional folder such as `"images"` or `"video"`.
             metadata: Optional data made available to processors and to `put`.
             on_progress: Optional callback that receives ProgressEvent objects
                 for this save, in addition to global callbacks.
+            source_mtime: Optional modification time of the source file, if available.
 
         Returns:
             A StoredFile describing where the file was stored.
@@ -597,9 +645,13 @@ class StorageBackend(ABC):
         raise_if_in_async_context(f"Calling this method in async context not allowed, try using `async_save_as` instead.")
         
         # Run the pipeline, then keep the caller's key
-        context = self.build_context(data, Path(key).name, folder, metadata)
-        context.key = key
+        context = self.build_context(data, Path(filename).name, folder, metadata)
+        context.key = filename
 
+        # Explicit mtime overrides the detected one
+        if source_mtime is not None:
+            context.source_mtime = source_mtime
+                    
         # Make reporter
         reporter = self.make_reporter(context, on_progress)
 
@@ -607,7 +659,8 @@ class StorageBackend(ABC):
         reporter.start()
 
         # Put data
-        self.put(key, context, reporter)
+        if not self.is_unchanged(filename, context):
+            self.put(filename, context, reporter)
 
         # Finish reporter
         reporter.finish()
@@ -623,28 +676,34 @@ class StorageBackend(ABC):
     async def async_save_as(
         self,
         data: FileData,
-        key: str,
+        filename: str,
         folder: str = "",
         metadata: dict[str, Any] | None = None,
         on_progress: ProgressCallback | None = None,
+        source_mtime: float | None = None,
     ) -> StoredFile:
         """
         Async version of `save_as`.
 
         Args:
             data: Raw bytes, a FileIOStream, or a binary file-like object.
-            key: Exact storage key, such as `"css/app.css"`.
+            filename: Exact storage filename, such as `"app.css"`.
             folder: Optional folder such as `"images"` or `"video"`.
             metadata: Optional data made available to processors and to `put`.
             on_progress: Optional callback that receives ProgressEvent objects
                 for this save, in addition to global callbacks.
+            source_mtime: Optional modification time of the source file, if available.
 
         Returns:
             A StoredFile describing where the file was stored.
         """
         # Run the pipeline, then keep the caller's key
-        context = await self.async_build_context(data, Path(key).name, folder, metadata)
-        context.key = key
+        context = await self.async_build_context(data, Path(filename).name, folder, metadata)
+        context.key = filename
+
+        # Explicit mtime overrides the detected one
+        if source_mtime is not None:
+            context.source_mtime = source_mtime
 
         # Make reporter
         reporter = self.make_reporter(context, on_progress)
@@ -653,7 +712,8 @@ class StorageBackend(ABC):
         await reporter.async_start()
 
         # Put data
-        await self.async_put(key, context, reporter)
+        if not await self.async_is_unchanged(filename, context):
+            await self.async_put(filename, context, reporter)
 
         # Finish reporter
         await reporter.async_finish()
@@ -743,6 +803,77 @@ class StorageBackend(ABC):
         """
         return await ensure_async(self.exists)(key)
 
+    def modified_time(self, key: str) -> float | None:
+        """
+        Returns the last modified time of a stored file as a UTC timestamp.
+
+        Args:
+            key: Backend-relative path.
+
+        Returns:
+            Seconds since the epoch, or None when the backend cannot provide it.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+        """
+        return None
+
+    async def async_modified_time(self, key: str) -> float | None:
+        """
+        Async version of `modified_time`.
+
+        Args:
+            key: Backend-relative path.
+
+        Returns:
+            Seconds since the epoch, or None when unavailable.
+        """
+        return await ensure_async(self.modified_time)(key)
+
+    async def async_size(self, key: str) -> int:
+        """
+        Async version of `size`.
+
+        Args:
+            key: Backend-relative path.
+
+        Returns:
+            The file size in bytes.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+        """
+        return await ensure_async(self.size)(key)
+
+    def is_unchanged(self, key: str, context: UploadContext) -> bool:
+        """
+        Checks whether the stored file already matches the upload.
+
+        The default compares existence and size. Backends should override this
+        with an exact comparison.
+        
+        Args:
+            key: Backend-relative path.
+            context: Final upload state.
+
+        Returns:
+            True if the upload can be skipped.
+        """
+        return self.exists(key) and self.size(key) == len(context.payload)
+
+    async def async_is_unchanged(self, key: str, context: UploadContext) -> bool:
+        """
+        Async version of `is_unchanged`.
+
+        Args:
+            key: Backend-relative path.
+            context: Final upload state.
+
+        Returns:
+            True if the upload can be skipped.
+        """
+        return await ensure_async(self.is_unchanged)(key, context)
+
     @abstractmethod
     def put(self, key: str, context: UploadContext, reporter: ProgressReporter) -> None:
         """
@@ -788,6 +919,24 @@ class StorageBackend(ABC):
 
         Returns:
             True if the file exists, otherwise False.
+        """
+
+    @abstractmethod
+    def size(self, key: str) -> int:
+        """
+        Returns the size of a stored file in bytes.
+
+        Implementations should use a cheap metadata lookup (file stat,
+        HTTP HEAD) instead of reading the file.
+
+        Args:
+            key: Backend-relative path.
+
+        Returns:
+            The file size in bytes.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
         """
 
     @abstractmethod

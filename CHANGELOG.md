@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- First step towards Duck's own ORM which will  use sqlalchemy under the hood.
+- `duck collectstatic` now asynchronous and you can disable this by running `duck collectstatic --no-async`
+- Added `duck.utils.memory` module for memory tracking, inspection and profiling utility for Python applications.
 - Added support for app supervision. By default, app is started in supervisor.
 - Added support for custom caching backend in `duck.utils.fileio`.
 

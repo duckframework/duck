@@ -236,7 +236,7 @@ class App(BaseApp):
         
         Args:
             name:
-                Optional application name.
+                Optional application name. Maybe used for logging, process identification, and other runtime purposes.
                 
             addr:
                 Address or hostname to bind the server to.
@@ -326,7 +326,7 @@ class App(BaseApp):
         
         # Process configuration
         self.project_name = get_project_name()
-        self.process_name = self.normalize_process_name(process_name or f"duck-server.{self.project_name}")
+        self.process_name = self.normalize_process_name(process_name or f"duck-server.{name or self.project_name}")
         
         # Django configuration
         self.use_django = SETTINGS["USE_DJANGO"]

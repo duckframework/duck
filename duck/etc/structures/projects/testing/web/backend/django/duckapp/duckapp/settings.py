@@ -6,6 +6,7 @@ only modify these if you know what you are doing!
 """
 
 import os
+
 from pathlib import Path
 
 from duck.backend.django.logging import SIMPLE_CONFIG
@@ -99,6 +100,29 @@ TEMPLATES = [
 
 
 WSGI_APPLICATION = "web.backend.django.duckapp.duckapp.wsgi.application"
+
+
+# Storage Backends 
+STORAGE_BACKENDS = {
+    "default": {
+        "BACKEND": "duck.backend.django.storage.DuckStorage",
+        "OPTIONS": {
+            "backend_key": "default",
+        },
+    },
+    "staticfiles": {
+        "BACKEND": "duck.backend.django.storage.DuckStorage",
+        "OPTIONS": {
+            "backend_key": "staticfiles",
+        },
+    },
+    "mediafiles": {
+        "BACKEND": "duck.backend.django.storage.DuckStorage",
+        "OPTIONS": {
+            "backend_key": "mediafiles",
+        },
+    },
+} #!: duck-modified
 
 
 # Database

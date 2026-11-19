@@ -3,29 +3,43 @@ String utilities module providing a variety of functions for common string manip
 """
 import re
 
-from typing import Dict, List
+from typing import List
 
 
-def smart_truncate(text: str, cap: int, grammar: list = None, suffix: str = '...') -> str:
+# Constants for pluralisation rules
+VOWELS = "aeiou"
+
+
+def smart_truncate(text: str, cap: int, grammar: list | None = None, suffix: str = '...') -> str:
     """
     Truncates the given text if it exceeds the specified character cap,
     ensuring that the truncation occurs at the last complete word or grammar boundary
     defined by the provided list of grammar elements.
     
     Args:
-        text (str): The string to be truncated. Can be a regular text or a file path.
-        cap (int): The maximum allowed length of the string.
-        grammar (list): A list of grammar elements such as words, punctuation, etc. 
-                        These will be used to define truncation boundaries.
-        suffix (str): The suffix to append if truncation occurs. Default is '...'.
+        text (str):
+            The string to be truncated. Can be a regular text or a file path.
+
+        cap (int):
+            The maximum allowed length of the string.
+
+        grammar (list):
+            A list of grammar elements such as words, punctuation, etc. 
+            These will be used to define truncation boundaries.
+
+        suffix (str):
+            The suffix to append if truncation occurs. Default is '...'.
     
     Returns:
         str: The truncated string with the specified suffix appended if truncation occurs, 
              or the original string if no truncation is needed.
     
     Example:
+
+    ```python
         smart_truncate("This is a long sentence that might need truncation.", 30, grammar=[' ', '.'])
         # Returns: "This is a long..."
+    ```
     """
     if grammar is None:
         grammar = [' ', '.', ',', ';', ':', '/', '\\']  # default grammar elements
@@ -54,6 +68,25 @@ def smart_truncate(text: str, cap: int, grammar: list = None, suffix: str = '...
     return text
 
 
+def pluralize(word: str) -> str:
+    """
+    Apply simple English pluralisation rules.
+
+    Args:
+        word: Singular word.
+
+    Returns:
+        The plural form.
+    """
+    if word.endswith(("s", "x", "z", "ch", "sh")):
+        return f"{word}es"
+
+    if word.endswith("y") and word[-2:-1] not in VOWELS:
+        return f"{word[:-1]}ies"
+
+    return f"{word}s"
+
+
 def capitalize_words(text: str) -> str:
     """
     Capitalizes the first letter of each word in the string.
@@ -61,14 +94,16 @@ def capitalize_words(text: str) -> str:
     return ' '.join(word.capitalize() for word in text.split())
 
 
-def clean_string(text: str, remove_chars: list[str] = None) -> str:
+def clean_string(text: str, remove_chars: list[str]| None = None) -> str:
     """
     Removes unwanted characters (e.g., spaces or specific symbols) from the string.
     """
     cleaned_text = text.strip()  # Trim leading/trailing spaces
     remove_chars = remove_chars or []
+
     for char in remove_chars:
         cleaned_text = cleaned_text.replace(char, '')
+
     return cleaned_text
 
 
@@ -121,10 +156,12 @@ def wrap_text(text: str, width: int, align: str = "left") -> str:
     
     if align == "left":
         wrapped_lines = [text[i:i+width] for i in range(0, len(text), width)]
+
     elif align == "center":
         for i in range(0, len(text), width):
             line = text[i:i+width]
             wrapped_lines.append(line.center(width))
+
     elif align == "right":
         for i in range(0, len(text), width):
             line = text[i:i+width]
@@ -133,26 +170,11 @@ def wrap_text(text: str, width: int, align: str = "left") -> str:
     return '\n'.join(wrapped_lines)
 
 
-def snake_to_camel_case(text: str) -> str:
+def to_snake_case(text: str) -> str:
     """
-    Converts a string from snake_case to camelCase.
+    Convert a string to snake_case.
     """
-    components = text.split('_')
-    return components[0] + ''.join(x.title() for x in components[1:])
-    
-
-def camel_to_snake_case(text: str) -> str:
-    """
-    Converts a string from camelCase to snake_case.
-    """
-    return re.sub('([a-z])([A-Z])', r'\1_\2', text).lower()
-
-
-def remove_non_alphanumeric(text: str) -> str:
-    """
-    Removes all characters except alphanumeric (letters and digits).
-    """
-    return ''.join(e for e in text if e.isalnum())
+    return re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', text).lower()
 
 
 def to_kebab_case(text: str) -> str:
@@ -178,6 +200,28 @@ def to_spaced_camel_case(value: str) -> str:
     return re.sub(r'(?<!^)(?=[A-Z])', ' ', value).strip()
 
 
+def snake_to_camel_case(text: str) -> str:
+    """
+    Converts a string from snake_case to camelCase.
+    """
+    components = text.split('_')
+    return components[0] + ''.join(x.title() for x in components[1:])
+    
+
+def camel_to_snake_case(text: str) -> str:
+    """
+    Converts a string from camelCase to snake_case.
+    """
+    return re.sub('([a-z])([A-Z])', r'\1_\2', text).lower()
+
+
+def remove_non_alphanumeric(text: str) -> str:
+    """
+    Removes all characters except alphanumeric (letters and digits).
+    """
+    return ''.join(e for e in text if e.isalnum())
+
+
 def find_and_replace(text: str, target: str, replacement: str) -> str:
     """
     Replace all occurrences of a target substring with a replacement string.
@@ -186,7 +230,9 @@ def find_and_replace(text: str, target: str, replacement: str) -> str:
 
 
 def find_all_occurrences(text: str, target: str) -> List[int]:
-    """Return all starting indices where the target substring occurs in the text (uses regex)."""
+    """
+    Return all starting indices where the target substring occurs in the text (uses regex).
+    """
     return [m.start() for m in re.finditer(re.escape(target), text)]
 
 
@@ -204,8 +250,10 @@ def justify_text(text: str, width: int, direction: str = "left") -> str:
     """
     if direction == "left":
         return text.ljust(width)
+    
     elif direction == "right":
         return text.rjust(width)
+    
     elif direction == "center":
         return text.center(width)
     else:
@@ -213,45 +261,68 @@ def justify_text(text: str, width: int, direction: str = "left") -> str:
 
 
 def remove_extra_spaces(text: str) -> str:
-    """Remove extra spaces from a string, leaving only one space between words."""
+    """
+    Remove extra spaces from a string, leaving only one space between words.
+    """
     return re.sub(r'\s+', ' ', text).strip()
 
 
 def remove_punctuation(text: str) -> str:
-    """Remove punctuation from a string."""
+    """
+    Remove punctuation from a string.
+    """
     return re.sub(r'[^\w\s]', '', text)
 
 
 def re_remove_non_alphanumeric(text: str) -> str:
-    """Remove all non-alphanumeric characters (keeps letters and numbers) using Regex."""
+    """
+    Remove all non-alphanumeric characters (keeps letters and numbers) using Regex.
+    """
     return re.sub(r'[^a-zA-Z0-9]', '', text)
 
 
 def string_similarity(str1: str, str2: str) -> float:
-    """Compute the similarity between two strings using Levenshtein distance."""
-    import Levenshtein
+    """
+    Compute the similarity between two strings using Levenshtein distance.
+    """
+    try:
+        import Levenshtein
+    except ImportError:
+        raise ImportError("Levenshtein module is required for string similarity calculation. Install it via 'pip install python-Levenshtein'.")
+
+    # Calculate the similarity ratio between the two strings
     return Levenshtein.ratio(str1, str2)
 
 
 def are_anagrams(str1: str, str2: str) -> bool:
-    """Check if two strings are anagrams of each other."""
+    """
+    Check if two strings are anagrams of each other.
+    """
     return sorted(str1) == sorted(str2)
 
 
 def to_base64(text: str) -> str:
-    """Encode a string in base64."""
+    """
+    Encode a string in base64.
+    """
     import base64
+
     return base64.b64encode(text.encode()).decode()
 
 
 def from_base64(encoded_text: str) -> str:
-    """Decode a base64 encoded string."""
+    """
+    Decode a base64 encoded string.
+    """
     import base64
+
     return base64.b64decode(encoded_text.encode()).decode()
 
 
 def wrap_words(text: str, line_length: int) -> str:
-    """Wrap words at a specified line length."""
+    """
+    Wrap words at a specified line length.
+    """
     wrapped_text = ""
     current_line = []
     
@@ -261,8 +332,11 @@ def wrap_words(text: str, line_length: int) -> str:
             current_line = [word]
         else:
             current_line.append(word)
-    
+
+    # Add any remaining words in the current line
     wrapped_text += " ".join(current_line)
+
+    # Return the wrapped text
     return wrapped_text
 
 
@@ -281,12 +355,16 @@ def transform_case_based_on_condition(text: str, condition: bool) -> str:
 
 
 def reverse_words_in_sentence(text: str) -> str:
-    """Reverse the order of words in a string."""
+    """
+    Reverse the order of words in a string.
+    """
     return ' '.join(text.split()[::-1])
 
 
 def pad_text(text: str, total_length: int, padding_char: str = " ") -> str:
-    """Pad a string to a specific total length."""
+    """
+    Pad a string to a specific total length.
+    """
     return text.ljust(total_length, padding_char)
 
 
@@ -305,7 +383,9 @@ def is_camel_case(s: str) -> bool:
 
 
 def is_pascal_case(s: str) -> bool:
-    """Checks if a string follows PascalCase (UpperCamelCase)."""
+    """
+    Checks if a string follows PascalCase (UpperCamelCase).
+    """
     return bool(re.fullmatch(r"[A-Z][a-z]*(?:[A-Z][a-z]*)*", s))
 
 
@@ -315,15 +395,21 @@ def is_snake_case(s: str) -> bool:
 
 
 def is_screaming_snake_case(s: str) -> bool:
-    """Checks if a string follows SCREAMING_SNAKE_CASE."""
+    """
+    Checks if a string follows SCREAMING_SNAKE_CASE.
+    """
     return bool(re.fullmatch(r"[A-Z]+(?:_[A-Z]+)*", s))
 
 
 def is_kebab_case(s: str) -> bool:
-    """Checks if a string follows kebab-case."""
+    """
+    Checks if a string follows kebab-case.
+    """
     return bool(re.fullmatch(r"[a-z]+(?:-[a-z]+)*", s))
 
 
 def is_train_case(s: str) -> bool:
-    """Checks if a string follows Train-Case (Capitalized Kebab Case)."""
+    """
+    Checks if a string follows Train-Case (Capitalized Kebab Case).
+    """
     return bool(re.fullmatch(r"[A-Z][a-z]*(?:-[A-Z][a-z]*)*", s))
